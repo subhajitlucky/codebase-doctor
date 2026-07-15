@@ -52,10 +52,12 @@
     "node": ">=20"
   },
   "dependencies": {
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
+    "@types/pg": "^8.20.0",
     "tsup": "^8.5.1",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
