@@ -12,6 +12,7 @@ import { displayCommand } from "../execution/command-plan.js";
 import { planChecks } from "../doctors/checks/planner.js";
 import type {
   FileInventory,
+  FileInventoryOptions,
   ManifestRecord,
   ProjectDetection,
   ProjectSnapshot,
@@ -20,13 +21,14 @@ import type {
 export interface ScanRequest {
   root: string;
   runChecks: boolean;
-  format: "text" | "json";
+  format: "text" | "json" | "sarif";
   timeoutMs: number;
   failOn: FindingThreshold;
+  exclude?: readonly string[];
 }
 
 export interface ScanDependencies {
-  inventoryWorkspace(root: string): Promise<FileInventory>;
+  inventoryWorkspace(root: string, options?: FileInventoryOptions): Promise<FileInventory>;
   loadManifests(inventory: FileInventory): Promise<ManifestRecord[]>;
   detectWorkspaceProjects(
     inventory: FileInventory,
@@ -63,7 +65,9 @@ export async function scanCodebase(
   hooks: ScanHooks = {},
 ): Promise<ScanResult> {
   const dependencies: ScanDependencies = { ...defaultDependencies, ...overrides };
-  const inventory = await dependencies.inventoryWorkspace(request.root);
+  const inventory = await dependencies.inventoryWorkspace(request.root, {
+    exclude: request.exclude ?? [],
+  });
   const manifests = await dependencies.loadManifests(inventory);
   const detection = await dependencies.detectWorkspaceProjects(inventory, manifests);
   const snapshot: ProjectSnapshot = {

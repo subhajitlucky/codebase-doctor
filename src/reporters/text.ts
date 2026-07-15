@@ -115,6 +115,14 @@ export function renderTextReport(
     }
   }
 
+  if (result.comparison !== undefined) {
+    lines.push(
+      "",
+      "Baseline comparison",
+      `New: ${result.comparison.new.length}; unchanged: ${result.comparison.unchanged.length}; resolved: ${result.comparison.resolved.length}`,
+    );
+  }
+
   const counts = result.summary.counts;
   lines.push(
     "",

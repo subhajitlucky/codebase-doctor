@@ -13,6 +13,7 @@ import {
 import { VERSION } from "../version.js";
 import type { DetectedProject } from "../workspace/types.js";
 import type { PlannedCheckRecord } from "../execution/types.js";
+import type { FindingComparison } from "./baseline.js";
 
 export interface DoctorRunRecord {
   doctorId: string;
@@ -33,6 +34,7 @@ export interface ScanResult {
   doctorRuns: readonly DoctorRunRecord[];
   findings: readonly Finding[];
   summary: FindingSummary;
+  comparison?: FindingComparison;
 }
 
 function exactFindingKey(finding: Finding): string {
@@ -91,5 +93,8 @@ export function classifyScanExit(
   failOn: FindingThreshold,
 ): 0 | 1 | 2 {
   if (result.doctorRuns.some(({ status }) => status === "failed")) return 2;
-  return hasFindingAtOrAbove(result.findings, failOn) ? 1 : 0;
+  const findings = result.comparison === undefined
+    ? result.findings
+    : result.findings.filter(({ fingerprint }) => result.comparison?.new.includes(fingerprint));
+  return hasFindingAtOrAbove(findings, failOn) ? 1 : 0;
 }

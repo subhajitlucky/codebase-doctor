@@ -1,9 +1,16 @@
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 const repositoryRoot = process.cwd();
 const fixture = (name: string) => resolve(repositoryRoot, "test", "fixtures", name);
+const temporaryRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 function cli(args: readonly string[], cwd = repositoryRoot) {
   return spawnSync(
@@ -31,6 +38,43 @@ describe("scan CLI", () => {
       ecosystems: ["python"],
       executionSupport: "supported",
     });
+  });
+
+  it("supports the format option while preserving the json alias", () => {
+    const formatted = cli(["scan", fixture("node-pass"), "--format", "json"]);
+    const aliased = cli(["scan", fixture("node-pass"), "--json"]);
+
+    expect(formatted.status).toBe(0);
+    expect(JSON.parse(formatted.stdout).schemaVersion).toBe("1");
+    expect(JSON.parse(aliased.stdout).schemaVersion).toBe("1");
+  });
+
+  it("emits SARIF 2.1.0", () => {
+    const result = cli(["scan", fixture("node-fail"), "--format", "sarif"]);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.version).toBe("2.1.0");
+    expect(report.runs[0].tool.driver.name).toBe("Codebase Doctor");
+  });
+
+  it("rejects conflicting output options", () => {
+    const result = cli(["scan", fixture("node-pass"), "--json", "--format", "text"]);
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/conflict/i);
+  });
+
+  it("excludes matching projects before planning checks", () => {
+    const result = cli(["scan", repositoryRoot, "--json", "--exclude", "test/fixtures/**"]);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.projects.map(({ root }: { root: string }) => root)).toEqual(["."]);
+    expect(report.plannedChecks.every(({ projectId }: { projectId: string }) =>
+      projectId === "root",
+    )).toBe(true);
   });
 
   it("does not execute a failing fixture script by default", () => {
@@ -76,6 +120,25 @@ describe("scan CLI", () => {
     )).toBe(true);
   });
 
+  it("uses a baseline so unchanged findings do not fail the scan", () => {
+    const initial = cli([
+      "scan", fixture("node-fail"), "--run-checks", "--json", "--fail-on", "none",
+    ]);
+    const root = mkdtempSync(resolve(tmpdir(), "codebase-doctor-baseline-"));
+    temporaryRoots.push(root);
+    const baseline = resolve(root, "baseline.json");
+    writeFileSync(baseline, initial.stdout);
+
+    const compared = cli([
+      "scan", fixture("node-fail"), "--run-checks", "--json", "--baseline", baseline,
+    ]);
+    const report = JSON.parse(compared.stdout);
+
+    expect(compared.status).toBe(0);
+    expect(report.comparison.new).toEqual([]);
+    expect(report.comparison.unchanged).toHaveLength(report.findings.length);
+  });
+
   it("returns exit 2 for a nonexistent path", () => {
     const result = cli(["scan", fixture("does-not-exist"), "--json"]);
 
@@ -88,6 +151,7 @@ describe("scan CLI", () => {
     ["--timeout", "not-a-number"],
     ["--timeout", "0"],
     ["--fail-on", "urgent"],
+    ["--format", "xml"],
   ])("returns exit 2 for invalid options: %s %s", (option, value) => {
     const result = cli(["scan", fixture("node-pass"), option, value]);
 

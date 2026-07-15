@@ -1,9 +1,11 @@
 import { Command } from "commander";
-import { displayCommand } from "../execution/command-plan.js";
+import { loadCodebaseConfig, validateExcludePattern } from "../config/config.js";
+import { loadBaseline, withBaselineComparison } from "../core/baseline.js";
 import { classifyScanExit } from "../core/normalize.js";
 import { scanCodebase } from "../core/scan.js";
 import type { FindingThreshold } from "../core/summary.js";
 import { renderJsonReport } from "../reporters/json.js";
+import { renderSarifReport } from "../reporters/sarif.js";
 import { renderTextReport } from "../reporters/text.js";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -20,9 +22,15 @@ const THRESHOLDS = new Set<FindingThreshold>([
 interface ScanCommandOptions {
   runChecks: boolean;
   json: boolean;
+  format?: string;
+  exclude: string[];
+  baseline?: string;
   timeout: string;
   failOn: string;
 }
+
+type OutputFormat = "text" | "json" | "sarif";
+const OUTPUT_FORMATS = new Set<OutputFormat>(["text", "json", "sarif"]);
 
 function parseTimeout(value: string): number {
   if (!/^\d+$/.test(value)) {
@@ -42,31 +50,42 @@ function parseThreshold(value: string): FindingThreshold {
   return value as FindingThreshold;
 }
 
+function parseFormat(options: ScanCommandOptions): OutputFormat {
+  if (options.format !== undefined && !OUTPUT_FORMATS.has(options.format as OutputFormat)) {
+    throw new Error(`Invalid output format "${options.format}".`);
+  }
+  if (options.json && options.format !== undefined && options.format !== "json") {
+    throw new Error("The --json and --format options conflict.");
+  }
+  return options.json ? "json" : (options.format as OutputFormat | undefined) ?? "text";
+}
+
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 async function executeScan(path: string, options: ScanCommandOptions): Promise<void> {
   try {
     const timeoutMs = parseTimeout(options.timeout);
     const failOn = parseThreshold(options.failOn);
+    const format = parseFormat(options);
+    const config = await loadCodebaseConfig(path);
+    const exclude = [...config.exclude, ...options.exclude.map(validateExcludePattern)];
     const request = {
       root: path,
       runChecks: options.runChecks,
-      format: options.json ? "json" : "text",
+      format,
       timeoutMs,
       failOn,
+      exclude,
     } as const;
-    const result = await scanCodebase(
-      request,
-      {},
-      options.json
-        ? {}
-        : {
-            onCommandPlan: (plan) => {
-              process.stdout.write(`Planned command: ${displayCommand(plan)}\n`);
-            },
-          },
-    );
-    const report = options.json
+    const scanned = await scanCodebase(request);
+    const result = options.baseline === undefined
+      ? scanned
+      : withBaselineComparison(scanned, (await loadBaseline(options.baseline)).findings);
+    const report = format === "json"
       ? renderJsonReport(result)
-      : renderTextReport(result, {
+      : format === "sarif" ? renderSarifReport(result) : renderTextReport(result, {
           color: true,
           isTTY: process.stdout.isTTY === true,
           noColor: process.env.NO_COLOR !== undefined,
@@ -86,6 +105,9 @@ export function createScanCommand(): Command {
     .argument("[path]", "repository path", ".")
     .option("--run-checks", "permit execution of detected validation commands", false)
     .option("--json", "emit machine-readable JSON", false)
+    .option("--format <format>", "output format: text, json, or sarif")
+    .option("--exclude <glob>", "exclude a repository-relative path glob", collect, [])
+    .option("--baseline <path>", "compare findings with a prior JSON report")
     .option("--timeout <ms>", "per-command timeout in milliseconds", String(DEFAULT_TIMEOUT_MS))
     .option(
       "--fail-on <severity>",
