@@ -57,7 +57,7 @@ describe("release package", () => {
         process.platform === "win32" ? "codebase-doctor.cmd" : "codebase-doctor",
       );
       const scanned = run(binary, [
-        "scan",
+        "audit",
         resolve(repositoryRoot, "test", "fixtures", "node-pass"),
         "--json",
       ], temporaryRoot);
@@ -68,6 +68,10 @@ describe("release package", () => {
         schemaVersion: "1",
         tool: { name: "codebase-doctor", version: "0.1.1" },
       });
+      expect(report.doctorRuns).toContainEqual(expect.objectContaining({
+        doctorId: "database/rls",
+        status: "skipped",
+      }));
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
