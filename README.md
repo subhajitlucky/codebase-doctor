@@ -1,182 +1,126 @@
 # Codebase Doctor
 
-Codebase Doctor is a planned model-independent CLI for diagnosing human- and AI-written software.
+Codebase Doctor is a model-independent CLI that turns repository structure and configured validation commands into deterministic, evidence-backed findings.
 
-It will inspect a repository, identify its languages and tooling, run explicitly approved validation checks, and return one evidence-backed report that humans, coding agents, and CI systems can understand.
+> **Status:** `0.1.0` release candidate. The implementation is working locally but has not been published to npm.
 
-> **Status:** Architecture approved; `0.1.0` is not implemented or published yet.
+## What works in 0.1.0
 
-## Product Promise
+- Bounded, symlink-safe repository inventory.
+- Node.js, JavaScript, TypeScript, Python, Go, Rust, and Java project detection.
+- React, Next.js, Vite, and NestJS framework detection.
+- npm, pnpm, Yarn, Bun, uv, and Poetry evidence detection.
+- Exact and one-level package workspace discovery.
+- Structural findings for invalid manifests, conflicting lockfiles, missing workspaces, and absent visible tests.
+- Configured JavaScript/TypeScript and Python validation checks.
+- Stable text and JSON schema version `1` reports.
+- Severity thresholds and CI-friendly exit codes.
+- A provider-neutral agent skill.
 
-Modern coding agents can create software quickly, but a confident answer is not proof that the software works. Codebase Doctor is intended to be the verification layer after code changes:
+Go, Rust, and Java are detection-only in `0.1.0`; Codebase Doctor does not execute their toolchains yet.
 
-```text
-Human or AI changes code
-        |
-        v
-Codebase Doctor inspects the repository
-        |
-        +--> detects languages, frameworks, and package managers
-        +--> runs approved tests, builds, linters, and type-checkers
-        +--> normalizes failures into evidence-backed findings
-        |
-        v
-Human-readable and machine-readable report
-```
+## Usage
 
-The deterministic diagnostic engine is the product. AI may later explain or repair verified findings, but an AI opinion will not be treated as evidence by itself.
-
-## Planned `0.1.0`
-
-The first release will deliberately do two things well.
-
-### 1. Project Doctor
-
-Read-only repository inspection:
-
-- Detect common languages, frameworks, manifests, workspaces, and package managers.
-- Recognize monorepos and mixed-language repositories.
-- Report conflicting lockfiles and unreadable or invalid manifests.
-- Inventory configured test, build, lint, and type-check commands.
-- Highlight source areas with no visible test files as a coverage signal, not proof of missing coverage.
-
-### 2. Check Doctor
-
-Explicitly approved command execution for JavaScript/TypeScript and Python projects:
-
-- Discover existing project checks instead of inventing commands.
-- Show the execution plan before running checks.
-- Run checks only when the user supplies `--run-checks`.
-- Apply timeouts and output limits.
-- Never install dependencies or intentionally modify project files.
-- Avoid network calls in the scanner itself; `0.1.0` does not yet sandbox network access for explicitly permitted project commands.
-- Convert failed checks into the same normalized finding format.
-
-## Planned Usage
-
-The following commands describe the approved interface. They will become available after `0.1.0` is implemented and published.
-
-Read-only inspection:
+After npm publication, run a read-only scan:
 
 ```bash
 npx codebase-doctor scan .
 ```
 
-Run detected validation checks with explicit permission:
+Request JSON for an agent or CI system:
+
+```bash
+npx codebase-doctor scan . --json
+```
+
+Explicitly permit detected project checks:
 
 ```bash
 npx codebase-doctor scan . --run-checks
 ```
 
-Machine-readable output for coding agents and CI:
+Available options:
+
+```text
+--run-checks          Permit configured validation commands
+--json                Emit schema-versioned JSON
+--timeout <ms>        Set the per-command timeout (default: 120000)
+--fail-on <severity>  info|low|medium|high|critical|none (default: high)
+```
+
+Local development usage:
 
 ```bash
-npx codebase-doctor scan . --run-checks --json
+npm install
+npm run build
+node dist/cli.js scan . --json
 ```
 
-Planned example:
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Scan completed and no finding met the configured threshold. |
+| `1` | Scan completed and at least one finding met the threshold. |
+| `2` | The requested scan could not be completed. |
+
+Exit `2` is an operational failure, not a clean result. `--fail-on none` disables finding-based failure but does not hide findings or operational failures.
+
+## Safety model
+
+- Read-only discovery is the default.
+- Target commands require `--run-checks`.
+- The scanner never installs target-project dependencies.
+- Commands use argument arrays with `shell: false`.
+- Per-command time and output limits are enforced.
+- Child processes receive a minimal environment.
+- Likely secrets are redacted before entering finding evidence.
+- Scanner logic makes no external network calls.
+
+Approved child commands still inherit host networking in `0.1.0`. Do not execute checks from an untrusted repository. Codebase Doctor coordinates existing tools; it is not a guarantee that every defect will be found.
+
+## Initial findings
+
+- `repository/conflicting-lockfiles`
+- `repository/invalid-manifest`
+- `repository/missing-workspace`
+- `repository/no-visible-tests`
+- `checks/command-failed`
+- `checks/command-timeout`
+
+Every finding contains a rule ID, doctor ID, severity, confidence, category, explanation, structured evidence, stable fingerprint, and remediation when available. Operational failures remain separate in `doctorRuns`.
+
+## Agent skill
+
+The npm package includes the provider-neutral skill at:
 
 ```text
-Codebase Doctor
-
-Repository: ./my-app
-Detected: TypeScript, Next.js, pnpm workspace
-
-HIGH  tests/check-failed
-      The configured test command exited with code 1.
-      Evidence: pnpm test
-      Next step: inspect the failing test output attached to this finding.
-
-MEDIUM repository/conflicting-lockfiles
-       Both pnpm-lock.yaml and package-lock.json are present.
-       Next step: keep the lockfile for the package manager used by this repo.
-
-Summary: 1 high, 1 medium
+.agents/skills/codebase-doctor/
 ```
 
-## Finding Contract
+Copy that directory into a compatible agent's skill directory, or let an agent load it from the installed package. The workflow starts with `npx codebase-doctor scan . --json`, requires confirmation before adding `--run-checks`, fixes one evidence-backed finding at a time, and reruns the exact scan.
 
-Every doctor will produce the same core information:
+## Development
 
-```text
-Rule ID
-Doctor ID
-Severity
-Confidence
-Category
-Title and explanation
-File and line when known
-Evidence and reproduction command when safe
-Suggested next step
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run ci
 ```
 
-Stable normalized findings allow the same scan to power terminal output, JSON, SARIF, GitHub annotations, agent tools, and future dashboards.
-
-## Safety Principles
-
-- **Read-only by default:** scanning must not change the target repository.
-- **Execution requires consent:** project commands run only with `--run-checks`.
-- **No surprise installation:** Codebase Doctor never installs target dependencies.
-- **No scanner network calls:** local inspection does not contact external services; `0.1.0` cannot enforce network isolation inside an approved child process.
-- **Bounded execution:** subprocesses receive time and output limits.
-- **Evidence before confidence:** findings must explain what was observed.
-- **No secret leakage:** reporters redact likely credentials and sensitive environment values.
-- **No fake universality:** support for a language means a tested adapter exists for it.
-
-## Agent-Native Direction
-
-Codebase Doctor will remain useful without an AI model. Agent integrations will be separate surfaces built on the same deterministic core:
-
-```text
-Core CLI
-  +--> JSON and SARIF reports
-  +--> GitHub Action
-  +--> Codex and Claude skills
-  +--> lifecycle hooks
-  +--> MCP server
-  +--> controlled repair workflow
-```
-
-The intended agent loop is:
-
-1. An agent changes code.
-2. Codebase Doctor scans the changed repository.
-3. The agent reads structured, reproducible findings.
-4. The agent fixes one finding in an isolated branch or worktree.
-5. Codebase Doctor verifies whether the repair improved the result.
-
-## What Codebase Doctor Is Not
-
-- Not a claim that one tool can understand every language on day one.
-- Not a replacement for compilers, linters, tests, or security scanners.
-- Not an LLM prompt that guesses whether code looks correct.
-- Not an automatic fixer that silently edits a repository.
-- Not a wrapper that hides the command and evidence behind a score.
-
-Codebase Doctor coordinates proven checks, adds high-signal cross-project diagnostics, and gives every result one stable contract.
+Architecture and safety decisions are documented in [docs/architecture.md](docs/architecture.md). The implementation plan is recorded in [docs/plans/2026-07-15-codebase-doctor-v0.1-implementation.md](docs/plans/2026-07-15-codebase-doctor-v0.1-implementation.md).
 
 ## Roadmap
 
-| Release | Intended focus |
-| --- | --- |
-| `0.1` | Project detection, JavaScript/TypeScript and Python check execution, text and JSON reports, agent skill |
-| `0.2` | Go and Rust adapters, stronger monorepo discovery |
-| `0.3` | Diff-aware scans, baselines, SARIF output |
-| `0.4` | External doctor adapters, including RLS Doctor where applicable |
-| `0.5` | GitHub Action and pull-request annotations |
-| `0.6` | Lifecycle-hook installers and MCP server |
-| `1.0` | Stable doctor SDK and controlled, verification-gated repair workflow |
+- Go and Rust check adapters.
+- Stronger monorepo and Python configuration parsing.
+- Diff-aware scans, baselines, and SARIF.
+- Pull-request annotations and a reusable GitHub Action.
+- External doctor adapters, lifecycle hooks, and MCP tools.
 
-Roadmap items are direction, not shipped features.
+Roadmap items are not shipped behavior.
 
-## Architecture
+## License
 
-See [Project Architecture](docs/architecture.md) for module boundaries, data flow, safety controls, doctor contracts, and testing strategy.
-
-The approved product decisions are recorded in [the design document](docs/plans/2026-07-15-codebase-doctor-design.md).
-
-## Development Status
-
-Implementation has not started. The next milestone is to scaffold the TypeScript CLI using Node.js 20+, Commander, tsup, and Vitest, implement the two `0.1.0` doctors test-first, and package a minimal agent skill that invokes the verified CLI contract.
-
-The package is intended to use the MIT license before its first public release.
+MIT
