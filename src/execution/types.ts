@@ -8,6 +8,13 @@ export interface CommandPlan {
   timeoutMs: number;
 }
 
+export interface PlannedCheckRecord {
+  planId: string;
+  projectId: string;
+  label: string;
+  command: string;
+}
+
 interface CommandOutput {
   stdout: string;
   stderr: string;

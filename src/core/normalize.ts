@@ -12,6 +12,7 @@ import {
 } from "./summary.js";
 import { VERSION } from "../version.js";
 import type { DetectedProject } from "../workspace/types.js";
+import type { PlannedCheckRecord } from "../execution/types.js";
 
 export interface DoctorRunRecord {
   doctorId: string;
@@ -28,6 +29,7 @@ export interface ScanResult {
   tool: { name: "codebase-doctor"; version: string };
   repository: { root: string };
   projects: readonly DetectedProject[];
+  plannedChecks: readonly PlannedCheckRecord[];
   doctorRuns: readonly DoctorRunRecord[];
   findings: readonly Finding[];
   summary: FindingSummary;
@@ -63,6 +65,7 @@ export function normalizeScanResult(
   root: string,
   projects: readonly DetectedProject[],
   registeredResults: readonly RegisteredDoctorResult[],
+  plannedChecks: readonly PlannedCheckRecord[] = [],
 ): ScanResult {
   const findings = uniqueFindings(registeredResults.flatMap(({ result }) => result.findings));
   const doctorRuns = registeredResults
@@ -76,6 +79,7 @@ export function normalizeScanResult(
     projects: [...projects].sort((left, right) =>
       left.root < right.root ? -1 : left.root > right.root ? 1 : 0,
     ),
+    plannedChecks: [...plannedChecks],
     doctorRuns,
     findings,
     summary: summarizeFindings(findings),

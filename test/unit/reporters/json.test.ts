@@ -8,6 +8,7 @@ function result(): ScanResult {
     tool: { name: "codebase-doctor", version: "0.1.0" },
     repository: { root: "/repo" },
     projects: [],
+    plannedChecks: [],
     doctorRuns: [{
       doctorId: "broken",
       status: "failed",

@@ -8,6 +8,8 @@ import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
 import type { CommandPlan } from "../execution/types.js";
+import { displayCommand } from "../execution/command-plan.js";
+import { planChecks } from "../doctors/checks/planner.js";
 import type {
   FileInventory,
   ManifestRecord,
@@ -30,7 +32,11 @@ export interface ScanDependencies {
     inventory: FileInventory,
     manifests: readonly ManifestRecord[],
   ): Promise<ProjectDetection>;
-  createDoctors(request: ScanRequest, hooks: ScanHooks): readonly Doctor[];
+  createDoctors(
+    request: ScanRequest,
+    hooks: ScanHooks,
+    plans: readonly CommandPlan[],
+  ): readonly Doctor[];
 }
 
 export interface ScanHooks {
@@ -41,10 +47,11 @@ const defaultDependencies: ScanDependencies = {
   inventoryWorkspace: inventoryFiles,
   loadManifests: loadPackageManifests,
   detectWorkspaceProjects: detectProjects,
-  createDoctors: (request, hooks) => [
+  createDoctors: (request, hooks, plans) => [
     projectDoctor,
     createCheckDoctor({
       timeoutMs: request.timeoutMs,
+      plans,
       ...(hooks.onCommandPlan === undefined ? {} : { onPlan: hooks.onCommandPlan }),
     }),
   ],
@@ -66,11 +73,22 @@ export async function scanCodebase(
     projects: detection.projects,
     workspaces: detection.workspaces,
   };
+  const plans = planChecks(snapshot, request.timeoutMs);
   const results = await runDoctors(
-    dependencies.createDoctors(request, hooks),
+    dependencies.createDoctors(request, hooks, plans),
     snapshot,
     { runChecks: request.runChecks },
   );
 
-  return normalizeScanResult(inventory.root, detection.projects, results);
+  return normalizeScanResult(
+    inventory.root,
+    detection.projects,
+    results,
+    plans.map((plan) => ({
+      planId: plan.id,
+      projectId: plan.projectId,
+      label: plan.label,
+      command: displayCommand(plan),
+    })),
+  );
 }

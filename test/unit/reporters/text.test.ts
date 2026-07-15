@@ -17,6 +17,12 @@ function result(): ScanResult {
       manifestPaths: ["package.json"],
       executionSupport: "supported",
     }],
+    plannedChecks: [{
+      planId: "root:javascript:test",
+      projectId: "root",
+      label: "JavaScript test",
+      command: "npm run test",
+    }],
     doctorRuns: [
       {
         doctorId: "checks",
@@ -67,6 +73,8 @@ describe("text reporter", () => {
     expect(report).toContain("Check support: supported");
     expect(report).toContain("checks: skipped");
     expect(report).toContain("process:execute");
+    expect(report).toContain("Planned checks");
+    expect(report).toContain("npm run test");
   });
 
   it("renders severity, evidence, and remediation readably", () => {

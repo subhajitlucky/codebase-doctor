@@ -14,8 +14,7 @@ import type {
   CommandRunner,
   CommandRunResult,
 } from "../../execution/types.js";
-import { planJavaScriptChecks } from "./javascript.js";
-import { planPythonChecks } from "./python.js";
+import { planChecks } from "./planner.js";
 
 export interface CheckDoctorResult extends DoctorResult {
   checkRuns: readonly CheckRunRecord[];
@@ -32,6 +31,7 @@ export interface CheckDoctorOptions {
   timeoutMs?: number;
   redactionEnvironment?: NodeJS.ProcessEnv;
   onPlan?: (plan: CommandPlan) => void;
+  plans?: readonly CommandPlan[];
 }
 
 function outputEvidence(
@@ -157,10 +157,7 @@ export function createCheckDoctor(options: CheckDoctorOptions = {}): CheckDoctor
       }
 
       const startedAt = Date.now();
-      const plans = [
-        ...planJavaScriptChecks(context.snapshot, timeoutMs),
-        ...planPythonChecks(context.snapshot, timeoutMs),
-      ];
+      const plans = options.plans ?? planChecks(context.snapshot, timeoutMs);
       const findings: Finding[] = [];
       const checkRuns: CheckRunRecord[] = [];
       let operationalError: OperationalError | undefined;

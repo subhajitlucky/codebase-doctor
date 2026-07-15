@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { planJavaScriptChecks } from "../../../src/doctors/checks/javascript.js";
 import { planPythonChecks } from "../../../src/doctors/checks/python.js";
+import { planChecks } from "../../../src/doctors/checks/planner.js";
 import type {
   DetectedProject,
   FileRecord,
@@ -161,5 +162,21 @@ describe("Python check planning", () => {
       { command: executable, args: ["run", "ruff", "check", "."], cwd: "/tmp/repository/services/api" },
       { command: executable, args: ["run", "mypy", "."], cwd: "/tmp/repository/services/api" },
     ]);
+  });
+});
+
+describe("combined check planning", () => {
+  it("returns immutable plans in stable ID order", () => {
+    const plans = planChecks(snapshot({
+      projects: [pythonProject("services/api"), nodeProject("npm")],
+      manifests: [packageManifest({ test: "vitest" })],
+      files: [file("services/api/pytest.ini")],
+    }), 10_000);
+
+    expect(plans.map(({ id }) => id)).toEqual([
+      "root:javascript:test",
+      "project:services/api:python:pytest",
+    ]);
+    expect(Object.isFrozen(plans)).toBe(true);
   });
 });

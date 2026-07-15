@@ -102,6 +102,23 @@ describe("scan orchestration", () => {
     expect(diagnose).toHaveBeenCalledOnce();
   });
 
+  it("reports planned checks without granting process execution", async () => {
+    const deps = dependencies([]);
+    deps.loadManifests = vi.fn(async () => [{
+      kind: "package-json" as const,
+      path: "package.json",
+      status: "valid" as const,
+      data: { scripts: { test: "vitest" } },
+    }]);
+
+    const result = await scanCodebase(request(false), deps);
+
+    expect(result.plannedChecks).toEqual([expect.objectContaining({
+      planId: "root:javascript:test",
+      command: "npm run test",
+    })]);
+  });
+
   it("retains one doctor failure while preserving another doctor's finding", async () => {
     const broken = doctor("broken", ["filesystem:read"], async () => {
       throw new Error("doctor broke");

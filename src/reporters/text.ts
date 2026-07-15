@@ -75,6 +75,15 @@ export function renderTextReport(
     }
   }
 
+  lines.push("", "Planned checks");
+  if (result.plannedChecks.length === 0) {
+    lines.push("No supported checks detected.");
+  } else {
+    for (const check of result.plannedChecks) {
+      lines.push(`Planned command: ${check.command} (${check.projectId})`);
+    }
+  }
+
   lines.push("", "Doctor runs");
   if (result.doctorRuns.length === 0) {
     lines.push("No doctors ran.");
