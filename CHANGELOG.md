@@ -4,6 +4,10 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [0.1.1] - 2026-07-15
 
+### Added
+
+- Show live monthly npm downloads in the repository and package README.
+
 ### Fixed
 
 - Correct the README status and usage wording after the initial npm publication.
