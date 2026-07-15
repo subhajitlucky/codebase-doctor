@@ -2,12 +2,46 @@
 
 [![npm downloads](https://img.shields.io/npm/dm/codebase-doctor?label=npm%20downloads)](https://www.npmjs.com/package/codebase-doctor)
 
-Codebase Doctor is a model-independent CLI that turns repository structure and configured validation commands into deterministic, evidence-backed findings.
+Codebase Doctor is a model-independent, full-codebase auditor for developers and
+coding agents. It turns repository evidence into deterministic findings that a
+human or model can inspect, fix, and verify.
 
-The long-term product direction is a model-independent verification control
-plane for coding agents: a doctor-of-doctors that coordinates specialist tools,
-normalizes their evidence, and verifies repairs. See the
-[agent verification platform design](docs/plans/2026-07-15-agent-verification-platform-design.md).
+## One doctor for the whole codebase
+
+The product is one CLI, one configuration file, and one report—not a collection
+of separate products such as React Doctor, API Doctor, or RLS Doctor.
+
+Codebase Doctor will automatically detect what a repository contains and run the
+audits that apply. Framework- and domain-specific knowledge lives inside the
+product as internal audit modules:
+
+```text
+codebase-doctor
+└── audits
+    ├── frontend        React, Next.js, accessibility, SEO, bundles
+    ├── backend         APIs, authentication, workers, webhooks, cron
+    ├── database        schemas, queries, migrations, RLS
+    ├── security        secrets, dependencies, permissions, rate limits
+    ├── infrastructure Docker, CI, hosting, deployment
+    ├── performance     caching, queries, memory, profiling
+    └── ai              prompts, tokens, models, grounding
+```
+
+These are implementation boundaries, not tools users must discover, install, or
+orchestrate. Existing specialist knowledge—including the rule catalog and
+analysis ideas from [RLS Doctor](https://github.com/subhajitlucky/rls-doctor)—can
+be incorporated into the relevant internal module while Codebase Doctor remains
+the single public interface.
+
+The intended end state is:
+
+```bash
+codebase-doctor audit .
+```
+
+That command is the product direction, not shipped behavior in `0.1.x`. Today,
+the implemented command is `codebase-doctor scan` and the current capabilities
+are listed below.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
@@ -132,7 +166,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 - Likely secrets are redacted before entering finding evidence.
 - Scanner logic makes no external network calls.
 
-Approved child commands still inherit host networking in `0.1.x`. Do not execute checks from an untrusted repository. Codebase Doctor coordinates existing tools; it is not a guarantee that every defect will be found.
+Approved child commands still inherit host networking in `0.1.x`. Do not execute checks from an untrusted repository. Codebase Doctor combines built-in analysis with explicitly approved project checks; it is not a guarantee that every defect will be found.
 
 ## Initial findings
 
@@ -145,7 +179,21 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 
 Every finding contains a rule ID, doctor ID, severity, confidence, category, explanation, structured evidence, stable fingerprint, and remediation when available. Operational failures remain separate in `doctorRuns`.
 
-## Agent skill
+## Built for coding agents
+
+Codebase Doctor gives any agent the same stable contract regardless of which
+model is driving it:
+
+1. Run one repository-wide command.
+2. Read compact, schema-versioned evidence.
+3. Fix a specific finding.
+4. Run the same command again to verify the repair.
+
+The CLI is intentionally model-independent. It can be exposed through a shell,
+repository instructions, an agent skill, CI, hooks, or a future MCP server. A
+model does not need to know which internal audit module found an issue.
+
+### Agent skill
 
 The npm package includes the provider-neutral skill at:
 
@@ -169,10 +217,18 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 
 ## Roadmap
 
-- Go and Rust check adapters.
-- Stronger monorepo and Python configuration parsing.
-- Reusable GitHub Action and pull-request annotations.
-- External doctor adapters, lifecycle hooks, and MCP tools.
+- Introduce `codebase-doctor audit` as the unified full-codebase audit command.
+- Build an auto-detected internal audit engine with shared evidence, severity,
+  confidence, fingerprinting, and remediation contracts.
+- Add database security auditing, beginning with an internal RLS audit module.
+- Expand built-in frontend, backend, security, infrastructure, performance, and
+  AI audit coverage without requiring separate doctor installations.
+- Report which applicable areas were audited, skipped, unsupported, or blocked
+  so an agent never mistakes partial coverage for a clean codebase.
+- Add reusable GitHub Action, pull-request annotations, hooks, agent plugins,
+  and MCP integration around the same CLI and report schema.
+- Publish cross-model benchmarks that measure defects found, false positives,
+  verification success, runtime, and token/tool-call cost.
 
 Roadmap items are not shipped behavior.
 
