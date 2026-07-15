@@ -5,6 +5,7 @@ import type { FindingThreshold } from "./summary.js";
 import { createCheckDoctor } from "../doctors/checks/doctor.js";
 import { projectDoctor } from "../doctors/project/doctor.js";
 import { createRlsDoctor } from "../audits/database/rls/doctor.js";
+import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
@@ -68,6 +69,7 @@ const defaultDependencies: ScanDependencies = {
       }),
     ];
     if (request.includeDatabaseAudit === true) {
+      doctors.push(createSqlRlsDoctor());
       doctors.push(createRlsDoctor({
         schemas: request.databaseSchemas ?? ["public"],
         statementTimeoutMs: request.databaseTimeoutMs ?? 10_000,

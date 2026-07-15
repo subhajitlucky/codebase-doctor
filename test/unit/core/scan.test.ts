@@ -125,7 +125,7 @@ describe("scan orchestration", () => {
     expect(diagnose).toHaveBeenCalledOnce();
   });
 
-  it("registers the built-in RLS doctor only for the combined audit path", async () => {
+  it("registers static and live RLS doctors only for the combined audit path", async () => {
     const discovery = {
       inventoryWorkspace: vi.fn(async () => inventory),
       loadManifests: vi.fn(async () => []),
@@ -141,6 +141,15 @@ describe("scan orchestration", () => {
     }), discovery);
 
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/rls");
+    expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/sql-rls");
+    expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "database/sql-rls",
+      status: "completed",
+    }));
+    expect(audited.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/sql-rls",
+      status: "not-applicable",
+    }));
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "database/rls",
       status: "skipped",
