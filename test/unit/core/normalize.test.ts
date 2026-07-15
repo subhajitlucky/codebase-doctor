@@ -74,6 +74,41 @@ describe("scan normalization", () => {
     });
   });
 
+  it("preserves and deterministically sorts audit coverage", () => {
+    const result = normalizeScanResult("/repo", [], [
+      run("database/sql-rls", {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage: [
+          {
+            moduleId: "database/sql-rls",
+            status: "partial",
+            scope: "root:supabase/migrations",
+            filesExamined: 2,
+            statementsExamined: 8,
+            statementsRecognized: 7,
+            limitations: ["Dynamic SQL was not evaluated."],
+          },
+          {
+            moduleId: "database/sql-rls",
+            status: "completed",
+            scope: "root:drizzle",
+            filesExamined: 1,
+            statementsExamined: 3,
+            statementsRecognized: 3,
+            limitations: [],
+          },
+        ],
+      }),
+    ]);
+
+    expect(result.coverage?.map(({ scope }) => scope)).toEqual([
+      "root:drizzle",
+      "root:supabase/migrations",
+    ]);
+  });
+
   it("maps thresholds and operational failure to stable exit classifications", () => {
     const healthy = normalizeScanResult("/repo", [], [
       run("doctor", {

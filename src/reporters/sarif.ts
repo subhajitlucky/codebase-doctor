@@ -92,6 +92,9 @@ export function renderSarifReport(result: ScanResult): string {
         },
       },
       results: result.findings.map((finding) => sarifResult(result, finding)),
+      ...(result.coverage === undefined
+        ? {}
+        : { properties: { coverage: result.coverage } }),
     }],
   };
   return `${JSON.stringify(report, null, 2)}\n`;

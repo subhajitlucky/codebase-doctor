@@ -136,4 +136,25 @@ describe("text reporter", () => {
 
     expect(renderTextReport(empty)).toContain("Clean scan: no findings.");
   });
+
+  it("renders partial audit coverage separately from findings", () => {
+    const covered: ScanResult = {
+      ...result(),
+      coverage: [{
+        moduleId: "database/sql-rls",
+        status: "partial",
+        scope: "root:supabase/migrations",
+        filesExamined: 2,
+        statementsExamined: 8,
+        statementsRecognized: 7,
+        limitations: ["Dynamic SQL was not evaluated."],
+      }],
+    };
+
+    const report = renderTextReport(covered);
+
+    expect(report).toContain("Audit coverage");
+    expect(report).toContain("database/sql-rls: partial");
+    expect(report).toContain("Dynamic SQL was not evaluated.");
+  });
 });

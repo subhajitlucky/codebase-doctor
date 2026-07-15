@@ -22,12 +22,30 @@ export interface CheckRunRecord {
   reason?: string;
 }
 
+export type CoverageStatus =
+  | "completed"
+  | "partial"
+  | "not-applicable"
+  | "skipped"
+  | "failed";
+
+export interface AuditCoverage {
+  moduleId: string;
+  status: CoverageStatus;
+  scope: string;
+  filesExamined: number;
+  statementsExamined: number;
+  statementsRecognized: number;
+  limitations: readonly string[];
+}
+
 export interface DoctorResult {
   status: "completed" | "skipped" | "failed";
   findings: readonly Finding[];
   error?: OperationalError;
   skipReason?: string;
   checkRuns?: readonly CheckRunRecord[];
+  coverage?: readonly AuditCoverage[];
   durationMs: number;
 }
 

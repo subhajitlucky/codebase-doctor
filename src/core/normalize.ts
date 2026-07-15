@@ -1,5 +1,6 @@
 import type {
   CheckRunRecord,
+  AuditCoverage,
   OperationalError,
   RegisteredDoctorResult,
 } from "./doctor.js";
@@ -34,6 +35,7 @@ export interface ScanResult {
   doctorRuns: readonly DoctorRunRecord[];
   findings: readonly Finding[];
   summary: FindingSummary;
+  coverage?: readonly AuditCoverage[];
   comparison?: FindingComparison;
 }
 
@@ -73,6 +75,13 @@ export function normalizeScanResult(
   const doctorRuns = registeredResults
     .map(doctorRun)
     .sort((left, right) => left.doctorId < right.doctorId ? -1 : left.doctorId > right.doctorId ? 1 : 0);
+  const coverage = registeredResults
+    .flatMap(({ result }) => result.coverage ?? [])
+    .map((entry) => ({ ...entry, limitations: [...entry.limitations].sort() }))
+    .sort((left, right) => {
+      const moduleOrder = left.moduleId.localeCompare(right.moduleId);
+      return moduleOrder !== 0 ? moduleOrder : left.scope.localeCompare(right.scope);
+    });
 
   return {
     schemaVersion: "1",
@@ -85,6 +94,7 @@ export function normalizeScanResult(
     doctorRuns,
     findings,
     summary: summarizeFindings(findings),
+    ...(coverage.length === 0 ? {} : { coverage }),
   };
 }
 

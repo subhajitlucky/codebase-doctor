@@ -88,4 +88,25 @@ describe("SARIF reporter", () => {
       expect.objectContaining({ type: "database", schema: "public", table: "documents" }),
     ]);
   });
+
+  it("stores coverage in run properties without creating results", () => {
+    const covered: ScanResult = {
+      ...result(),
+      findings: [],
+      coverage: [{
+        moduleId: "database/sql-rls",
+        status: "partial",
+        scope: "root:migrations",
+        filesExamined: 1,
+        statementsExamined: 2,
+        statementsRecognized: 1,
+        limitations: ["Dynamic SQL was not evaluated."],
+      }],
+    };
+
+    const run = JSON.parse(renderSarifReport(covered)).runs[0];
+
+    expect(run.results).toEqual([]);
+    expect(run.properties.coverage).toEqual(covered.coverage);
+  });
 });

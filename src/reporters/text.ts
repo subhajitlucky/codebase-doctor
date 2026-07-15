@@ -106,6 +106,20 @@ export function renderTextReport(
     }
   }
 
+  if (result.coverage !== undefined) {
+    lines.push("", "Audit coverage");
+    for (const coverage of result.coverage) {
+      lines.push(
+        `${coverage.moduleId}: ${coverage.status} (${coverage.scope}; ` +
+        `${coverage.filesExamined} files; ${coverage.statementsRecognized}/` +
+        `${coverage.statementsExamined} statements recognized)`,
+      );
+      for (const limitation of coverage.limitations) {
+        lines.push(`  Limitation: ${limitation}`);
+      }
+    }
+  }
+
   lines.push("", "Findings");
   if (result.findings.length === 0) {
     lines.push("Clean scan: no findings.");
