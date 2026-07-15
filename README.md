@@ -48,7 +48,8 @@ Explicitly approved command execution for JavaScript/TypeScript and Python proje
 - Show the execution plan before running checks.
 - Run checks only when the user supplies `--run-checks`.
 - Apply timeouts and output limits.
-- Never install dependencies, enable network access, or modify project files.
+- Never install dependencies or intentionally modify project files.
+- Avoid network calls in the scanner itself; `0.1.0` does not yet sandbox network access for explicitly permitted project commands.
 - Convert failed checks into the same normalized finding format.
 
 ## Planned Usage
@@ -116,7 +117,7 @@ Stable normalized findings allow the same scan to power terminal output, JSON, S
 - **Read-only by default:** scanning must not change the target repository.
 - **Execution requires consent:** project commands run only with `--run-checks`.
 - **No surprise installation:** Codebase Doctor never installs target dependencies.
-- **No network by default:** checks do not receive network permission from Codebase Doctor.
+- **No scanner network calls:** local inspection does not contact external services; `0.1.0` cannot enforce network isolation inside an approved child process.
 - **Bounded execution:** subprocesses receive time and output limits.
 - **Evidence before confidence:** findings must explain what was observed.
 - **No secret leakage:** reporters redact likely credentials and sensitive environment values.
@@ -158,12 +159,12 @@ Codebase Doctor coordinates proven checks, adds high-signal cross-project diagno
 
 | Release | Intended focus |
 | --- | --- |
-| `0.1` | Project detection, JavaScript/TypeScript and Python check execution, text and JSON reports |
+| `0.1` | Project detection, JavaScript/TypeScript and Python check execution, text and JSON reports, agent skill |
 | `0.2` | Go and Rust adapters, stronger monorepo discovery |
 | `0.3` | Diff-aware scans, baselines, SARIF output |
 | `0.4` | External doctor adapters, including RLS Doctor where applicable |
 | `0.5` | GitHub Action and pull-request annotations |
-| `0.6` | Agent skills, lifecycle-hook installers, and MCP server |
+| `0.6` | Lifecycle-hook installers and MCP server |
 | `1.0` | Stable doctor SDK and controlled, verification-gated repair workflow |
 
 Roadmap items are direction, not shipped features.
@@ -176,6 +177,6 @@ The approved product decisions are recorded in [the design document](docs/plans/
 
 ## Development Status
 
-Implementation has not started. The next milestone is to scaffold the TypeScript CLI using Node.js 20+, Commander, tsup, and Vitest, then implement the two `0.1.0` doctors test-first.
+Implementation has not started. The next milestone is to scaffold the TypeScript CLI using Node.js 20+, Commander, tsup, and Vitest, implement the two `0.1.0` doctors test-first, and package a minimal agent skill that invokes the verified CLI contract.
 
 The package is intended to use the MIT license before its first public release.

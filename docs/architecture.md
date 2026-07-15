@@ -302,6 +302,7 @@ The subprocess runner is a trust boundary.
 - Limit captured stdout and stderr.
 - Pass a minimal inherited environment and redact likely credentials.
 - Never run dependency installation.
+- Do not make scanner network calls or add network credentials; document that approved child commands still inherit host networking in `0.1.0`.
 - Never allow doctor-provided filesystem writes.
 - Record the exact command and exit code.
 
@@ -374,7 +375,7 @@ A failed project test normally produces a finding and exit `1`. Invalid CLI argu
 
 The CLI and JSON contract come first. Agent surfaces remain adapters:
 
-1. A `SKILL.md` teaches compatible agents when and how to run scans.
+1. A `SKILL.md` shipped in `0.1.0` teaches compatible agents when and how to run scans.
 2. Lifecycle hooks run diff-aware scans after code changes or before an agent stops.
 3. An MCP server exposes `inspect_repository`, `plan_checks`, and `run_checks` tools with explicit capability annotations.
 4. A controlled repair workflow asks an agent to patch a finding in isolation, then accepts the patch only after deterministic verification.
@@ -441,6 +442,7 @@ The following are intentionally outside `0.1.0`:
 - baseline and diff comparison
 - external doctor installation
 - MCP server
+- lifecycle-hook installers
 - AI explanations and repair
 - hosted dashboards, accounts, billing, and telemetry
 

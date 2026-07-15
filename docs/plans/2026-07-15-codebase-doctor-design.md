@@ -80,6 +80,7 @@ Approved.
 - Human-readable terminal report.
 - Versioned JSON report.
 - Exit codes suitable for CI.
+- Minimal filesystem-based agent skill that teaches compatible coding agents to invoke the CLI and interpret its exit codes.
 
 ### Quality Bar
 
@@ -117,6 +118,7 @@ The target repository may be buggy or malicious. Therefore:
 - output and duration are bounded
 - likely secrets are redacted before reporting
 - missing tools produce a skip explanation rather than automatic installation
+- the scanner makes no external network calls, while documentation clearly states that `0.1.0` cannot isolate networking inside an approved child process
 - untrusted repository execution remains unsupported until sandboxing exists
 
 ## Agent Strategy
@@ -144,7 +146,8 @@ The release is successful when:
 4. Reports include evidence and redact configured secret fixtures.
 5. Unit, integration, build, audit, and package smoke checks pass.
 6. The packed npm artifact contains only required runtime files and documentation.
-7. README claims match implemented behavior.
+7. The included agent skill uses only commands and report behavior verified by CLI integration tests.
+8. README claims match implemented behavior.
 
 ## Non-Goals for `0.1.0`
 
