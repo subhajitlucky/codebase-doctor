@@ -9,7 +9,7 @@ export const projectDoctor: Doctor = {
   id: "project",
   version: "0.1.0",
   capabilities: ["filesystem:read"],
-  supports: (snapshot) => snapshot.projects.length > 0,
+  supports: () => true,
   diagnose: async ({ snapshot }) => {
     const startedAt = Date.now();
     const findings = sortFindings([

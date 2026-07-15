@@ -12,11 +12,22 @@ export interface DoctorContext {
   allowedCapabilities: ReadonlySet<Capability>;
 }
 
+export interface CheckRunRecord {
+  planId: string;
+  projectId: string;
+  command: string;
+  status: "passed" | "failed" | "timed-out" | "skipped";
+  durationMs: number;
+  exitCode?: number;
+  reason?: string;
+}
+
 export interface DoctorResult {
   status: "completed" | "skipped" | "failed";
   findings: readonly Finding[];
   error?: OperationalError;
   skipReason?: string;
+  checkRuns?: readonly CheckRunRecord[];
   durationMs: number;
 }
 

@@ -1,4 +1,5 @@
 import type {
+  CheckRunRecord,
   Doctor,
   DoctorContext,
   DoctorResult,
@@ -16,19 +17,11 @@ import type {
 import { planJavaScriptChecks } from "./javascript.js";
 import { planPythonChecks } from "./python.js";
 
-export interface CheckRunRecord {
-  planId: string;
-  projectId: string;
-  command: string;
-  status: "passed" | "failed" | "timed-out" | "skipped";
-  durationMs: number;
-  exitCode?: number;
-  reason?: string;
-}
-
 export interface CheckDoctorResult extends DoctorResult {
   checkRuns: readonly CheckRunRecord[];
 }
+
+export type { CheckRunRecord } from "../../core/doctor.js";
 
 export interface CheckDoctor extends Omit<Doctor, "diagnose"> {
   diagnose(context: DoctorContext): Promise<CheckDoctorResult>;

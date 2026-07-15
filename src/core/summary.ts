@@ -6,6 +6,17 @@ export interface FindingSummary {
   highestSeverity: Severity | null;
 }
 
+export type FindingThreshold = Severity | "none";
+
+export function hasFindingAtOrAbove(
+  findings: readonly Finding[],
+  threshold: FindingThreshold,
+): boolean {
+  if (threshold === "none") return false;
+  const thresholdIndex = SEVERITIES.indexOf(threshold);
+  return findings.some(({ severity }) => SEVERITIES.indexOf(severity) >= thresholdIndex);
+}
+
 export function summarizeFindings(findings: readonly Finding[]): FindingSummary {
   const counts: Record<Severity, number> = {
     info: 0,

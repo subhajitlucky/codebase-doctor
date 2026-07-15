@@ -1,0 +1,67 @@
+import type { Doctor } from "./doctor.js";
+import { normalizeScanResult, type ScanResult } from "./normalize.js";
+import { runDoctors } from "./registry.js";
+import type { FindingThreshold } from "./summary.js";
+import { createCheckDoctor } from "../doctors/checks/doctor.js";
+import { projectDoctor } from "../doctors/project/doctor.js";
+import { inventoryFiles } from "../workspace/file-inventory.js";
+import { loadPackageManifests } from "../workspace/manifest-loader.js";
+import { detectProjects } from "../workspace/project-detector.js";
+import type {
+  FileInventory,
+  ManifestRecord,
+  ProjectDetection,
+  ProjectSnapshot,
+} from "../workspace/types.js";
+
+export interface ScanRequest {
+  root: string;
+  runChecks: boolean;
+  format: "text" | "json";
+  timeoutMs: number;
+  failOn: FindingThreshold;
+}
+
+export interface ScanDependencies {
+  inventoryWorkspace(root: string): Promise<FileInventory>;
+  loadManifests(inventory: FileInventory): Promise<ManifestRecord[]>;
+  detectWorkspaceProjects(
+    inventory: FileInventory,
+    manifests: readonly ManifestRecord[],
+  ): Promise<ProjectDetection>;
+  createDoctors(request: ScanRequest): readonly Doctor[];
+}
+
+const defaultDependencies: ScanDependencies = {
+  inventoryWorkspace: inventoryFiles,
+  loadManifests: loadPackageManifests,
+  detectWorkspaceProjects: detectProjects,
+  createDoctors: (request) => [
+    projectDoctor,
+    createCheckDoctor({ timeoutMs: request.timeoutMs }),
+  ],
+};
+
+export async function scanCodebase(
+  request: ScanRequest,
+  overrides: Partial<ScanDependencies> = {},
+): Promise<ScanResult> {
+  const dependencies: ScanDependencies = { ...defaultDependencies, ...overrides };
+  const inventory = await dependencies.inventoryWorkspace(request.root);
+  const manifests = await dependencies.loadManifests(inventory);
+  const detection = await dependencies.detectWorkspaceProjects(inventory, manifests);
+  const snapshot: ProjectSnapshot = {
+    root: inventory.root,
+    files: inventory.files,
+    manifests,
+    projects: detection.projects,
+    workspaces: detection.workspaces,
+  };
+  const results = await runDoctors(
+    dependencies.createDoctors(request),
+    snapshot,
+    { runChecks: request.runChecks },
+  );
+
+  return normalizeScanResult(inventory.root, detection.projects, results);
+}
