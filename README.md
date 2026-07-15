@@ -4,6 +4,11 @@
 
 Codebase Doctor is a model-independent CLI that turns repository structure and configured validation commands into deterministic, evidence-backed findings.
 
+The long-term product direction is a model-independent verification control
+plane for coding agents: a doctor-of-doctors that coordinates specialist tools,
+normalizes their evidence, and verifies repairs. See the
+[agent verification platform design](docs/plans/2026-07-15-agent-verification-platform-design.md).
+
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
 ## What works in the current source
