@@ -32,6 +32,10 @@ export interface ScanRequest {
   databaseTimeoutMs?: number;
 }
 
+export interface AuditRequest extends ScanRequest {
+  includeDatabaseAudit: true;
+}
+
 export interface ScanDependencies {
   inventoryWorkspace(root: string, options?: FileInventoryOptions): Promise<FileInventory>;
   loadManifests(inventory: FileInventory): Promise<ManifestRecord[]>;
@@ -111,5 +115,17 @@ export async function scanCodebase(
       label: plan.label,
       command: displayCommand(plan),
     })),
+  );
+}
+
+export async function auditCodebase(
+  request: AuditRequest,
+  overrides: Partial<ScanDependencies> = {},
+  hooks: ScanHooks = {},
+): Promise<ScanResult> {
+  return scanCodebase(
+    { ...request, includeDatabaseAudit: true },
+    overrides,
+    hooks,
   );
 }

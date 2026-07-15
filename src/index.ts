@@ -25,8 +25,13 @@ export type {
   BaselineReport,
   FindingComparison,
 } from "./core/baseline.js";
-export { scanCodebase } from "./core/scan.js";
-export type { ScanDependencies, ScanHooks, ScanRequest } from "./core/scan.js";
+export { auditCodebase, scanCodebase } from "./core/scan.js";
+export type {
+  AuditRequest,
+  ScanDependencies,
+  ScanHooks,
+  ScanRequest,
+} from "./core/scan.js";
 export { hasFindingAtOrAbove, summarizeFindings } from "./core/summary.js";
 export type {
   FindingSummary,
