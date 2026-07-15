@@ -12,6 +12,7 @@ export interface FileInventory {
 export interface FileInventoryOptions {
   maxFiles?: number;
   maxDepth?: number;
+  exclude?: readonly string[];
 }
 
 export type JsonObject = Record<string, unknown>;

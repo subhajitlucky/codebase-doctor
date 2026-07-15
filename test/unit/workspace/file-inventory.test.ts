@@ -67,6 +67,25 @@ describe("workspace file inventory", () => {
     expect(inventory.files.map(({ path }) => path)).toEqual(["src/keep.ts"]);
   });
 
+  it("applies exact and glob exclusions before descending", async () => {
+    const root = await project();
+    await writeProjectFile(root, "src/keep.ts");
+    await writeProjectFile(root, "src/generated/client.ts");
+    await writeProjectFile(root, "test/fixtures/a/package.json");
+    await writeProjectFile(root, "test/fixtures/b/package.json");
+    await writeProjectFile(root, "reports/a.json");
+    await writeProjectFile(root, "reports/a.txt");
+
+    const inventory = await inventoryFiles(root, {
+      exclude: ["src/generated", "test/fixtures/**", "reports/?.json"],
+    });
+
+    expect(inventory.files.map(({ path }) => path)).toEqual([
+      "reports/a.txt",
+      "src/keep.ts",
+    ]);
+  });
+
   it("records symlinks but never follows directory symlinks", async () => {
     const root = await project();
     const outside = await project("codebase-doctor-outside-");

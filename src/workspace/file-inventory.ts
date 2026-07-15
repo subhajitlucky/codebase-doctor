@@ -1,5 +1,6 @@
 import { lstat, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { validateExcludePattern } from "../config/config.js";
 import type {
   FileInventory,
   FileInventoryOptions,
@@ -30,6 +31,42 @@ function isIgnoredDirectory(name: string): boolean {
   return IGNORED_DIRECTORIES.has(name) || name.startsWith(".venv-");
 }
 
+function escapeRegularExpression(value: string): string {
+  return value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+}
+
+function globExpression(pattern: string): RegExp {
+  let source = "^";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "*") {
+      if (pattern[index + 1] === "*") {
+        index += 1;
+        if (pattern[index + 1] === "/") {
+          index += 1;
+          source += "(?:[^/]+/)*";
+        } else {
+          source += ".*";
+        }
+      } else {
+        source += "[^/]*";
+      }
+    } else if (character === "?") {
+      source += "[^/]";
+    } else {
+      source += escapeRegularExpression(character ?? "");
+    }
+  }
+  return new RegExp(`${source}$`);
+}
+
+function exclusionMatcher(patterns: readonly string[]): (path: string) => boolean {
+  const expressions = patterns.map(validateExcludePattern).map(globExpression);
+  return (path) => expressions.some((expression) =>
+    expression.test(path) || expression.test(`${path}/`),
+  );
+}
+
 export class WorkspaceInventoryError extends Error {
   constructor(message: string) {
     super(message);
@@ -52,6 +89,7 @@ export async function inventoryFiles(
   const root = resolve(requestedRoot);
   const maxFiles = readLimit(options.maxFiles, DEFAULT_MAX_FILES, "File limit");
   const maxDepth = readLimit(options.maxDepth, DEFAULT_MAX_DEPTH, "Depth limit");
+  const isExcluded = exclusionMatcher(options.exclude ?? []);
 
   let rootStatus;
   try {
@@ -85,6 +123,7 @@ export async function inventoryFiles(
       const absolutePath = join(directory, name);
       const relativeSegments = [...segments, name];
       const relativePath = relativeSegments.join("/");
+      if (isExcluded(relativePath)) continue;
       const status = await lstat(absolutePath);
 
       if (status.isSymbolicLink()) {
