@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseNpmPackJson } from "../../scripts/npm-pack-json.mjs";
 
 const repositoryRoot = process.cwd();
 
@@ -32,8 +33,13 @@ describe("release package", () => {
         temporaryRoot,
       ]);
       expect(packed.status, packed.stderr).toBe(0);
-      const [{ filename }] = JSON.parse(packed.stdout) as [{ filename: string }];
-      const tarball = join(temporaryRoot, filename);
+      const reports = parseNpmPackJson(packed.stdout);
+      expect(reports).toHaveLength(1);
+      const [packReport] = reports;
+      if (!packReport) {
+        throw new Error("Expected npm pack to return one package report.");
+      }
+      const tarball = join(temporaryRoot, packReport.filename);
 
       const installed = run("npm", [
         "install",

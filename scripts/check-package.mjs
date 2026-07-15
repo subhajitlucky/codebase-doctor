@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { parseNpmPackJson } from "./npm-pack-json.mjs";
 
 const packed = spawnSync(
   "npm",
@@ -8,7 +9,7 @@ const packed = spawnSync(
 );
 
 assert.equal(packed.status, 0, packed.stderr || packed.stdout);
-const reports = JSON.parse(packed.stdout);
+const reports = parseNpmPackJson(packed.stdout);
 assert.equal(reports.length, 1, "Expected one npm package report.");
 
 const [report] = reports;
