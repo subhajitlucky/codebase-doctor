@@ -51,13 +51,17 @@ function doctor(
   };
 }
 
-function request(runChecks: boolean): ScanRequest {
+function request(
+  runChecks: boolean,
+  overrides: Partial<ScanRequest> = {},
+): ScanRequest {
   return {
     root: "/repo",
     runChecks,
     format: "json",
     timeoutMs: 1_000,
     failOn: "high",
+    ...overrides,
   };
 }
 
@@ -100,6 +104,48 @@ describe("scan orchestration", () => {
     expect(denied.doctorRuns[0]).toMatchObject({ status: "skipped" });
     expect(allowed.doctorRuns[0]).toMatchObject({ status: "completed" });
     expect(diagnose).toHaveBeenCalledOnce();
+  });
+
+  it("grants database networking independently through the scan request", async () => {
+    const diagnose = vi.fn(async () => ({
+      status: "completed" as const,
+      findings: [],
+      durationMs: 1,
+    }));
+    const database = doctor("database/rls", ["network:access"], diagnose);
+
+    const denied = await scanCodebase(request(false), dependencies([database]));
+    const allowed = await scanCodebase(
+      request(false, { withDatabase: true }),
+      dependencies([database]),
+    );
+
+    expect(denied.doctorRuns[0]).toMatchObject({ status: "skipped" });
+    expect(allowed.doctorRuns[0]).toMatchObject({ status: "completed" });
+    expect(diagnose).toHaveBeenCalledOnce();
+  });
+
+  it("registers the built-in RLS doctor only for the combined audit path", async () => {
+    const discovery = {
+      inventoryWorkspace: vi.fn(async () => inventory),
+      loadManifests: vi.fn(async () => []),
+      detectWorkspaceProjects: vi.fn(async () => detection),
+    };
+
+    const scanned = await scanCodebase(request(false), discovery);
+    const audited = await scanCodebase(request(false, {
+      includeDatabaseAudit: true,
+      withDatabase: false,
+      databaseSchemas: ["public"],
+      databaseTimeoutMs: 10_000,
+    }), discovery);
+
+    expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/rls");
+    expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "database/rls",
+      status: "skipped",
+      skipReason: expect.stringContaining("network:access"),
+    }));
   });
 
   it("reports planned checks without granting process execution", async () => {

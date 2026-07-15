@@ -4,6 +4,7 @@ import { runDoctors } from "./registry.js";
 import type { FindingThreshold } from "./summary.js";
 import { createCheckDoctor } from "../doctors/checks/doctor.js";
 import { projectDoctor } from "../doctors/project/doctor.js";
+import { createRlsDoctor } from "../audits/database/rls/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
@@ -25,6 +26,10 @@ export interface ScanRequest {
   timeoutMs: number;
   failOn: FindingThreshold;
   exclude?: readonly string[];
+  includeDatabaseAudit?: boolean;
+  withDatabase?: boolean;
+  databaseSchemas?: readonly string[];
+  databaseTimeoutMs?: number;
 }
 
 export interface ScanDependencies {
@@ -49,14 +54,23 @@ const defaultDependencies: ScanDependencies = {
   inventoryWorkspace: inventoryFiles,
   loadManifests: loadPackageManifests,
   detectWorkspaceProjects: detectProjects,
-  createDoctors: (request, hooks, plans) => [
-    projectDoctor,
-    createCheckDoctor({
-      timeoutMs: request.timeoutMs,
-      plans,
-      ...(hooks.onCommandPlan === undefined ? {} : { onPlan: hooks.onCommandPlan }),
-    }),
-  ],
+  createDoctors: (request, hooks, plans) => {
+    const doctors: Doctor[] = [
+      projectDoctor,
+      createCheckDoctor({
+        timeoutMs: request.timeoutMs,
+        plans,
+        ...(hooks.onCommandPlan === undefined ? {} : { onPlan: hooks.onCommandPlan }),
+      }),
+    ];
+    if (request.includeDatabaseAudit === true) {
+      doctors.push(createRlsDoctor({
+        schemas: request.databaseSchemas ?? ["public"],
+        statementTimeoutMs: request.databaseTimeoutMs ?? 10_000,
+      }));
+    }
+    return doctors;
+  },
 };
 
 export async function scanCodebase(
@@ -81,7 +95,10 @@ export async function scanCodebase(
   const results = await runDoctors(
     dependencies.createDoctors(request, hooks, plans),
     snapshot,
-    { runChecks: request.runChecks },
+    {
+      runChecks: request.runChecks,
+      withDatabase: request.withDatabase === true,
+    },
   );
 
   return normalizeScanResult(
