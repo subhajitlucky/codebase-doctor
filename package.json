@@ -24,7 +24,9 @@
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:package": "node scripts/check-package.mjs && vitest run test/integration/packed-cli.test.ts",
     "ci": "npm run typecheck && npm test && npm run build",
+    "ci:full": "npm run ci && npm run test:package && npm audit --audit-level=high",
     "prepare": "npm run build"
   },
   "keywords": [

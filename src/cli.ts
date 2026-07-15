@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { createScanCommand } from "./commands/scan.js";
@@ -17,7 +17,7 @@ export function createProgram(): Command {
 
 const isEntrypoint =
   process.argv[1] !== undefined &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 
 if (isEntrypoint) {
   await createProgram().parseAsync();
