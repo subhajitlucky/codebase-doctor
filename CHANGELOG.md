@@ -2,7 +2,7 @@
 
 All notable changes to Codebase Doctor are documented here.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-07-15
 
 ### Added
 
