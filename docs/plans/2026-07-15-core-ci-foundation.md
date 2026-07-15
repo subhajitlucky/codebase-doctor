@@ -80,7 +80,7 @@ Commit: `feat: add configurable scan exclusions`
 **Step 1: Write failing planner and scan tests**
 
 Assert that one pure `planChecks(snapshot, timeoutMs)` call returns JavaScript and
-Python plans in stable ID order. Assert a read-only scan exposes plans while the
+Python plans in stable adapter and tool order. Assert a read-only scan exposes plans while the
 Check Doctor remains skipped and no runner is invoked.
 
 **Step 2: Run focused tests**
@@ -102,7 +102,8 @@ export interface PlannedCheckRecord {
 }
 ```
 
-`planner.ts` combines existing ecosystem planners and sorts by plan ID. The scan
+`planner.ts` combines existing ecosystem planners while preserving each adapter's
+intentional tool order. The scan
 pipeline computes plans after project detection. `ScanResult.plannedChecks` is an
 additive schema-1 field populated by normalization.
 

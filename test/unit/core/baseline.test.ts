@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   BaselineError,
-  compareFindings,
+  compareFindingBaseline,
   loadBaseline,
 } from "../../../src/core/baseline.js";
 import type { Finding, Severity } from "../../../src/core/findings.js";
@@ -33,7 +33,7 @@ afterEach(async () => {
 
 describe("baseline comparison", () => {
   it("classifies fingerprints and summarizes only new findings", () => {
-    const comparison = compareFindings(
+    const comparison = compareFindingBaseline(
       [finding("same"), finding("new-medium", "medium")],
       [finding("resolved"), finding("same")],
     );

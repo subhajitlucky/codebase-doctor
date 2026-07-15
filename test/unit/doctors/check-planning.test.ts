@@ -166,7 +166,7 @@ describe("Python check planning", () => {
 });
 
 describe("combined check planning", () => {
-  it("returns immutable plans in stable ID order", () => {
+  it("returns immutable plans in stable adapter order", () => {
     const plans = planChecks(snapshot({
       projects: [pythonProject("services/api"), nodeProject("npm")],
       manifests: [packageManifest({ test: "vitest" })],

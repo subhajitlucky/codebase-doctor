@@ -30,7 +30,15 @@ describe("Codebase Doctor agent skill contract", () => {
     const skill = await readFile(skillPath, "utf8");
     const options = [...new Set(skill.match(/--[a-z][a-z-]*/g) ?? [])].sort();
 
-    expect(options).toEqual(["--fail-on", "--json", "--run-checks", "--timeout"]);
+    expect(options).toEqual([
+      "--baseline",
+      "--exclude",
+      "--fail-on",
+      "--format",
+      "--json",
+      "--run-checks",
+      "--timeout",
+    ]);
     expect(skill).toMatch(/exit (?:code )?`?0`?.*(completed|threshold)/i);
     expect(skill).toMatch(/exit (?:code )?`?1`?.*finding/i);
     expect(skill).toMatch(/exit (?:code )?`?2`?.*(could not|operational|invalid)/i);

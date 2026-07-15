@@ -60,5 +60,15 @@ export async function loadCodebaseConfig(root: string): Promise<CodebaseConfig> 
   if (!Array.isArray(exclude) || !exclude.every((entry) => typeof entry === "string")) {
     throw new CodebaseConfigError(`The "exclude" value in ${path} must be an array of strings.`);
   }
-  return { exclude: exclude.map(validateExcludePattern) };
+  return {
+    exclude: exclude.map((pattern) => {
+      try {
+        return validateExcludePattern(pattern);
+      } catch (error) {
+        throw new CodebaseConfigError(
+          `${path}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }),
+  };
 }

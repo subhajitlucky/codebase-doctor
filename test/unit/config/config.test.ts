@@ -49,9 +49,11 @@ describe("Codebase Doctor configuration", () => {
     const root = await project();
     await writeProjectFile(root, ".codebase-doctor.json", contents);
 
-    await expect(loadCodebaseConfig(root)).rejects.toEqual(
-      expect.objectContaining({ name: "CodebaseConfigError", message: expect.stringMatching(message) }),
-    );
+    await expect(loadCodebaseConfig(root)).rejects.toEqual(expect.objectContaining({
+      name: "CodebaseConfigError",
+      message: expect.stringMatching(message),
+    }));
+    await expect(loadCodebaseConfig(root)).rejects.toThrow(/\.codebase-doctor\.json/);
   });
 
   it("normalizes repository-relative patterns", () => {

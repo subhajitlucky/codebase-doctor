@@ -361,6 +361,21 @@ Optimized for agents and CI:
 
 The JSON schema version is independent from the npm package version. Backward-incompatible report changes require a schema-version change.
 
+### SARIF
+
+SARIF 2.1.0 maps normalized findings to code-scanning results. Rule IDs,
+locations, evidence, confidence, remediation, and Codebase Doctor fingerprints
+remain deterministic. Optional baseline comparison maps current fingerprints to
+SARIF baseline state.
+
+### Planning, exclusions, and baselines
+
+Command planning is read-only and occurs before capability-gated execution, so a
+scan always exposes the commands it would run. Repository-root configuration and
+CLI patterns filter inventory before manifest or project discovery. Baseline
+comparison occurs after normalization and uses stable fingerprints; when present,
+failure thresholds consider only new findings.
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -438,8 +453,7 @@ The following are intentionally outside `0.1.0`:
 - Go, Rust, Java, and mobile check execution
 - semantic code analysis implemented from scratch
 - networked vulnerability databases
-- SARIF and GitHub annotations
-- baseline and diff comparison
+- GitHub annotations and a reusable GitHub Action
 - external doctor installation
 - MCP server
 - lifecycle-hook installers

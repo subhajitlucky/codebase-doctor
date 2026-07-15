@@ -15,6 +15,16 @@ export type {
 } from "./core/findings.js";
 export { classifyScanExit } from "./core/normalize.js";
 export type { DoctorRunRecord, ScanResult } from "./core/normalize.js";
+export {
+  BaselineError,
+  compareFindingBaseline,
+  loadBaseline,
+  withBaselineComparison,
+} from "./core/baseline.js";
+export type {
+  BaselineReport,
+  FindingComparison,
+} from "./core/baseline.js";
 export { scanCodebase } from "./core/scan.js";
 export type { ScanDependencies, ScanHooks, ScanRequest } from "./core/scan.js";
 export { hasFindingAtOrAbove, summarizeFindings } from "./core/summary.js";
@@ -23,5 +33,13 @@ export type {
   FindingThreshold,
 } from "./core/summary.js";
 export { renderJsonReport } from "./reporters/json.js";
+export { renderSarifReport } from "./reporters/sarif.js";
 export { renderTextReport } from "./reporters/text.js";
 export type { TextReportOptions } from "./reporters/text.js";
+export {
+  CodebaseConfigError,
+  loadCodebaseConfig,
+  validateExcludePattern,
+} from "./config/config.js";
+export type { CodebaseConfig } from "./config/config.js";
+export type { PlannedCheckRecord } from "./execution/types.js";

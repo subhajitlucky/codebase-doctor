@@ -71,6 +71,9 @@ async function executeScan(path: string, options: ScanCommandOptions): Promise<v
     const format = parseFormat(options);
     const config = await loadCodebaseConfig(path);
     const exclude = [...config.exclude, ...options.exclude.map(validateExcludePattern)];
+    const baseline = options.baseline === undefined
+      ? undefined
+      : await loadBaseline(options.baseline);
     const request = {
       root: path,
       runChecks: options.runChecks,
@@ -80,9 +83,9 @@ async function executeScan(path: string, options: ScanCommandOptions): Promise<v
       exclude,
     } as const;
     const scanned = await scanCodebase(request);
-    const result = options.baseline === undefined
+    const result = baseline === undefined
       ? scanned
-      : withBaselineComparison(scanned, (await loadBaseline(options.baseline)).findings);
+      : withBaselineComparison(scanned, baseline.findings);
     const report = format === "json"
       ? renderJsonReport(result)
       : format === "sarif" ? renderSarifReport(result) : renderTextReport(result, {

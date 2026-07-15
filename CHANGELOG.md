@@ -2,6 +2,19 @@
 
 All notable changes to Codebase Doctor are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Preview validation command plans during read-only scans.
+- Configure repository-relative exclusions through `.codebase-doctor.json` and
+  repeatable `--exclude` options.
+- Compare findings with schema-1 JSON baselines and apply failure thresholds only
+  to new findings.
+- Emit deterministic SARIF 2.1.0 reports with locations, rule metadata,
+  fingerprints, evidence, and baseline state.
+- Select text, JSON, or SARIF with `--format` while preserving `--json`.
+
 ## [0.1.1] - 2026-07-15
 
 ### Added

@@ -6,7 +6,7 @@ Codebase Doctor is a model-independent CLI that turns repository structure and c
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
-## What works in 0.1.x
+## What works in the current source
 
 - Bounded, symlink-safe repository inventory.
 - Node.js, JavaScript, TypeScript, Python, Go, Rust, and Java project detection.
@@ -15,6 +15,10 @@ Codebase Doctor is a model-independent CLI that turns repository structure and c
 - Exact and one-level package workspace discovery.
 - Structural findings for invalid manifests, conflicting lockfiles, missing workspaces, and absent visible tests.
 - Configured JavaScript/TypeScript and Python validation checks.
+- Read-only validation command previews.
+- Configurable repository exclusions.
+- Fingerprint-based baseline comparisons.
+- SARIF 2.1.0 output for code-scanning integrations.
 - Stable text and JSON schema version `1` reports.
 - Severity thresholds and CI-friendly exit codes.
 - A provider-neutral agent skill.
@@ -46,8 +50,50 @@ Available options:
 ```text
 --run-checks          Permit configured validation commands
 --json                Emit schema-versioned JSON
+--format <format>     Output text, json, or sarif
+--exclude <glob>      Exclude a repository-relative path glob; repeatable
+--baseline <path>     Compare with a prior Codebase Doctor JSON report
 --timeout <ms>        Set the per-command timeout (default: 120000)
 --fail-on <severity>  info|low|medium|high|critical|none (default: high)
+```
+
+Read-only reports include the validation command plan even when execution is not
+permitted. This lets users review the exact commands before adding `--run-checks`.
+
+## Configuration and exclusions
+
+Place `.codebase-doctor.json` in the scanned repository root:
+
+```json
+{
+  "exclude": ["test/fixtures/**", "examples/generated/**"]
+}
+```
+
+Command-line exclusions are combined with configuration exclusions:
+
+```bash
+npx codebase-doctor scan . --exclude 'vendor/**' --json
+```
+
+Patterns are repository-relative and support `*`, `?`, and `**`.
+
+## Baselines and SARIF
+
+Save a normal schema-1 JSON report, then compare a later scan with it:
+
+```bash
+npx codebase-doctor scan . --json > codebase-doctor-baseline.json
+npx codebase-doctor scan . --baseline codebase-doctor-baseline.json --json
+```
+
+Baseline reports classify fingerprints as new, unchanged, or resolved. When a
+baseline is supplied, `--fail-on` applies only to new findings.
+
+Emit SARIF 2.1.0 for code-scanning systems:
+
+```bash
+npx codebase-doctor scan . --format sarif > codebase-doctor.sarif
 ```
 
 Local development usage:
@@ -120,8 +166,7 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 
 - Go and Rust check adapters.
 - Stronger monorepo and Python configuration parsing.
-- Diff-aware scans, baselines, and SARIF.
-- Pull-request annotations and a reusable GitHub Action.
+- Reusable GitHub Action and pull-request annotations.
 - External doctor adapters, lifecycle hooks, and MCP tools.
 
 Roadmap items are not shipped behavior.

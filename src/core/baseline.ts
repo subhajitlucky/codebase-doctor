@@ -62,7 +62,7 @@ export async function loadBaseline(path: string): Promise<BaselineReport> {
   };
 }
 
-export function compareFindings(
+export function compareFindingBaseline(
   current: readonly Finding[],
   baseline: readonly Finding[],
 ): FindingComparison {
@@ -85,5 +85,5 @@ export function withBaselineComparison(
   result: ScanResult,
   baseline: readonly Finding[],
 ): ScanResult {
-  return { ...result, comparison: compareFindings(result.findings, baseline) };
+  return { ...result, comparison: compareFindingBaseline(result.findings, baseline) };
 }

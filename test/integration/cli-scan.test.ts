@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -137,6 +137,26 @@ describe("scan CLI", () => {
     expect(compared.status).toBe(0);
     expect(report.comparison.new).toEqual([]);
     expect(report.comparison.unchanged).toHaveLength(report.findings.length);
+  });
+
+  it("validates a baseline before permitting configured checks", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "codebase-doctor-consent-"));
+    temporaryRoots.push(root);
+    writeFileSync(resolve(root, "package.json"), JSON.stringify({
+      private: true,
+      packageManager: "npm@11.0.0",
+      scripts: {
+        test: "node -e \"require('node:fs').writeFileSync('executed', 'yes')\"",
+      },
+    }));
+    writeFileSync(resolve(root, "invalid-baseline.json"), "not json");
+
+    const result = cli([
+      "scan", root, "--run-checks", "--baseline", resolve(root, "invalid-baseline.json"),
+    ]);
+
+    expect(result.status).toBe(2);
+    expect(existsSync(resolve(root, "executed"))).toBe(false);
   });
 
   it("returns exit 2 for a nonexistent path", () => {

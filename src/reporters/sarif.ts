@@ -26,7 +26,9 @@ function location(finding: Finding): object[] | undefined {
       };
   return [{
     physicalLocation: {
-      artifactLocation: { uri: path.replaceAll("\\", "/") },
+      artifactLocation: {
+        uri: path.replaceAll("\\", "/").split("/").map(encodeURIComponent).join("/"),
+      },
       ...(region === undefined ? {} : { region }),
     },
   }];

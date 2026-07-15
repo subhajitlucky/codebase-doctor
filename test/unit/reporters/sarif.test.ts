@@ -18,7 +18,7 @@ function result(): ScanResult {
       category: "repository",
       title: "Invalid package manifest",
       message: "package.json could not be parsed.",
-      location: { path: "package.json", line: 2, column: 4 },
+      location: { path: "config/package #1.json", line: 2, column: 4 },
       evidence: [{ type: "manifest", path: "package.json", detail: "Unexpected token" }],
       remediation: "Correct the JSON syntax.",
       fingerprint: "stable-fingerprint",
@@ -55,7 +55,7 @@ describe("SARIF reporter", () => {
       baselineState: "new",
       partialFingerprints: { codebaseDoctorFingerprint: "stable-fingerprint" },
       locations: [{ physicalLocation: {
-        artifactLocation: { uri: "package.json" },
+        artifactLocation: { uri: "config/package%20%231.json" },
         region: { startLine: 2, startColumn: 4 },
       } }],
       properties: { category: "repository", confidence: "high" },
