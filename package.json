@@ -40,6 +40,14 @@
   ],
   "author": "Subhajit Pradhan",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subhajitlucky/codebase-doctor.git"
+  },
+  "homepage": "https://github.com/subhajitlucky/codebase-doctor#readme",
+  "bugs": {
+    "url": "https://github.com/subhajitlucky/codebase-doctor/issues"
+  },
   "engines": {
     "node": ">=20"
   },
