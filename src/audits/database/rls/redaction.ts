@@ -1,10 +1,15 @@
-export function resolveConnectionString(value?: string): string {
-  const connectionString = [value, process.env.DATABASE_URL, process.env.SUPABASE_DB_URL].find(
+export function resolveConnectionString(
+  value?: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  const connectionString = [value, environment.DATABASE_URL, environment.SUPABASE_DB_URL].find(
     (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0
   );
 
   if (!connectionString) {
-    throw new Error("Missing connection string. Pass --connection or set DATABASE_URL.");
+    throw new Error(
+      "Missing database connection string. Set DATABASE_URL or SUPABASE_DB_URL.",
+    );
   }
 
   return connectionString;

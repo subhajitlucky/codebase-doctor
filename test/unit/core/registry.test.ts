@@ -34,6 +34,18 @@ describe("allowed capabilities", () => {
       "process:execute",
     ]);
   });
+
+  it("allows database networking independently of command execution", () => {
+    expect([...buildAllowedCapabilities({ runChecks: false, withDatabase: true })]).toEqual([
+      "filesystem:read",
+      "network:access",
+    ]);
+    expect([...buildAllowedCapabilities({ runChecks: true, withDatabase: true })]).toEqual([
+      "filesystem:read",
+      "process:execute",
+      "network:access",
+    ]);
+  });
 });
 
 describe("doctor registry", () => {
@@ -71,7 +83,7 @@ describe("doctor registry", () => {
   });
 
   it.each(["network:access", "filesystem:write"] as const)(
-    "never grants %s in v0.1",
+    "denies %s without its explicit permission",
     async (forbiddenCapability) => {
       const diagnose = vi.fn(async () => completed());
       const [entry] = await runDoctors([
