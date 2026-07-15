@@ -2,12 +2,15 @@
 
 ## Purpose
 
-Codebase Doctor is a local-first diagnostic orchestrator for software repositories. It combines cross-project inspection with ecosystem-specific validation and returns normalized, evidence-backed findings.
+Codebase Doctor is a local-first, full-codebase auditor. It combines repository
+inspection, ecosystem-specific validation, and explicitly permitted live-system
+audits behind one command and one normalized finding contract.
 
 The architecture must satisfy two goals that pull in opposite directions:
 
 1. `0.1.0` must stay small enough to implement, test, and publish quickly.
-2. The core contracts must support additional languages, external doctors, agent integrations, CI, and safe repair without a rewrite.
+2. The core contracts must support additional built-in audit modules, agent
+   integrations, CI, and safe repair without a rewrite.
 
 ## Architectural Principles
 
@@ -15,7 +18,8 @@ The architecture must satisfy two goals that pull in opposite directions:
 2. **Evidence-backed findings:** a finding records the observation, location, and reproduction path when available.
 3. **Read-only default:** repository discovery and static diagnostics cannot mutate the target.
 4. **Capability-based execution:** doctors declare whether they need filesystem reads, subprocesses, network access, or writes.
-5. **Explicit execution consent:** `0.1.0` enables subprocesses only with `--run-checks`.
+5. **Explicit capability consent:** subprocesses require `--run-checks`; live
+   database networking independently requires `--with-database`.
 6. **Stable contracts, replaceable adapters:** language and framework support lives behind doctor interfaces.
 7. **Reporter separation:** terminal formatting never becomes the machine-readable API.
 8. **Graceful partial failure:** one unsupported or failing doctor must not erase other useful results.
@@ -28,7 +32,7 @@ The architecture must satisfy two goals that pull in opposite directions:
 User, coding agent, or CI
            |
            v
-       CLI parser
+   `audit` / `scan` CLI parser
            |
            v
    Scan request validator
@@ -46,7 +50,8 @@ User, coding agent, or CI
            |
            +--> Project Doctor (read-only)
            +--> Check Doctor (subprocess permission required)
-           +--> future internal and external doctors
+           +--> Database/RLS Doctor (network permission required)
+           +--> future built-in audit modules
            |
            v
      Finding normalizer
@@ -60,7 +65,8 @@ User, coding agent, or CI
         Reporters
            +--> terminal text
            +--> JSON
-           +--> future SARIF / Markdown / MCP
+           +--> SARIF
+           +--> future Markdown / MCP
            |
            v
         Exit code
@@ -74,6 +80,7 @@ codebase-doctor/
 │   ├── cli.ts
 │   ├── index.ts
 │   ├── commands/
+│   │   ├── audit.ts
 │   │   └── scan.ts
 │   ├── core/
 │   │   ├── capabilities.ts
@@ -92,6 +99,14 @@ codebase-doctor/
 │   │   ├── command-runner.ts
 │   │   ├── redaction.ts
 │   │   └── types.ts
+│   ├── audits/
+│   │   └── database/rls/
+│   │       ├── analyzer.ts
+│   │       ├── catalog.ts
+│   │       ├── doctor.ts
+│   │       ├── mapper.ts
+│   │       ├── redaction.ts
+│   │       └── types.ts
 │   ├── doctors/
 │   │   ├── project/
 │   │   │   ├── doctor.ts
@@ -215,7 +230,8 @@ Rules for `0.1.0`:
 
 - Built-in doctors may request `filesystem:read`.
 - Check Doctor may request `process:execute` only when `runChecks` is true.
-- No built-in doctor receives `network:access` or `filesystem:write`.
+- Database/RLS Doctor receives `network:access` only when `--with-database` is
+  present. No built-in doctor receives `filesystem:write`.
 - An operational doctor failure becomes scan metadata, not a fabricated code finding.
 - Doctor results are normalized and sorted after all eligible doctors finish.
 
@@ -302,7 +318,10 @@ The subprocess runner is a trust boundary.
 - Limit captured stdout and stderr.
 - Pass a minimal inherited environment and redact likely credentials.
 - Never run dependency installation.
-- Do not make scanner network calls or add network credentials; document that approved child commands still inherit host networking in `0.1.0`.
+- Repository-only auditing does not make network calls. The database audit reads
+  environment credentials only after explicit permission, sanitizes failures,
+  and uses a read-only transaction. Approved child commands still inherit host
+  networking in `0.1.x`.
 - Never allow doctor-provided filesystem writes.
 - Record the exact command and exit code.
 
@@ -311,7 +330,7 @@ The subprocess runner is a trust boundary.
 - Container or sandbox execution for untrusted repositories.
 - CPU, memory, process, and filesystem quotas.
 - Explicit network-deny enforcement rather than policy alone.
-- Signed and permission-reviewed external doctor packages.
+- Stronger isolation and permission review for future built-in modules.
 
 Until those controls exist, documentation must tell users not to execute checks from an untrusted repository.
 
@@ -397,17 +416,16 @@ The CLI and JSON contract come first. Agent surfaces remain adapters:
 
 No agent integration may bypass the CLI safety model.
 
-## External Doctor Strategy
+## Internal Audit Module Strategy
 
-External doctors such as RLS Doctor remain separate packages and repositories.
+Codebase Doctor is the single public tool. Framework- and domain-specific
+knowledge lives in built-in modules that share capability gating, evidence,
+fingerprints, reporters, baselines, and exit semantics.
 
-The future adapter layer should support:
-
-- executable adapters that consume and return JSON
-- JavaScript package adapters using a published SDK
-- MCP-backed remote doctors where local execution is unsuitable
-
-Licenses and redistribution terms must be checked before bundling any third-party doctor. Optional user-installed tools are preferred over hidden vendoring.
+The first module migrates RLS Doctor's pure analyzer and read-only PostgreSQL
+catalog loader into `audits/database/rls`. It does not spawn or parse an external
+RLS Doctor CLI. Future modules follow the same internal Doctor contract and must
+make skipped, unsupported, failed, and completed coverage visible.
 
 ## Testing Strategy
 
@@ -444,7 +462,8 @@ Licenses and redistribution terms must be checked before bundling any third-part
 - JSON has its own `schemaVersion`.
 - New optional fields are backward-compatible.
 - Removed or reinterpreted fields require a schema-version change.
-- External doctor SDK stability is not promised until `1.0.0`.
+- Built-in audit module internals are not a public compatibility surface until
+  explicitly exported.
 
 ## Deferred Work
 
@@ -454,7 +473,7 @@ The following are intentionally outside `0.1.0`:
 - semantic code analysis implemented from scratch
 - networked vulnerability databases
 - GitHub annotations and a reusable GitHub Action
-- external doctor installation
+- additional built-in audit modules
 - MCP server
 - lifecycle-hook installers
 - AI explanations and repair

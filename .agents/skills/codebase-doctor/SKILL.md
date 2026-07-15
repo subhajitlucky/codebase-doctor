@@ -1,39 +1,67 @@
 ---
 name: codebase-doctor
-description: Run evidence-backed, model-independent repository diagnostics with the Codebase Doctor CLI. Use when inspecting a codebase, validating agent-written changes, reviewing configured checks, or interpreting scan findings and exit codes.
+description: Run evidence-backed, model-independent codebase diagnostics with the Codebase Doctor CLI. Use when auditing a repository, validating agent-written changes, reviewing configured checks, or interpreting findings and coverage.
 ---
 
 # Codebase Doctor
 
-Use the CLI as a verification layer after code changes. Treat findings as evidence from repository structure or configured tools, not as proof that the tool can detect every defect.
+Use the unified CLI as a verification layer after code changes. Treat findings
+as repository or database evidence, not as proof that every defect was found.
 
 ## Workflow
 
-1. Run read-only discovery first:
+1. Start with the read-only unified audit:
 
    ```bash
-   npx codebase-doctor scan . --json
+   npx codebase-doctor audit . --json
    ```
 
-2. Review detected projects, `plannedChecks`, structured findings, and the declared validation commands that form the command plan. The plan is visible without process execution.
-3. Confirm explicit execution permission before adding `--run-checks`. Do not use `--run-checks` on an untrusted repository; approved child commands are not network-isolated in version 0.1.
-4. When permission is confirmed, run:
+2. Review detected projects, `plannedChecks`, findings, and every entry in
+   `doctorRuns`. Without additional permission, configured checks and the
+   database audit are reported as skipped. Skipped coverage is not a clean
+   result for that audit area.
+3. Confirm explicit permission before adding `--run-checks`. Do not use
+   `--run-checks` on an untrusted repository; approved child commands are not
+   network-isolated.
+4. When command execution is approved, run:
 
    ```bash
-   npx codebase-doctor scan . --run-checks --json
+   npx codebase-doctor audit . --run-checks --json
    ```
 
-5. Fix one evidence-backed finding at a time. Do not invent a defect from an informational signal.
-6. Rerun the exact scan after each change and compare rule IDs, fingerprints, evidence, and severity totals.
+5. Request separate permission before adding `--with-database`. This performs a
+   live, read-only PostgreSQL catalog audit and requires network access. Supply
+   the connection through `DATABASE_URL` or `SUPABASE_DB_URL`; never print,
+   echo, log, or expose the credential or connection string.
+6. When database access is approved, run without putting the URL in arguments:
 
-Use `--exclude` or `.codebase-doctor.json` to omit intentional fixtures and unrelated generated projects. Use `--baseline` with a prior JSON report when only new findings should affect the threshold. Use `--format sarif` for SARIF 2.1.0 consumers; `--json` remains the schema-1 JSON shortcut.
+   ```bash
+   npx codebase-doctor audit . --with-database --json
+   ```
 
-Use `--timeout` only to set the per-command time limit. Use `--fail-on` only to change the finding threshold used for the process exit status.
+   Use `--database-schema` repeatedly for non-default schemas and
+   `--database-timeout` only to change the catalog statement timeout.
+7. Fix one evidence-backed finding at a time, then rerun the exact audit and
+   compare rule IDs, fingerprints, evidence, coverage, and severity totals.
+
+`scan` is the backward-compatible repository-only command. Prefer `audit` for
+new agent workflows so internal audit modules share one report.
+
+Use `--exclude` or `.codebase-doctor.json` to omit intentional fixtures and
+generated projects. Use `--baseline` when only new findings should affect the
+threshold. Use `--format sarif` for SARIF 2.1.0; `--json` remains the schema-1
+JSON shortcut. Use `--timeout` for configured command time limits and
+`--fail-on` only for finding-based process status.
 
 ## Interpret results
 
-- Exit `0`: the scan completed and no finding met the configured threshold.
-- Exit `1`: the scan completed and at least one finding met the configured threshold.
-- Exit `2`: the CLI could not perform the requested scan because of invalid input or an operational failure. Never treat exit `2` as clean.
+- Exit `0`: requested audits completed and no finding met the threshold; inspect
+  skipped coverage separately.
+- Exit `1`: requested audits completed and at least one finding met the
+  threshold.
+- Exit `2`: the CLI could not perform a requested audit because of invalid input
+  or an operational failure. Never treat exit `2` as clean.
 
-Keep operational failures separate from code findings. Preserve redacted evidence when reporting results, and request user direction when execution permission or repository trust is unclear.
+A failed database doctor run is not a clean database audit. Keep operational
+failures separate from findings, preserve redacted evidence, and request user
+direction whenever execution, database access, or repository trust is unclear.

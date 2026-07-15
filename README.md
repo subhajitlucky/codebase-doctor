@@ -33,15 +33,15 @@ analysis ideas from [RLS Doctor](https://github.com/subhajitlucky/rls-doctor)—
 be incorporated into the relevant internal module while Codebase Doctor remains
 the single public interface.
 
-The intended end state is:
+The unified command in the current source is:
 
 ```bash
 codebase-doctor audit .
 ```
 
-That command is the product direction, not shipped behavior in `0.1.x`. Today,
-the implemented command is `codebase-doctor scan` and the current capabilities
-are listed below.
+It combines repository audits and visible coverage for optional internal modules.
+The published `0.1.1` package predates this command; `audit` will reach npm in the
+next release after package verification.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
@@ -61,27 +61,38 @@ are listed below.
 - Stable text and JSON schema version `1` reports.
 - Severity thresholds and CI-friendly exit codes.
 - A provider-neutral agent skill.
+- A built-in live PostgreSQL RLS analyzer migrated from RLS Doctor.
+- Explicit, independent permission for database network access.
+- Read-only catalog inspection for policies, privileges, roles, memberships,
+  RLS enforcement, and bypass paths.
 
 Go, Rust, and Java are detection-only in `0.1.x`; Codebase Doctor does not execute their toolchains yet.
 
 ## Usage
 
-Run a read-only scan:
+Run the unified audit without executing checks or opening a database connection:
 
 ```bash
-npx codebase-doctor scan .
+codebase-doctor audit .
 ```
 
 Request JSON for an agent or CI system:
 
 ```bash
-npx codebase-doctor scan . --json
+codebase-doctor audit . --json
 ```
 
 Explicitly permit detected project checks:
 
 ```bash
-npx codebase-doctor scan . --run-checks
+codebase-doctor audit . --run-checks
+```
+
+Explicitly permit the live, read-only PostgreSQL RLS audit. Keep the connection
+string in the environment rather than command-line arguments:
+
+```bash
+DATABASE_URL=postgres://... codebase-doctor audit . --with-database
 ```
 
 Available options:
@@ -94,10 +105,18 @@ Available options:
 --baseline <path>     Compare with a prior Codebase Doctor JSON report
 --timeout <ms>        Set the per-command timeout (default: 120000)
 --fail-on <severity>  info|low|medium|high|critical|none (default: high)
+--with-database       Permit live PostgreSQL catalog access
+--database-schema     Select a database schema; repeatable (default: public)
+--database-timeout    Catalog statement timeout in ms (default: 10000)
 ```
 
 Read-only reports include the validation command plan even when execution is not
 permitted. This lets users review the exact commands before adding `--run-checks`.
+Database coverage appears as skipped until `--with-database` is supplied. A skip
+does not mean the database was audited and found clean.
+
+`codebase-doctor scan` remains available as the backward-compatible,
+repository-only command.
 
 ## Configuration and exclusions
 
@@ -112,7 +131,7 @@ Place `.codebase-doctor.json` in the scanned repository root:
 Command-line exclusions are combined with configuration exclusions:
 
 ```bash
-npx codebase-doctor scan . --exclude 'vendor/**' --json
+codebase-doctor audit . --exclude 'vendor/**' --json
 ```
 
 Patterns are repository-relative and support `*`, `?`, and `**`.
@@ -122,8 +141,8 @@ Patterns are repository-relative and support `*`, `?`, and `**`.
 Save a normal schema-1 JSON report, then compare a later scan with it:
 
 ```bash
-npx codebase-doctor scan . --json > codebase-doctor-baseline.json
-npx codebase-doctor scan . --baseline codebase-doctor-baseline.json --json
+codebase-doctor audit . --json > codebase-doctor-baseline.json
+codebase-doctor audit . --baseline codebase-doctor-baseline.json --json
 ```
 
 Baseline reports classify fingerprints as new, unchanged, or resolved. When a
@@ -132,7 +151,7 @@ baseline is supplied, `--fail-on` applies only to new findings.
 Emit SARIF 2.1.0 for code-scanning systems:
 
 ```bash
-npx codebase-doctor scan . --format sarif > codebase-doctor.sarif
+codebase-doctor audit . --format sarif > codebase-doctor.sarif
 ```
 
 Local development usage:
@@ -140,7 +159,7 @@ Local development usage:
 ```bash
 npm install
 npm run build
-node dist/cli.js scan . --json
+node dist/cli.js audit . --json
 ```
 
 The release package is checked with `npm pack`, installed into a clean temporary project, and executed through its generated `node_modules/.bin/codebase-doctor` command.
@@ -149,9 +168,9 @@ The release package is checked with `npm pack`, installed into a clean temporary
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Scan completed and no finding met the configured threshold. |
-| `1` | Scan completed and at least one finding met the threshold. |
-| `2` | The requested scan could not be completed. |
+| `0` | Requested audits completed and no finding met the configured threshold. |
+| `1` | Requested audits completed and at least one finding met the threshold. |
+| `2` | A requested audit could not be completed. |
 
 Exit `2` is an operational failure, not a clean result. `--fail-on none` disables finding-based failure but does not hide findings or operational failures.
 
@@ -159,12 +178,17 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 
 - Read-only discovery is the default.
 - Target commands require `--run-checks`.
+- Live database access requires the separate `--with-database` permission.
+- Database credentials are read from `DATABASE_URL` or `SUPABASE_DB_URL`, not a
+  connection-string CLI option.
+- The RLS module uses a read-only, repeatable-read transaction and never executes
+  suggested SQL.
 - The scanner never installs target-project dependencies.
 - Commands use argument arrays with `shell: false`.
 - Per-command time and output limits are enforced.
 - Child processes receive a minimal environment.
 - Likely secrets are redacted before entering finding evidence.
-- Scanner logic makes no external network calls.
+- Repository-only auditing makes no external network calls.
 
 Approved child commands still inherit host networking in `0.1.x`. Do not execute checks from an untrusted repository. Codebase Doctor combines built-in analysis with explicitly approved project checks; it is not a guarantee that every defect will be found.
 
@@ -176,6 +200,7 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 - `repository/no-visible-tests`
 - `checks/command-failed`
 - `checks/command-timeout`
+- `database/rls/*`
 
 Every finding contains a rule ID, doctor ID, severity, confidence, category, explanation, structured evidence, stable fingerprint, and remediation when available. Operational failures remain separate in `doctorRuns`.
 
@@ -201,7 +226,11 @@ The npm package includes the provider-neutral skill at:
 .agents/skills/codebase-doctor/
 ```
 
-Copy that directory into a compatible agent's skill directory, or let an agent load it from the installed package. The workflow starts with `npx codebase-doctor scan . --json`, requires confirmation before adding `--run-checks`, fixes one evidence-backed finding at a time, and reruns the exact scan.
+Copy that directory into a compatible agent's skill directory, or let an agent
+load it from the installed package. The workflow starts with
+`codebase-doctor audit . --json`, treats skipped coverage explicitly, requests
+separate permission for `--run-checks` and `--with-database`, fixes one
+evidence-backed finding at a time, and reruns the exact audit.
 
 ## Development
 
@@ -217,10 +246,8 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 
 ## Roadmap
 
-- Introduce `codebase-doctor audit` as the unified full-codebase audit command.
-- Build an auto-detected internal audit engine with shared evidence, severity,
-  confidence, fingerprinting, and remediation contracts.
-- Add database security auditing, beginning with an internal RLS audit module.
+- Release the unified `audit` command and internal RLS module on npm.
+- Add static SQL migration analysis to complement live catalog auditing.
 - Expand built-in frontend, backend, security, infrastructure, performance, and
   AI audit coverage without requiring separate doctor installations.
 - Report which applicable areas were audited, skipped, unsupported, or blocked

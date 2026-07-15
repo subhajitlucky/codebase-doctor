@@ -16,13 +16,15 @@ describe("Codebase Doctor agent skill contract", () => {
     ]);
   });
 
-  it("places read-only discovery before explicitly permitted execution", async () => {
+  it("places unified read-only auditing before explicitly permitted capabilities", async () => {
     const skill = await readFile(skillPath, "utf8");
-    const readOnly = skill.indexOf("npx codebase-doctor scan . --json");
+    const readOnly = skill.indexOf("npx codebase-doctor audit . --json");
     const execution = skill.indexOf("--run-checks");
+    const database = skill.indexOf("--with-database");
 
     expect(readOnly).toBeGreaterThan(-1);
     expect(execution).toBeGreaterThan(readOnly);
+    expect(database).toBeGreaterThan(readOnly);
     expect(skill).toMatch(/confirm|permission|approval/i);
   });
 
@@ -32,12 +34,15 @@ describe("Codebase Doctor agent skill contract", () => {
 
     expect(options).toEqual([
       "--baseline",
+      "--database-schema",
+      "--database-timeout",
       "--exclude",
       "--fail-on",
       "--format",
       "--json",
       "--run-checks",
       "--timeout",
+      "--with-database",
     ]);
     expect(skill).toMatch(/exit (?:code )?`?0`?.*(completed|threshold)/i);
     expect(skill).toMatch(/exit (?:code )?`?1`?.*finding/i);
@@ -50,6 +55,17 @@ describe("Codebase Doctor agent skill contract", () => {
 
     expect(skill).toMatch(/do not.*--run-checks.*untrusted repository/is);
     expect(skill).not.toMatch(/finds? every bug|finds? all bugs|detects? every bug/i);
+  });
+
+  it("treats database coverage and credentials safely", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/database.*skipped|skipped.*database/is);
+    expect(skill).toMatch(/request|confirm|permission|approval/i);
+    expect(skill).toMatch(/DATABASE_URL|SUPABASE_DB_URL/);
+    expect(skill).toMatch(/never (?:print|echo|expose).*(?:credential|connection|string|secret)/is);
+    expect(skill).toMatch(/failed.*not.*clean|never.*failed.*clean/is);
+    expect(skill).toMatch(/scan.*backward-compatible|backward-compatible.*scan/is);
   });
 
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
