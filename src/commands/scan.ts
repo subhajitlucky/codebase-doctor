@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { loadCodebaseConfig, validateExcludePattern } from "../config/config.js";
 import { loadBaseline, withBaselineComparison } from "../core/baseline.js";
 import { classifyScanExit } from "../core/normalize.js";
-import { scanCodebase } from "../core/scan.js";
+import { scanCodebase, type ScanRequest } from "../core/scan.js";
 import type { FindingThreshold } from "../core/summary.js";
 import { renderJsonReport } from "../reporters/json.js";
 import { renderSarifReport } from "../reporters/sarif.js";
@@ -19,7 +19,7 @@ const THRESHOLDS = new Set<FindingThreshold>([
   "none",
 ]);
 
-interface ScanCommandOptions {
+export interface RepositoryCommandOptions {
   runChecks: boolean;
   json: boolean;
   format?: string;
@@ -50,7 +50,7 @@ function parseThreshold(value: string): FindingThreshold {
   return value as FindingThreshold;
 }
 
-function parseFormat(options: ScanCommandOptions): OutputFormat {
+function parseFormat(options: RepositoryCommandOptions): OutputFormat {
   if (options.format !== undefined && !OUTPUT_FORMATS.has(options.format as OutputFormat)) {
     throw new Error(`Invalid output format "${options.format}".`);
   }
@@ -64,7 +64,11 @@ function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-async function executeScan(path: string, options: ScanCommandOptions): Promise<void> {
+async function executeScan(
+  path: string,
+  options: RepositoryCommandOptions,
+  requestOptions: () => Partial<ScanRequest> = () => ({}),
+): Promise<void> {
   try {
     const timeoutMs = parseTimeout(options.timeout);
     const failOn = parseThreshold(options.failOn);
@@ -81,6 +85,7 @@ async function executeScan(path: string, options: ScanCommandOptions): Promise<v
       timeoutMs,
       failOn,
       exclude,
+      ...requestOptions(),
     } as const;
     const scanned = await scanCodebase(request);
     const result = baseline === undefined
@@ -102,9 +107,11 @@ async function executeScan(path: string, options: ScanCommandOptions): Promise<v
   }
 }
 
-export function createScanCommand(): Command {
-  return new Command("scan")
-    .description("Inspect a repository and report evidence-backed findings.")
+export function configureRepositoryCommand<Options extends RepositoryCommandOptions>(
+  command: Command,
+  requestOptions: (options: Options) => Partial<ScanRequest> = () => ({}),
+): Command {
+  return command
     .argument("[path]", "repository path", ".")
     .option("--run-checks", "permit execution of detected validation commands", false)
     .option("--json", "emit machine-readable JSON", false)
@@ -117,5 +124,14 @@ export function createScanCommand(): Command {
       "failure threshold: info, low, medium, high, critical, or none",
       "high",
     )
-    .action(executeScan);
+    .action((path: string, options: Options) =>
+      executeScan(path, options, () => requestOptions(options))
+    );
+}
+
+export function createScanCommand(): Command {
+  return configureRepositoryCommand(
+    new Command("scan")
+      .description("Inspect a repository and report evidence-backed findings."),
+  );
 }
