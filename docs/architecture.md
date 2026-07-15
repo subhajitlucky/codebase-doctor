@@ -50,6 +50,7 @@ User, coding agent, or CI
            |
            +--> Project Doctor (read-only)
            +--> Check Doctor (subprocess permission required)
+           +--> Static SQL/RLS Doctor (read-only, automatic for `audit`)
            +--> Database/RLS Doctor (network permission required)
            +--> future built-in audit modules
            |
@@ -100,7 +101,15 @@ codebase-doctor/
 │   │   ├── redaction.ts
 │   │   └── types.ts
 │   ├── audits/
-│   │   └── database/rls/
+│   │   └── database/
+│   │       ├── sql-rls/
+│   │       │   ├── discovery.ts
+│   │       │   ├── splitter.ts
+│   │       │   ├── parser.ts
+│   │       │   ├── reducer.ts
+│   │       │   ├── analyzer.ts
+│   │       │   └── doctor.ts
+│   │       └── rls/
 │   │       ├── analyzer.ts
 │   │       ├── catalog.ts
 │   │       ├── doctor.ts
@@ -222,6 +231,7 @@ export interface DoctorResult {
   status: "completed" | "skipped" | "failed";
   findings: readonly Finding[];
   error?: OperationalError;
+  coverage?: readonly AuditCoverage[];
   durationMs: number;
 }
 ```
@@ -229,11 +239,32 @@ export interface DoctorResult {
 Rules for `0.1.0`:
 
 - Built-in doctors may request `filesystem:read`.
+- Static SQL/RLS auditing runs automatically for `audit` with only
+  `filesystem:read`; it never opens a database connection or executes SQL.
 - Check Doctor may request `process:execute` only when `runChecks` is true.
 - Database/RLS Doctor receives `network:access` only when `--with-database` is
   present. No built-in doctor receives `filesystem:write`.
 - An operational doctor failure becomes scan metadata, not a fabricated code finding.
 - Doctor results are normalized and sorted after all eligible doctors finish.
+
+## Static SQL/RLS Audit
+
+The `database/sql-rls` doctor reconstructs expected migration state from
+inventoried PostgreSQL SQL files under Supabase, Prisma, Drizzle, and common
+generic migration roots. Each root is an independent stream. Files are split
+lexically, a conservative RLS-relevant DDL subset is recognized, and operations
+are replayed in filename order into final table, policy, and grant state.
+
+This module is automatic and offline. It reads only paths admitted by workspace
+inventory, enforces a per-file size ceiling, does not load included files, and
+never executes or evaluates SQL. Dynamic SQL, malformed input, renames, and
+unsupported relevant forms produce partial coverage rather than guessed facts.
+Partial coverage is not a clean result.
+
+Static `database/sql-rls` findings describe expected migration state. The
+separately permissioned `database/rls` doctor describes observed live catalog
+state when `--with-database` is present. The current implementation keeps both
+results distinct and does not claim deployment drift detection.
 
 ## Workspace Discovery
 

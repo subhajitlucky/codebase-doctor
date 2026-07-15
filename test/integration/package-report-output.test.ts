@@ -3,7 +3,9 @@ import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   auditCodebase,
+  type AuditCoverage,
   type AuditRequest,
+  type CoverageStatus,
   type Evidence,
 } from "../../src/index.js";
 
@@ -26,10 +28,21 @@ describe("package report output", () => {
       table: "documents",
       detail: "RLS is disabled.",
     };
+    const status: CoverageStatus = "partial";
+    const coverage: AuditCoverage = {
+      moduleId: "database/sql-rls",
+      status,
+      scope: "root:supabase/migrations",
+      filesExamined: 1,
+      statementsExamined: 2,
+      statementsRecognized: 1,
+      limitations: ["Dynamic SQL was not evaluated."],
+    };
 
     expect(typeof auditCodebase).toBe("function");
     expect(request.includeDatabaseAudit).toBe(true);
     expect(evidence.type).toBe("database");
+    expect(coverage.status).toBe("partial");
   });
 
   it("accepts lifecycle output before npm pack JSON", () => {

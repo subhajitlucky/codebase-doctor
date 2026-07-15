@@ -16,10 +16,12 @@ as repository or database evidence, not as proof that every defect was found.
    npx codebase-doctor audit . --json
    ```
 
-2. Review detected projects, `plannedChecks`, findings, and every entry in
-   `doctorRuns`. Without additional permission, configured checks and the
-   database audit are reported as skipped. Skipped coverage is not a clean
-   result for that audit area.
+2. Review detected projects, `plannedChecks`, findings, `coverage`, and every
+   entry in `doctorRuns`. The audit automatically performs offline PostgreSQL
+   RLS analysis when supported Supabase, Prisma, Drizzle, or generic SQL
+   migrations are inventoried. It reads migration files but never executes SQL.
+   Partial coverage is not a clean result: dynamic SQL, malformed statements,
+   or unsupported relevant DDL may prevent complete reconstruction.
 3. Confirm explicit permission before adding `--run-checks`. Do not use
    `--run-checks` on an untrusted repository; approved child commands are not
    network-isolated.
@@ -29,7 +31,9 @@ as repository or database evidence, not as proof that every defect was found.
    npx codebase-doctor audit . --run-checks --json
    ```
 
-5. Request separate permission before adding `--with-database`. This performs a
+5. Treat static and live results as different evidence. `database/sql-rls`
+   describes expected migration state; `database/rls` describes observed live
+   catalog state. Request separate permission before adding `--with-database`. This performs a
    live, read-only PostgreSQL catalog audit and requires network access. Supply
    the connection through `DATABASE_URL` or `SUPABASE_DB_URL`; never print,
    echo, log, or expose the credential or connection string.
@@ -56,12 +60,15 @@ JSON shortcut. Use `--timeout` for configured command time limits and
 ## Interpret results
 
 - Exit `0`: requested audits completed and no finding met the threshold; inspect
-  skipped coverage separately.
+  partial and skipped coverage separately.
 - Exit `1`: requested audits completed and at least one finding met the
   threshold.
 - Exit `2`: the CLI could not perform a requested audit because of invalid input
   or an operational failure. Never treat exit `2` as clean.
 
-A failed database doctor run is not a clean database audit. Keep operational
-failures separate from findings, preserve redacted evidence, and request user
-direction whenever execution, database access, or repository trust is unclear.
+A failed database doctor run is not a clean database audit. The live database
+doctor remains skipped without `--with-database`; that skip does not invalidate
+completed offline migration coverage, but it also does not prove deployed state.
+Keep operational failures separate from findings, preserve redacted evidence,
+and request user direction whenever execution, database access, or repository
+trust is unclear.

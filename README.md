@@ -40,8 +40,8 @@ codebase-doctor audit .
 ```
 
 It combines repository audits and visible coverage for optional internal modules.
-The source is prepared as the `0.1.2` release candidate. The published `0.1.1`
-package predates this command until `0.1.2` is explicitly approved and released.
+Version `0.1.2` is published. The current source also contains unreleased static
+SQL/RLS migration auditing planned for the next patch release.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
@@ -62,6 +62,10 @@ package predates this command until `0.1.2` is explicitly approved and released.
 - Severity thresholds and CI-friendly exit codes.
 - A provider-neutral agent skill.
 - A built-in live PostgreSQL RLS analyzer migrated from RLS Doctor.
+- Automatic offline PostgreSQL RLS analysis for Supabase, Prisma, Drizzle, and
+  generic migration directories.
+- Final-state reconstruction for supported table, policy, RLS, and table-grant
+  statements, with explicit partial coverage for dynamic or unsupported SQL.
 - Explicit, independent permission for database network access.
 - Read-only catalog inspection for policies, privileges, roles, memberships,
   RLS enforcement, and bypass paths.
@@ -81,6 +85,12 @@ Request JSON for an agent or CI system:
 ```bash
 codebase-doctor audit . --json
 ```
+
+The audit automatically runs offline static SQL analysis when it discovers a
+supported PostgreSQL migration stream. It requires no credentials, makes no
+network request, and never executes migration SQL. `database/sql-rls` findings
+describe expected migration state. Dynamic SQL, malformed input, and unsupported
+relevant DDL produce partial coverage. Partial coverage is not a clean result.
 
 Explicitly permit detected project checks:
 
@@ -112,8 +122,17 @@ Available options:
 
 Read-only reports include the validation command plan even when execution is not
 permitted. This lets users review the exact commands before adding `--run-checks`.
-Database coverage appears as skipped until `--with-database` is supplied. A skip
-does not mean the database was audited and found clean.
+Offline migration coverage appears automatically when applicable. The separate
+live catalog doctor appears as skipped until `--with-database` is supplied. A
+live skip does not mean the deployed database was audited and found clean.
+
+Static and live evidence answer different questions:
+
+- `database/sql-rls` reconstructs expected state from repository migrations.
+- `database/rls` inspects observed live database state.
+
+Codebase Doctor does not compare them for deployment drift yet. PostgreSQL is
+the only SQL dialect supported by this static module in the current source.
 
 `codebase-doctor scan` remains available as the backward-compatible,
 repository-only command.
@@ -177,6 +196,8 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 ## Safety model
 
 - Read-only discovery is the default.
+- Offline SQL auditing reads only inventoried migration files, applies a file
+  size ceiling, and never evaluates or executes SQL.
 - Target commands require `--run-checks`.
 - Live database access requires the separate `--with-database` permission.
 - Database credentials are read from `DATABASE_URL` or `SUPABASE_DB_URL`, not a
@@ -201,6 +222,7 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 - `checks/command-failed`
 - `checks/command-timeout`
 - `database/rls/*`
+- `database/sql-rls/*`
 
 Every finding contains a rule ID, doctor ID, severity, confidence, category, explanation, structured evidence, stable fingerprint, and remediation when available. Operational failures remain separate in `doctorRuns`.
 
@@ -228,9 +250,10 @@ The npm package includes the provider-neutral skill at:
 
 Copy that directory into a compatible agent's skill directory, or let an agent
 load it from the installed package. The workflow starts with
-`codebase-doctor audit . --json`, treats skipped coverage explicitly, requests
-separate permission for `--run-checks` and `--with-database`, fixes one
-evidence-backed finding at a time, and reruns the exact audit.
+`codebase-doctor audit . --json`, treats partial and skipped coverage explicitly,
+uses automatic offline migration analysis, requests separate permission for
+`--run-checks` and live `--with-database` access, fixes one evidence-backed
+finding at a time, and reruns the exact audit.
 
 ## Development
 
@@ -247,7 +270,8 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 ## Roadmap
 
 - Release the unified `audit` command and internal RLS module on npm.
-- Add static SQL migration analysis to complement live catalog auditing.
+- Compare completed static migration state with observed live catalog state for
+  deployment drift.
 - Expand built-in frontend, backend, security, infrastructure, performance, and
   AI audit coverage without requiring separate doctor installations.
 - Report which applicable areas were audited, skipped, unsupported, or blocked

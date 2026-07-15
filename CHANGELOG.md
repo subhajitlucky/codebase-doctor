@@ -4,6 +4,24 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Automatically audit supported PostgreSQL RLS migration streams from
+  Supabase, Prisma, Drizzle, and generic migration layouts without credentials
+  or network access.
+- Reconstruct supported final table, policy, RLS, FORCE RLS, grant, and revoke
+  state with real SQL file evidence and stable `database/sql-rls/*` findings.
+- Add optional schema-1 coverage records to text, JSON, and SARIF so completed,
+  partial, not-applicable, skipped, and failed audit scope remains explicit.
+- Export the `AuditCoverage` and `CoverageStatus` programmatic types.
+
+### Security
+
+- Read only SQL paths admitted by bounded repository inventory, enforce a
+  per-file size ceiling, and never execute or evaluate migration SQL.
+- Mark dynamic, malformed, or unsupported relevant SQL as partial coverage
+  instead of guessing database state.
+
 ## [0.1.2] - 2026-07-15
 
 ### Added

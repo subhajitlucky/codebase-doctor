@@ -68,6 +68,20 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/scan.*backward-compatible|backward-compatible.*scan/is);
   });
 
+  it("explains automatic static SQL coverage separately from live database state", async () => {
+    const [skill, readme] = await Promise.all([
+      readFile(skillPath, "utf8"),
+      readFile("README.md", "utf8"),
+    ]);
+
+    for (const document of [skill, readme]) {
+      expect(document).toMatch(/automatic(?:ally)?.*offline|offline.*automatic(?:ally)?/is);
+      expect(document).toMatch(/partial coverage.*not.*clean|not.*clean.*partial coverage/is);
+      expect(document).toMatch(/expected.*migration.*(?:observed|live)|(?:observed|live).*expected.*migration/is);
+      expect(document).toMatch(/--with-database.*live|live.*--with-database/is);
+    }
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",

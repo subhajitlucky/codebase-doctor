@@ -15,6 +15,7 @@ export type {
 } from "./core/findings.js";
 export { classifyScanExit } from "./core/normalize.js";
 export type { DoctorRunRecord, ScanResult } from "./core/normalize.js";
+export type { AuditCoverage, CoverageStatus } from "./core/doctor.js";
 export {
   BaselineError,
   compareFindingBaseline,
