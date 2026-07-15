@@ -7,6 +7,7 @@ import { projectDoctor } from "../doctors/project/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
+import type { CommandPlan } from "../execution/types.js";
 import type {
   FileInventory,
   ManifestRecord,
@@ -29,22 +30,30 @@ export interface ScanDependencies {
     inventory: FileInventory,
     manifests: readonly ManifestRecord[],
   ): Promise<ProjectDetection>;
-  createDoctors(request: ScanRequest): readonly Doctor[];
+  createDoctors(request: ScanRequest, hooks: ScanHooks): readonly Doctor[];
+}
+
+export interface ScanHooks {
+  onCommandPlan?: (plan: CommandPlan) => void;
 }
 
 const defaultDependencies: ScanDependencies = {
   inventoryWorkspace: inventoryFiles,
   loadManifests: loadPackageManifests,
   detectWorkspaceProjects: detectProjects,
-  createDoctors: (request) => [
+  createDoctors: (request, hooks) => [
     projectDoctor,
-    createCheckDoctor({ timeoutMs: request.timeoutMs }),
+    createCheckDoctor({
+      timeoutMs: request.timeoutMs,
+      ...(hooks.onCommandPlan === undefined ? {} : { onPlan: hooks.onCommandPlan }),
+    }),
   ],
 };
 
 export async function scanCodebase(
   request: ScanRequest,
   overrides: Partial<ScanDependencies> = {},
+  hooks: ScanHooks = {},
 ): Promise<ScanResult> {
   const dependencies: ScanDependencies = { ...defaultDependencies, ...overrides };
   const inventory = await dependencies.inventoryWorkspace(request.root);
@@ -58,7 +67,7 @@ export async function scanCodebase(
     workspaces: detection.workspaces,
   };
   const results = await runDoctors(
-    dependencies.createDoctors(request),
+    dependencies.createDoctors(request, hooks),
     snapshot,
     { runChecks: request.runChecks },
   );

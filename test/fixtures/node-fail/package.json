@@ -1,0 +1,8 @@
+{
+  "name": "codebase-doctor-node-fail-fixture",
+  "private": true,
+  "packageManager": "npm@11.0.0",
+  "scripts": {
+    "test": "node -e \"console.error('fixture check failed'); process.exit(1)\""
+  }
+}

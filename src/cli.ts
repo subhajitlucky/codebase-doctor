@@ -3,13 +3,16 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { VERSION } from "./index.js";
+import { createScanCommand } from "./commands/scan.js";
+import { VERSION } from "./version.js";
 
 export function createProgram(): Command {
-  return new Command()
+  const program = new Command()
     .name("codebase-doctor")
     .description("Evidence-backed diagnostics for software repositories.")
     .version(VERSION);
+  program.addCommand(createScanCommand());
+  return program;
 }
 
 const isEntrypoint =

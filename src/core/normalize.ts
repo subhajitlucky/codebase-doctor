@@ -10,7 +10,7 @@ import {
   type FindingSummary,
   type FindingThreshold,
 } from "./summary.js";
-import { VERSION } from "../index.js";
+import { VERSION } from "../version.js";
 import type { DetectedProject } from "../workspace/types.js";
 
 export interface DoctorRunRecord {

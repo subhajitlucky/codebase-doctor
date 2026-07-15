@@ -1,4 +1,4 @@
-export const VERSION = "0.1.0";
+export { VERSION } from "./version.js";
 
 export {
   SEVERITIES,
@@ -13,5 +13,15 @@ export type {
   FingerprintInput,
   Severity,
 } from "./core/findings.js";
-export { summarizeFindings } from "./core/summary.js";
-export type { FindingSummary } from "./core/summary.js";
+export { classifyScanExit } from "./core/normalize.js";
+export type { DoctorRunRecord, ScanResult } from "./core/normalize.js";
+export { scanCodebase } from "./core/scan.js";
+export type { ScanDependencies, ScanHooks, ScanRequest } from "./core/scan.js";
+export { hasFindingAtOrAbove, summarizeFindings } from "./core/summary.js";
+export type {
+  FindingSummary,
+  FindingThreshold,
+} from "./core/summary.js";
+export { renderJsonReport } from "./reporters/json.js";
+export { renderTextReport } from "./reporters/text.js";
+export type { TextReportOptions } from "./reporters/text.js";

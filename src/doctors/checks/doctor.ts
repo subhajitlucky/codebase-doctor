@@ -31,6 +31,7 @@ export interface CheckDoctorOptions {
   runner?: CommandRunner;
   timeoutMs?: number;
   redactionEnvironment?: NodeJS.ProcessEnv;
+  onPlan?: (plan: CommandPlan) => void;
 }
 
 function outputEvidence(
@@ -167,6 +168,7 @@ export function createCheckDoctor(options: CheckDoctorOptions = {}): CheckDoctor
       for (const plan of plans) {
         let result: CommandRunResult;
         try {
+          options.onPlan?.(plan);
           result = await runner(plan);
         } catch (error) {
           operationalError = {

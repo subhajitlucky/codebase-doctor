@@ -1,0 +1,8 @@
+{
+  "name": "codebase-doctor-node-pass-fixture",
+  "private": true,
+  "packageManager": "npm@11.0.0",
+  "scripts": {
+    "test": "node -e \"console.log('fixture check passed')\""
+  }
+}
