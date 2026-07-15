@@ -2,9 +2,9 @@
 
 Codebase Doctor is a model-independent CLI that turns repository structure and configured validation commands into deterministic, evidence-backed findings.
 
-> **Status:** `0.1.0` release candidate. Source, package contents, and a clean tarball installation are verified locally, but the package has not been published to npm.
+> **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
-## What works in 0.1.0
+## What works in 0.1.x
 
 - Bounded, symlink-safe repository inventory.
 - Node.js, JavaScript, TypeScript, Python, Go, Rust, and Java project detection.
@@ -17,11 +17,11 @@ Codebase Doctor is a model-independent CLI that turns repository structure and c
 - Severity thresholds and CI-friendly exit codes.
 - A provider-neutral agent skill.
 
-Go, Rust, and Java are detection-only in `0.1.0`; Codebase Doctor does not execute their toolchains yet.
+Go, Rust, and Java are detection-only in `0.1.x`; Codebase Doctor does not execute their toolchains yet.
 
 ## Usage
 
-After npm publication, run a read-only scan:
+Run a read-only scan:
 
 ```bash
 npx codebase-doctor scan .
@@ -79,7 +79,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 - Likely secrets are redacted before entering finding evidence.
 - Scanner logic makes no external network calls.
 
-Approved child commands still inherit host networking in `0.1.0`. Do not execute checks from an untrusted repository. Codebase Doctor coordinates existing tools; it is not a guarantee that every defect will be found.
+Approved child commands still inherit host networking in `0.1.x`. Do not execute checks from an untrusted repository. Codebase Doctor coordinates existing tools; it is not a guarantee that every defect will be found.
 
 ## Initial findings
 
