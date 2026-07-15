@@ -1,5 +1,11 @@
 # Agent Verification Platform Design
 
+> **Superseded:** This document records an earlier external-specialist strategy.
+> Codebase Doctor is now one unified full-codebase auditor whose domain knowledge
+> lives in built-in modules. Do not implement the external doctor protocol
+> proposed below. The approved replacement is documented in
+> [Unified RLS Audit Design](2026-07-15-unified-rls-audit-design.md).
+
 **Date:** 2026-07-15  
 **Status:** Approved product direction  
 **Product:** Codebase Doctor

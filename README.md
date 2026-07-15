@@ -40,8 +40,8 @@ codebase-doctor audit .
 ```
 
 It combines repository audits and visible coverage for optional internal modules.
-The published `0.1.1` package predates this command; `audit` will reach npm in the
-next release after package verification.
+The source is prepared as the `0.1.2` release candidate. The published `0.1.1`
+package predates this command until `0.1.2` is explicitly approved and released.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 

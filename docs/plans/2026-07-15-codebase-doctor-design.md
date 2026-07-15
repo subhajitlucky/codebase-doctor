@@ -1,5 +1,11 @@
 # Codebase Doctor Design
 
+> **Superseded product direction:** This historical `0.1.0` design describes a
+> doctor-of-doctors and external adapters. That direction was rejected. The
+> current product is one unified auditor with built-in modules; see
+> [Unified RLS Audit Design](2026-07-15-unified-rls-audit-design.md) and the
+> repository README. Retain this document only as implementation history.
+
 **Date:** 2026-07-15  
 **Status:** Approved  
 **Product:** Codebase Doctor

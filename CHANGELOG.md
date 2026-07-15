@@ -4,8 +4,23 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-15
+
 ### Added
 
+- Introduce `codebase-doctor audit` as the unified full-codebase command while
+  retaining `scan` as the backward-compatible repository-only interface.
+- Add a built-in PostgreSQL Row Level Security audit module migrated from RLS
+  Doctor's catalog loader, analyzer, role graph, and policy rules.
+- Add separately permissioned live database auditing through `--with-database`,
+  repeatable `--database-schema`, and bounded `--database-timeout` options.
+- Normalize database findings into the shared text, JSON schema 1, SARIF,
+  fingerprint, baseline, severity, remediation, and exit-code contracts.
+- Export the programmatic `auditCodebase` API and `AuditRequest` type.
+- Report database coverage as skipped, completed, or failed so agents cannot
+  confuse an unaudited database with a clean database.
+- Add disposable PostgreSQL 16 integration coverage for unsafe and safe RLS
+  fixtures, credential redaction, and clean npm tarball installation.
 - Preview validation command plans during read-only scans.
 - Configure repository-relative exclusions through `.codebase-doctor.json` and
   repeatable `--exclude` options.
@@ -14,6 +29,14 @@ All notable changes to Codebase Doctor are documented here.
 - Emit deterministic SARIF 2.1.0 reports with locations, rule metadata,
   fingerprints, evidence, and baseline state.
 - Select text, JSON, or SARIF with `--format` while preserving `--json`.
+
+### Security
+
+- Keep PostgreSQL credentials in environment variables, sanitize connection
+  failures, use read-only repeatable-read catalog transactions, and never
+  execute suggested SQL.
+- Override esbuild to `0.28.1` or newer to resolve
+  `GHSA-g7r4-m6w7-qqqr` in the development toolchain.
 
 ## [0.1.1] - 2026-07-15
 

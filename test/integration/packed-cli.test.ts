@@ -66,7 +66,7 @@ describe("release package", () => {
       const report = JSON.parse(scanned.stdout);
       expect(report).toMatchObject({
         schemaVersion: "1",
-        tool: { name: "codebase-doctor", version: "0.1.1" },
+        tool: { name: "codebase-doctor", version: "0.1.2" },
       });
       expect(report.doctorRuns).toContainEqual(expect.objectContaining({
         doctorId: "database/rls",

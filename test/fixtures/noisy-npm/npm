@@ -5,6 +5,7 @@ const requiredFiles = [
   "dist/index.js",
   "dist/index.d.ts",
   "README.md",
+  "CHANGELOG.md",
   "LICENSE",
   "docs/architecture.md",
   ".agents/skills/codebase-doctor/SKILL.md",
@@ -14,9 +15,9 @@ const requiredFiles = [
 process.stdout.write("CLI Building entry: src/cli.ts, src/index.ts\n");
 process.stdout.write(`${JSON.stringify([
   {
-    id: "codebase-doctor@0.1.1",
+    id: "codebase-doctor@0.1.2",
     name: "codebase-doctor",
-    version: "0.1.1",
+    version: "0.1.2",
     size: 123,
     files: requiredFiles.map((path) => ({ path })),
   },

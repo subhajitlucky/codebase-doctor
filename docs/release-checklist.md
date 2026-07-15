@@ -33,7 +33,7 @@ create a remote tag without explicit human approval.
 
 ## After approved publication
 
-- [ ] Create and push the approved `v0.1.0` tag only after publication authorization.
+- [ ] Create and push the approved `v0.1.2` tag only after publication authorization.
 - [ ] Run the published package's `--version` in a clean temporary directory.
 - [ ] Run a read-only `codebase-doctor audit . --json` smoke test and inspect skipped coverage.
 - [ ] Confirm the npm package page shows the expected README, license, files, and version.
