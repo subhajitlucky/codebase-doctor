@@ -82,3 +82,50 @@ export type ParsedSqlStatement =
     })
   | (ParsedStatementBase & { kind: "ignored" })
   | (ParsedStatementBase & { kind: "unsupported-relevant"; reason: string });
+
+export interface StaticPolicyState {
+  name: string;
+  command: SqlPolicyCommand | "unknown";
+  permissive: boolean | "unknown";
+  roles: readonly string[] | "unknown";
+  usingExpression: string | null | "unknown";
+  checkExpression: string | null | "unknown";
+  evidence: SqlStatement;
+  commandEvidence?: SqlStatement;
+  rolesEvidence?: SqlStatement;
+  usingEvidence?: SqlStatement;
+  checkEvidence?: SqlStatement;
+}
+
+export interface StaticGrantState {
+  role: string;
+  privilege: SqlTablePrivilege;
+  evidence: SqlStatement;
+}
+
+export interface StaticTableState {
+  schema: string;
+  name: string;
+  declaredInStream: boolean;
+  dropped: boolean;
+  rlsEnabled: boolean | "unknown";
+  forceRls: boolean | "unknown";
+  policies: readonly StaticPolicyState[];
+  grants: readonly StaticGrantState[];
+  lastEvidence: SqlStatement;
+  rlsEvidence?: SqlStatement;
+  forceRlsEvidence?: SqlStatement;
+}
+
+export interface SqlReductionCoverage {
+  status: "completed" | "partial";
+  statementsExamined: number;
+  statementsRecognized: number;
+  limitations: readonly string[];
+}
+
+export interface SqlStreamState {
+  streamId: string;
+  tables: readonly StaticTableState[];
+  coverage: SqlReductionCoverage;
+}
