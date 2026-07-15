@@ -23,6 +23,53 @@ function cli(args: readonly string[]) {
 }
 
 describe("audit CLI", () => {
+  it("finds unsafe Supabase migration state without database credentials", () => {
+    const result = cli([
+      "audit", fixture("sql-rls/unsafe"), "--json", "--fail-on", "none",
+    ]);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.findings).toContainEqual(expect.objectContaining({
+      doctorId: "database/sql-rls",
+      ruleId: "database/sql-rls/rls-disabled-exposed",
+      severity: "high",
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/sql-rls",
+      scope: "root:supabase/migrations",
+      status: "completed",
+    }));
+  });
+
+  it("accepts a safe Prisma migration stream without high findings", () => {
+    const result = cli(["audit", fixture("sql-rls/safe"), "--json"]);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      scope: "root:prisma/migrations",
+      status: "completed",
+    }));
+    expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
+      doctorId === "database/sql-rls"
+    )).toEqual([]);
+  });
+
+  it("reports dynamic migration SQL as partial coverage", () => {
+    const result = cli(["audit", fixture("sql-rls/partial"), "--json"]);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      scope: "root:migrations",
+      status: "partial",
+      statementsExamined: 1,
+      statementsRecognized: 0,
+      limitations: expect.arrayContaining([expect.stringMatching(/dynamic do blocks/i)]),
+    }));
+  });
+
   it("combines repository auditing with visible skipped database coverage", () => {
     const result = cli(["audit", fixture("node-pass"), "--json"]);
     const report = JSON.parse(result.stdout);
@@ -32,6 +79,10 @@ describe("audit CLI", () => {
       doctorId: "database/rls",
       status: "skipped",
       skipReason: expect.stringContaining("network:access"),
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/sql-rls",
+      status: "not-applicable",
     }));
   });
 

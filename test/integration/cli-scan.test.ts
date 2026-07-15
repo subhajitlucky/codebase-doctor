@@ -21,6 +21,17 @@ function cli(args: readonly string[], cwd = repositoryRoot) {
 }
 
 describe("scan CLI", () => {
+  it("does not run static or live database audit modules", () => {
+    const result = cli(["scan", fixture("sql-rls/unsafe"), "--json"]);
+    const report = JSON.parse(result.stdout);
+    const doctorIds = report.doctorRuns.map(({ doctorId }: { doctorId: string }) => doctorId);
+
+    expect(result.status).toBe(0);
+    expect(doctorIds).not.toContain("database/sql-rls");
+    expect(doctorIds).not.toContain("database/rls");
+    expect(report.coverage).toBeUndefined();
+  });
+
   it("defaults to the current directory", () => {
     const cwd = fixture("node-pass");
     const result = cli(["scan", "--json"], cwd);

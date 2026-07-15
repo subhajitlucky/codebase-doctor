@@ -18,6 +18,15 @@ function result(): ScanResult {
       skipReason: null,
       checkRuns: [],
     }],
+    coverage: [{
+      moduleId: "database/sql-rls",
+      status: "partial",
+      scope: "root:migrations",
+      filesExamined: 1,
+      statementsExamined: 2,
+      statementsRecognized: 1,
+      limitations: ["Dynamic SQL was not evaluated."],
+    }],
     findings: [
       {
         ruleId: "high-rule",
@@ -90,5 +99,16 @@ describe("JSON reporter", () => {
     expect(parsed.findings.every(({ ruleId }: { ruleId: string }) =>
       ruleId !== "doctor_execution_failed",
     )).toBe(true);
+  });
+
+  it("keeps schema version 1 while emitting optional audit coverage", () => {
+    const parsed = JSON.parse(renderJsonReport(result()));
+
+    expect(parsed.schemaVersion).toBe("1");
+    expect(parsed.coverage).toEqual([expect.objectContaining({
+      moduleId: "database/sql-rls",
+      status: "partial",
+      statementsRecognized: 1,
+    })]);
   });
 });
