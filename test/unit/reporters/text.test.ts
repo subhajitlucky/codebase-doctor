@@ -86,6 +86,33 @@ describe("text reporter", () => {
     expect(report).toContain("Remediation: Correct the JSON syntax.");
   });
 
+  it("renders database evidence without inventing a file location", () => {
+    const { location: _location, ...baseFinding } = result().findings[0]!;
+    const databaseResult: ScanResult = {
+      ...result(),
+      findings: [{
+        ...baseFinding,
+        ruleId: "database/rls/public-unconditional-write",
+        doctorId: "database/rls",
+        category: "database-security",
+        title: "Anonymous-style role can write rows too broadly",
+        message: "The policy predicate is unconditional.",
+        evidence: [{
+          type: "database",
+          schema: "public",
+          table: "documents",
+          policy: "public write",
+          detail: "The policy predicate is unconditional.",
+        }],
+      }],
+    };
+
+    const report = renderTextReport(databaseResult);
+
+    expect(report).toContain("Evidence: database public.documents policy \"public write\"");
+    expect(report).not.toContain("Location: postgres:");
+  });
+
   it("does not emit ANSI in NO_COLOR or non-TTY mode", () => {
     const noColor = renderTextReport(result(), { color: true, isTTY: true, noColor: true });
     const nonTty = renderTextReport(result(), { color: true, isTTY: false, noColor: false });

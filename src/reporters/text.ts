@@ -38,6 +38,13 @@ function evidenceLines(finding: Finding): string[] {
     if (evidence.type === "observation") {
       return [`  Evidence: observation — ${evidence.detail}`];
     }
+    if (evidence.type === "database") {
+      const scope = evidence.table === undefined
+        ? evidence.schema
+        : `${evidence.schema}.${evidence.table}`;
+      const policy = evidence.policy === undefined ? "" : ` policy \"${evidence.policy}\"`;
+      return [`  Evidence: database ${scope}${policy} — ${evidence.detail}`];
+    }
     const lines = [`  Evidence: command ${evidence.command} — exit ${evidence.exitCode}`];
     if (evidence.output !== undefined && evidence.output.length > 0) {
       lines.push(...evidence.output.split("\n").map((line) => `    ${line}`));

@@ -9,6 +9,13 @@ export type Evidence =
   | { type: "file"; path: string; detail: string }
   | { type: "manifest"; path: string; detail: string }
   | { type: "command"; command: string; exitCode: number; output?: string }
+  | {
+      type: "database";
+      schema: string;
+      table?: string;
+      policy?: string;
+      detail: string;
+    }
   | { type: "observation"; detail: string };
 
 export interface Finding {

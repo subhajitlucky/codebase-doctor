@@ -61,4 +61,31 @@ describe("SARIF reporter", () => {
       properties: { category: "repository", confidence: "high" },
     });
   });
+
+  it("keeps database evidence on a locationless result", () => {
+    const { location: _location, ...baseFinding } = result().findings[0]!;
+    const databaseResult: ScanResult = {
+      ...result(),
+      findings: [{
+        ...baseFinding,
+        ruleId: "database/rls/public-unconditional-write",
+        doctorId: "database/rls",
+        category: "database-security",
+        evidence: [{
+          type: "database",
+          schema: "public",
+          table: "documents",
+          policy: "public write",
+          detail: "The policy predicate is unconditional.",
+        }],
+      }],
+    };
+
+    const finding = JSON.parse(renderSarifReport(databaseResult)).runs[0].results[0];
+
+    expect(finding.locations).toBeUndefined();
+    expect(finding.properties.evidence).toEqual([
+      expect.objectContaining({ type: "database", schema: "public", table: "documents" }),
+    ]);
+  });
 });
