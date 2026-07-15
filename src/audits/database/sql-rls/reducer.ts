@@ -15,6 +15,8 @@ interface MutableTableState {
   dropped: boolean;
   rlsEnabled: boolean | "unknown";
   forceRls: boolean | "unknown";
+  policiesComplete: boolean;
+  grantsComplete: boolean;
   policies: Map<string, StaticPolicyState>;
   grants: Map<string, StaticGrantState>;
   lastEvidence: SqlStatement;
@@ -42,6 +44,8 @@ function newReferencedTable(table: SqlObjectName, evidence: SqlStatement): Mutab
     dropped: false,
     rlsEnabled: "unknown",
     forceRls: "unknown",
+    policiesComplete: false,
+    grantsComplete: false,
     policies: new Map(),
     grants: new Map(),
     lastEvidence: evidence,
@@ -54,6 +58,8 @@ function createdTable(table: SqlObjectName, evidence: SqlStatement): MutableTabl
     declaredInStream: true,
     rlsEnabled: false,
     forceRls: false,
+    policiesComplete: true,
+    grantsComplete: true,
     rlsEvidence: evidence,
     forceRlsEvidence: evidence,
   };
@@ -71,6 +77,8 @@ function immutableTable(table: MutableTableState): StaticTableState {
     dropped: table.dropped,
     rlsEnabled: table.rlsEnabled,
     forceRls: table.forceRls,
+    policiesComplete: table.policiesComplete,
+    grantsComplete: table.grantsComplete,
     policies,
     grants,
     lastEvidence: table.lastEvidence,

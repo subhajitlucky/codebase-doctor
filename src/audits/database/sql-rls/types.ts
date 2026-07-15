@@ -110,6 +110,8 @@ export interface StaticTableState {
   dropped: boolean;
   rlsEnabled: boolean | "unknown";
   forceRls: boolean | "unknown";
+  policiesComplete: boolean;
+  grantsComplete: boolean;
   policies: readonly StaticPolicyState[];
   grants: readonly StaticGrantState[];
   lastEvidence: SqlStatement;
