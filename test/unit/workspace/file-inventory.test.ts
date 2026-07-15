@@ -47,6 +47,7 @@ describe("workspace file inventory", () => {
       "dist",
       "build",
       ".venv",
+      ".venv-logo-trace",
       "venv",
       "target",
       ".cache",

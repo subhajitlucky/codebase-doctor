@@ -2,7 +2,7 @@
 
 Codebase Doctor is a model-independent CLI that turns repository structure and configured validation commands into deterministic, evidence-backed findings.
 
-> **Status:** `0.1.0` release candidate. The implementation is working locally but has not been published to npm.
+> **Status:** `0.1.0` release candidate. Source, package contents, and a clean tarball installation are verified locally, but the package has not been published to npm.
 
 ## What works in 0.1.0
 
@@ -56,6 +56,8 @@ npm run build
 node dist/cli.js scan . --json
 ```
 
+The release package is checked with `npm pack`, installed into a clean temporary project, and executed through its generated `node_modules/.bin/codebase-doctor` command.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -107,6 +109,7 @@ npm run typecheck
 npm test
 npm run build
 npm run ci
+npm run ci:full
 ```
 
 Architecture and safety decisions are documented in [docs/architecture.md](docs/architecture.md). The implementation plan is recorded in [docs/plans/2026-07-15-codebase-doctor-v0.1-implementation.md](docs/plans/2026-07-15-codebase-doctor-v0.1-implementation.md).

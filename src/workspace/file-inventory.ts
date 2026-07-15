@@ -26,6 +26,10 @@ const IGNORED_DIRECTORIES = new Set([
   "venv",
 ]);
 
+function isIgnoredDirectory(name: string): boolean {
+  return IGNORED_DIRECTORIES.has(name) || name.startsWith(".venv-");
+}
+
 export class WorkspaceInventoryError extends Error {
   constructor(message: string) {
     super(message);
@@ -89,7 +93,7 @@ export async function inventoryFiles(
       }
 
       if (status.isDirectory()) {
-        if (IGNORED_DIRECTORIES.has(name)) continue;
+        if (isIgnoredDirectory(name)) continue;
 
         const nextDepth = depth + 1;
         if (nextDepth > maxDepth) {
