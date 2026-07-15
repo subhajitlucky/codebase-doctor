@@ -1,0 +1,54 @@
+{
+  "name": "codebase-doctor",
+  "version": "0.1.0",
+  "description": "A model-independent CLI for evidence-backed codebase diagnostics.",
+  "type": "module",
+  "bin": {
+    "codebase-doctor": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    ".agents/skills/codebase-doctor",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/cli.ts src/index.ts --format esm --clean && tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "ci": "npm run typecheck && npm test && npm run build",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "codebase",
+    "diagnostics",
+    "static-analysis",
+    "testing",
+    "developer-tools",
+    "ai-agents",
+    "cli"
+  ],
+  "author": "Subhajit Pradhan",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
