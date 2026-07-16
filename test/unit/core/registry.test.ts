@@ -82,21 +82,18 @@ describe("doctor registry", () => {
     expect(diagnose).toHaveBeenCalledOnce();
   });
 
-  it.each(["network:access", "filesystem:write"] as const)(
-    "denies %s without its explicit permission",
-    async (forbiddenCapability) => {
-      const diagnose = vi.fn(async () => completed());
-      const [entry] = await runDoctors([
-        doctor({ id: "unsafe", capabilities: [forbiddenCapability], diagnose }),
-      ], snapshot, { runChecks: true });
+  it("denies network access without its explicit permission", async () => {
+    const diagnose = vi.fn(async () => completed());
+    const [entry] = await runDoctors([
+      doctor({ id: "networked", capabilities: ["network:access"], diagnose }),
+    ], snapshot, { runChecks: true });
 
-      expect(entry?.result).toMatchObject({
-        status: "skipped",
-        skipReason: expect.stringContaining(forbiddenCapability),
-      });
-      expect(diagnose).not.toHaveBeenCalled();
-    },
-  );
+    expect(entry?.result).toMatchObject({
+      status: "skipped",
+      skipReason: expect.stringContaining("network:access"),
+    });
+    expect(diagnose).not.toHaveBeenCalled();
+  });
 
   it("turns a thrown doctor error into operational metadata and continues", async () => {
     const laterDiagnose = vi.fn(async () => completed());

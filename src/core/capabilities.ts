@@ -1,8 +1,7 @@
 export type Capability =
   | "filesystem:read"
   | "process:execute"
-  | "network:access"
-  | "filesystem:write";
+  | "network:access";
 
 export interface CapabilityOptions {
   runChecks: boolean;
