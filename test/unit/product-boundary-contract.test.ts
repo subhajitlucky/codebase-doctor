@@ -7,6 +7,21 @@ const canonicalDocuments = [
   ".agents/skills/codebase-doctor/SKILL.md",
 ] as const;
 
+const historicalPlans = [
+  "docs/plans/2026-07-15-agent-verification-platform-design.md",
+  "docs/plans/2026-07-15-codebase-doctor-design.md",
+  "docs/plans/2026-07-15-codebase-doctor-v0.1-implementation.md",
+  "docs/plans/2026-07-15-core-ci-foundation-design.md",
+  "docs/plans/2026-07-15-core-ci-foundation.md",
+  "docs/plans/2026-07-15-static-sql-rls-audit-design.md",
+  "docs/plans/2026-07-15-static-sql-rls-audit.md",
+  "docs/plans/2026-07-15-unified-rls-audit-design.md",
+  "docs/plans/2026-07-15-unified-rls-audit.md",
+] as const;
+
+const supersededPlans = historicalPlans.slice(0, 2);
+const targetWriteCapability = new RegExp(["filesystem", "write"].join(":"), "i");
+
 async function documents(paths: readonly string[]) {
   return Promise.all(paths.map(async (path) => ({
     path,
@@ -30,11 +45,33 @@ describe("independent auditor product boundary", () => {
       /controlled repair workflow/i,
       /repair-loop coordination/i,
       /AI explanations and repair/i,
-      /filesystem:write/i,
+      targetWriteCapability,
     ];
 
     for (const { path, text } of await documents(canonicalDocuments)) {
       for (const pattern of forbidden) expect(text, `${path}: ${pattern}`).not.toMatch(pattern);
+    }
+  });
+
+  it("keeps historical plans inside the same permanent boundary", async () => {
+    const forbidden = [
+      /repair-loop coordination/i,
+      /verification-gated repair/i,
+      /controlled (?:agent )?repair/i,
+      /guide repair/i,
+      /AI explanations and repair/i,
+      targetWriteCapability,
+    ];
+
+    for (const { path, text } of await documents(historicalPlans)) {
+      for (const pattern of forbidden) expect(text, `${path}: ${pattern}`).not.toMatch(pattern);
+    }
+  });
+
+  it("does not label superseded product directions as approved", async () => {
+    for (const { path, text } of await documents(supersededPlans)) {
+      expect(text, path).toMatch(/^\*\*Status:\*\* Superseded[ \t]*$/m);
+      expect(text, path).not.toMatch(/^\*\*Status:\*\* Approved/m);
     }
   });
 });

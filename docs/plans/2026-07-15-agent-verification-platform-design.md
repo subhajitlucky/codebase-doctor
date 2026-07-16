@@ -7,7 +7,7 @@
 > [Unified RLS Audit Design](2026-07-15-unified-rls-audit-design.md).
 
 **Date:** 2026-07-15  
-**Status:** Approved product direction  
+**Status:** Superseded
 **Product:** Codebase Doctor
 
 ## North Star
@@ -17,7 +17,8 @@ autonomous coding agents produce evidence-backed, production-ready software.
 
 It is a **doctor-of-doctors**: one trusted entry point that understands a
 repository, selects relevant specialist doctors, obtains the capabilities they
-need, normalizes their evidence, guides repair, and verifies the final result.
+need, normalizes their evidence, guides external actors with remediation
+evidence, and verifies the final result after they make changes.
 
 Codebase Doctor does not compete with increasingly capable coding models. It
 gives those models a reliable way to prove that their work is correct.
@@ -82,7 +83,8 @@ Codebase Doctor is:
 1. A universal repository and project discovery layer.
 2. A capability-aware orchestrator for deterministic specialist tools.
 3. A stable finding, evidence, fingerprint, and operational-error contract.
-4. A verification loop that agents can invoke before and after repair.
+4. A verification loop that agents can invoke before and after externally made
+   changes.
 5. A provider-neutral integration surface for skills, hooks, MCP, CI, and
    future agent systems.
 
@@ -100,7 +102,7 @@ Coding agent, developer, or CI
               +--> execute approved doctors
               +--> normalize and deduplicate evidence
               +--> compare with baselines
-              +--> guide repair and re-verification
+              +--> explain remediation and support re-verification
               |
               v
   Text / JSON / SARIF / MCP / agent result
@@ -138,7 +140,7 @@ source code live inside the core package.
 - finding normalization and stable fingerprints;
 - baseline comparison and severity thresholds;
 - text, JSON, SARIF, and future MCP reporting;
-- repair-loop coordination and final verification evidence.
+- post-change audit coordination and final verification evidence.
 
 ### Specialist doctors own
 
@@ -169,7 +171,8 @@ Codebase Doctor should then:
 4. Run safe, policy-approved checks without unnecessary questions.
 5. Request consent only when a doctor crosses a meaningful boundary.
 6. Return concise normalized findings instead of raw tool noise.
-7. Let the agent repair one evidence-backed defect at a time.
+7. Return one evidence-backed defect at a time for a separately authorized
+   external agent or human to change.
 8. Re-run affected doctors and dependent checks.
 9. Return proof of what passed, failed, skipped, or could not run.
 
@@ -184,7 +187,6 @@ Doctor capabilities remain explicit:
 filesystem:read
 process:execute
 network:access
-filesystem:write
 ```
 
 The system should minimize friction without weakening real boundaries:
@@ -194,7 +196,7 @@ The system should minimize friction without weakening real boundaries:
 - Network access requires an explicit policy or approval.
 - Secrets are forwarded only through named environment allowlists.
 - Production database access is never inferred silently.
-- Repository or database writes require separate authorization.
+- Repository or database writes remain outside Codebase Doctor's authority.
 - Destructive operations are never part of ordinary diagnosis.
 - Operational failures remain distinct from product defects.
 
@@ -229,7 +231,7 @@ The integration should:
 9. Treat a missing executable as a skip and connection or schema failures as
    operational failures.
 10. Include normalized RLS findings in text, JSON, SARIF, baselines, and future
-    repair workflows.
+    post-change verification workflows.
 
 The integration must never connect to a real database without explicit user or
 CI authorization. A read-only or disposable database credential is preferred.
@@ -252,9 +254,9 @@ versioned external-doctor protocol with these concepts:
 - stable source fingerprint preservation;
 - adapter version recorded in the final report.
 
-The first protocol should be intentionally narrow. New lifecycle hooks, dynamic
-installation, remote marketplaces, and arbitrary filesystem writes remain
-deferred until real integrations require them.
+The first protocol should be intentionally narrow. Dynamic installation, remote
+marketplaces, and target filesystem mutation remain outside the product
+boundary regardless of future integrations.
 
 ## Model and Provider Independence
 
@@ -309,8 +311,8 @@ Measure:
 
 - true findings and missed defects;
 - false-positive rate;
-- agent repair success rate;
-- regressions introduced during repair;
+- defects resolved by external actors after receiving a finding;
+- regressions detected after externally made changes;
 - tool calls and output tokens consumed;
 - time from task completion to verified result;
 - consistency across models and agent products;
@@ -377,13 +379,13 @@ The defensible value is the trusted protocol and evidence contract, not the word
 - Go, Rust, and Java executable checks;
 - third-party doctor SDK after protocol experience is sufficient.
 
-### Phase 5: Verification-gated repair and proof
+### Phase 5: Independent verification and proof
 
 - affected-doctor re-execution after changes;
-- controlled repair in branches or worktrees;
+- read-only or disposable validation environments;
 - signed or attestable verification summaries where useful;
 - public cross-model agent-verification benchmark;
-- measured token, latency, repair, and false-positive performance.
+- measured token, latency, detection, coverage, and false-positive performance.
 
 ## Success Criteria
 
@@ -392,7 +394,8 @@ The product direction is succeeding when:
 1. An agent can verify a representative repository through one stable command.
 2. Relevant specialists are selected without model-specific prompt logic.
 3. Safe checks run with minimal friction and risky capabilities remain explicit.
-4. Findings are concise, reproducible, low-noise, and repairable.
+4. Findings are concise, reproducible, low-noise, and actionable by an external
+   human or coding agent.
 5. A specialist failure does not erase other useful evidence.
 6. RLS Doctor findings appear correctly in the unified report without leaking a
    connection string.

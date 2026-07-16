@@ -7,7 +7,7 @@
 > repository README. Retain this document only as implementation history.
 
 **Date:** 2026-07-15  
-**Status:** Approved  
+**Status:** Superseded
 **Product:** Codebase Doctor
 
 ## Summary
@@ -138,7 +138,8 @@ The integration order is:
 3. Repository skill explaining when and how to scan.
 4. Hook installers for post-change verification.
 5. MCP server with read-only inspection and explicitly approved execution tools.
-6. Verification-gated repair in an isolated branch or worktree.
+6. Independent re-verification after a human or external coding agent changes
+   an isolated branch or worktree.
 
 Core diagnosis remains deterministic at every stage.
 
@@ -161,7 +162,7 @@ The release is successful when:
 - Supporting every language's executable checks.
 - Installing or repairing dependencies.
 - Running untrusted code in a secure sandbox.
-- Automatically editing the target repository.
+- Editing the target repository, now or in any future release.
 - Using an LLM to create findings.
 - Shipping a dashboard, account system, telemetry, or billing.
 
@@ -176,7 +177,7 @@ Universal workspace model
   + diff and baseline engine
   + SARIF and pull-request reporting
   + skills, hooks, and MCP
-  + controlled agent repair
+  + independent post-change verification
 ```
 
 The defensible value is not the word “doctor.” It is a trusted finding contract, safe execution, broad adapter support, low-noise diagnostics, and evidence that both humans and agents can verify.

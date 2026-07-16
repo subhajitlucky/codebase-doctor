@@ -371,7 +371,8 @@ Use fake doctors to assert:
 
 - read-only doctors run during a default scan
 - a `process:execute` doctor is skipped without execution permission
-- no `network:access` or `filesystem:write` doctor can run in `0.1.0`
+- no networked doctor can run without permission, and target-write authority is
+  outside the Doctor capability contract
 - one failed doctor returns an operational failure while later eligible doctors still run
 - unsupported doctors return skipped status with a reason
 
@@ -792,7 +793,8 @@ The workflow must instruct compatible agents to:
 1. Run `npx codebase-doctor scan . --json` for read-only discovery.
 2. Review the project and command plan.
 3. Request/confirm execution permission before adding `--run-checks`.
-4. Fix evidence-backed findings one at a time.
+4. Ask a human or separately authorized external coding agent to fix
+   evidence-backed findings one at a time.
 5. Rerun the exact scan after changes.
 6. Never treat exit `2` as a clean scan.
 

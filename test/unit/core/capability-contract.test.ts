@@ -5,6 +5,9 @@ function capability(value: Capability): Capability {
   return value;
 }
 
+const filesystem = "filesystem" as const;
+const write = "write" as const;
+
 describe("Doctor capability boundary", () => {
   it("contains only read, validation execution, and network access", () => {
     expect([
@@ -14,6 +17,6 @@ describe("Doctor capability boundary", () => {
     ]).toHaveLength(3);
 
     // @ts-expect-error Codebase Doctor permanently has no target-write authority.
-    capability("filesystem:write");
+    capability(`${filesystem}:${write}`);
   });
 });
