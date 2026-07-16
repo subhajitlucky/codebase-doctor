@@ -8,6 +8,13 @@ description: Run evidence-backed, model-independent codebase diagnostics with th
 Use the unified CLI as a verification layer after code changes. Treat findings
 as repository or database evidence, not as proof that every defect was found.
 
+> **Models build. Codebase Doctor verifies.**
+
+Codebase Doctor never edits, modifies, applies repairs to, or fixes the target.
+Remediation is guidance, not an executable repair. A human or separately
+authorized external coding agent performs the fix; Codebase Doctor only reruns
+the audit and verifies the resulting state.
+
 ## Workflow
 
 1. Start with the read-only unified audit:
@@ -24,7 +31,8 @@ as repository or database evidence, not as proof that every defect was found.
    or unsupported relevant DDL may prevent complete reconstruction.
 3. Confirm explicit permission before adding `--run-checks`. Do not use
    `--run-checks` on an untrusted repository; approved child commands are not
-   network-isolated.
+   filesystem- or network-isolated and may have side effects. This permission is
+   for validation, not repair.
 4. When command execution is approved, run:
 
    ```bash
@@ -45,8 +53,10 @@ as repository or database evidence, not as proof that every defect was found.
 
    Use `--database-schema` repeatedly for non-default schemas and
    `--database-timeout` only to change the catalog statement timeout.
-7. Fix one evidence-backed finding at a time, then rerun the exact audit and
-   compare rule IDs, fingerprints, evidence, coverage, and severity totals.
+7. Ask a human or separately authorized external coding agent to fix one
+   evidence-backed finding at a time. After that external change, rerun the
+   exact audit and compare rule IDs, fingerprints, evidence, coverage, and
+   severity totals.
 
 `scan` is the backward-compatible repository-only command. Prefer `audit` for
 new agent workflows so internal audit modules share one report.

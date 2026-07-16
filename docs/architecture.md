@@ -6,18 +6,25 @@ Codebase Doctor is a local-first, full-codebase auditor. It combines repository
 inspection, ecosystem-specific validation, and explicitly permitted live-system
 audits behind one command and one normalized finding contract.
 
+> **Models build. Codebase Doctor verifies.**
+
+Codebase Doctor never edits, modifies, applies repairs to, or fixes the target.
+A human or separately authorized external coding agent makes changes, and
+Codebase Doctor independently verifies the resulting state. Remediation is
+guidance, not an executable repair.
+
 The architecture must satisfy two goals that pull in opposite directions:
 
 1. `0.1.0` must stay small enough to implement, test, and publish quickly.
 2. The core contracts must support additional built-in audit modules, agent
-   integrations, CI, and safe repair without a rewrite.
+   integrations, CI, and independent verification without a rewrite.
 
 ## Architectural Principles
 
 1. **Deterministic core:** the same repository state and tool versions should produce the same findings.
 2. **Evidence-backed findings:** a finding records the observation, location, and reproduction path when available.
 3. **Read-only default:** repository discovery and static diagnostics cannot mutate the target.
-4. **Capability-based execution:** doctors declare whether they need filesystem reads, subprocesses, network access, or writes.
+4. **Capability-based execution:** doctors declare whether they need filesystem reads, validation subprocesses, or network access.
 5. **Explicit capability consent:** subprocesses require `--run-checks`; live
    database networking independently requires `--with-database`.
 6. **Stable contracts, replaceable adapters:** language and framework support lives behind doctor interfaces.
@@ -224,8 +231,7 @@ export interface Doctor {
 export type Capability =
   | "filesystem:read"
   | "process:execute"
-  | "network:access"
-  | "filesystem:write";
+  | "network:access";
 
 export interface DoctorResult {
   status: "completed" | "skipped" | "failed";
@@ -243,7 +249,7 @@ Rules for `0.1.0`:
   `filesystem:read`; it never opens a database connection or executes SQL.
 - Check Doctor may request `process:execute` only when `runChecks` is true.
 - Database/RLS Doctor receives `network:access` only when `--with-database` is
-  present. No built-in doctor receives `filesystem:write`.
+  present. The capability contract contains no target-write authority.
 - An operational doctor failure becomes scan metadata, not a fabricated code finding.
 - Doctor results are normalized and sorted after all eligible doctors finish.
 
@@ -353,12 +359,13 @@ The subprocess runner is a trust boundary.
   environment credentials only after explicit permission, sanitizes failures,
   and uses a read-only transaction. Approved child commands still inherit host
   networking in `0.1.x`.
-- Never allow doctor-provided filesystem writes.
+- Never let a doctor edit the target or execute remediation.
 - Record the exact command and exit code.
 
 ### Future controls
 
 - Container or sandbox execution for untrusted repositories.
+- Read-only workspace mounts or disposable copies for approved validation.
 - CPU, memory, process, and filesystem quotas.
 - Explicit network-deny enforcement rather than policy alone.
 - Stronger isolation and permission review for future built-in modules.
@@ -442,8 +449,10 @@ The CLI and JSON contract come first. Agent surfaces remain adapters:
 
 1. A `SKILL.md` shipped in `0.1.0` teaches compatible agents when and how to run scans.
 2. Lifecycle hooks run diff-aware scans after code changes or before an agent stops.
-3. An MCP server exposes `inspect_repository`, `plan_checks`, and `run_checks` tools with explicit capability annotations.
-4. A controlled repair workflow asks an agent to patch a finding in isolation, then accepts the patch only after deterministic verification.
+3. An MCP server exposes inspect, plan, validate, and report tools with explicit
+   capability annotations and no target-mutation surface.
+4. After a human or external agent changes the target, affected doctors rerun
+   and return independent verification evidence.
 
 No agent integration may bypass the CLI safety model.
 
@@ -507,7 +516,7 @@ The following are intentionally outside `0.1.0`:
 - additional built-in audit modules
 - MCP server
 - lifecycle-hook installers
-- AI explanations and repair
+- optional AI-assisted explanations that cannot create findings or mutate targets
 - hosted dashboards, accounts, billing, and telemetry
 
 This boundary keeps the first release useful, testable, safe, and honest.

@@ -4,6 +4,16 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Establish the permanent product boundary: **Models build. Codebase Doctor
+  verifies.** A human or separately authorized external coding agent performs
+  changes; Codebase Doctor supplies remediation guidance and independently
+  verifies the result.
+- Remove target-write authority from the Doctor capability contract. Validation
+  execution and separately approved read-only live access remain distinct from
+  repair permission.
+
 ### Added
 
 - Automatically audit supported PostgreSQL RLS migration streams from
@@ -17,6 +27,9 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Security
 
+- Guarantee that Codebase Doctor has no target-write or executable-remediation
+  capability. Approved repository validation commands remain explicitly
+  permissioned and documented as unsandboxed in the current release line.
 - Read only SQL paths admitted by bounded repository inventory, enforce a
   per-file size ceiling, and never execute or evaluate migration SQL.
 - Mark dynamic, malformed, or unsupported relevant SQL as partial coverage

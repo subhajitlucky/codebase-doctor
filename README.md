@@ -4,7 +4,14 @@
 
 Codebase Doctor is a model-independent, full-codebase auditor for developers and
 coding agents. It turns repository evidence into deterministic findings that a
-human or model can inspect, fix, and verify.
+human or model can inspect and act on.
+
+> **Models build. Codebase Doctor verifies.**
+
+Codebase Doctor never edits, modifies, applies repairs to, or otherwise fixes
+the target. Remediation is guidance, not an executable repair. A human or
+separately authorized external coding agent makes changes; Codebase Doctor then
+reruns independently to verify the resulting state.
 
 ## One doctor for the whole codebase
 
@@ -97,6 +104,13 @@ Explicitly permit detected project checks:
 ```bash
 codebase-doctor audit . --run-checks
 ```
+
+`--run-checks` authorizes validation only, not repair. Codebase Doctor does not
+select install, format, fix, migration, or deployment commands. Existing target
+commands are not currently filesystem- or network-sandboxed and may have side
+effects, so review the displayed plan and never run checks for an untrusted
+repository. The long-term execution direction is a read-only mount or
+disposable copy, not target-write authority for Codebase Doctor.
 
 Explicitly permit the live, read-only PostgreSQL RLS audit. Keep the connection
 string in the environment rather than command-line arguments:
@@ -196,6 +210,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 ## Safety model
 
 - Read-only discovery is the default.
+- Codebase Doctor has no target-write capability and never applies remediation.
 - Offline SQL auditing reads only inventoried migration files, applies a file
   size ceiling, and never evaluates or executes SQL.
 - Target commands require `--run-checks`.
@@ -233,8 +248,9 @@ model is driving it:
 
 1. Run one repository-wide command.
 2. Read compact, schema-versioned evidence.
-3. Fix a specific finding.
-4. Run the same command again to verify the repair.
+3. Let a human or separately authorized external coding agent fix a specific
+   finding.
+4. Run Codebase Doctor again to verify the external change independently.
 
 The CLI is intentionally model-independent. It can be exposed through a shell,
 repository instructions, an agent skill, CI, hooks, or a future MCP server. A
@@ -252,8 +268,8 @@ Copy that directory into a compatible agent's skill directory, or let an agent
 load it from the installed package. The workflow starts with
 `codebase-doctor audit . --json`, treats partial and skipped coverage explicitly,
 uses automatic offline migration analysis, requests separate permission for
-`--run-checks` and live `--with-database` access, fixes one evidence-backed
-finding at a time, and reruns the exact audit.
+`--run-checks` and live `--with-database` access, asks a human or external agent
+to fix one evidence-backed finding at a time, and reruns the exact audit.
 
 ## Development
 
@@ -278,6 +294,8 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
   so an agent never mistakes partial coverage for a clean codebase.
 - Add reusable GitHub Action, pull-request annotations, hooks, agent plugins,
   and MCP integration around the same CLI and report schema.
+- Run approved validation in read-only mounts or disposable copies so target
+  command side effects cannot alter the audited workspace.
 - Publish cross-model benchmarks that measure defects found, false positives,
   verification success, runtime, and token/tool-call cost.
 

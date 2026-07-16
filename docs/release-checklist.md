@@ -3,6 +3,11 @@
 Use this checklist from a clean release-candidate commit. Do not publish or
 create a remote tag without explicit human approval.
 
+Permanent release invariant: **Models build. Codebase Doctor verifies.**
+Codebase Doctor has no target-write or executable-repair capability. A human or
+separately authorized external coding agent performs fixes, and Codebase Doctor
+independently verifies the resulting state.
+
 ## Validated locally
 
 - [x] Read-only scan: Codebase Doctor repository
@@ -15,6 +20,8 @@ create a remote tag without explicit human approval.
 
 ## Before publication
 
+- [ ] Confirm source, tests, package docs, and skills contain no target-write or
+  executable-repair capability.
 - [ ] Confirm npm authentication with `npm whoami`.
 - [ ] Confirm npm account two-factor authentication policy.
 - [ ] Recheck live `codebase-doctor` name availability.

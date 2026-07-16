@@ -82,6 +82,14 @@ describe("Codebase Doctor agent skill contract", () => {
     }
   });
 
+  it("assigns repairs to an external actor and verification to Codebase Doctor", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/human|external coding agent|separately authorized.*agent/is);
+    expect(skill).toMatch(/Codebase Doctor (?:never|does not).*(?:edit|modify|apply|repair)/is);
+    expect(skill).toMatch(/after.*(?:human|agent).*(?:change|fix).*rerun|rerun.*after.*(?:change|fix)/is);
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",
