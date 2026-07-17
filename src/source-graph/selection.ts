@@ -35,7 +35,7 @@ function positiveSafeInteger(value: number, name: string): number {
   return value;
 }
 
-function isSourcePath(path: string): boolean {
+export function isSupportedSourcePath(path: string): boolean {
   return SOURCE_EXTENSIONS.has(posix.extname(path).toLowerCase());
 }
 
@@ -52,7 +52,7 @@ export function selectSourceFiles(
     "maxTotalSourceBytes",
   );
   const candidates = inventory.files
-    .filter(({ path }) => isSourcePath(path))
+    .filter(({ path }) => isSupportedSourcePath(path))
     .sort((left, right) => left.path.localeCompare(right.path));
   if (candidates.length === 0) {
     return {
