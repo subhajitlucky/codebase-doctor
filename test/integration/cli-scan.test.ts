@@ -1,8 +1,15 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  commitInitialContent,
+  createTempProject,
+  initializeGitRepository,
+  runGitFixtureCommand,
+  writeProjectFile,
+} from "../helpers/temp-project.js";
 
 const repositoryRoot = process.cwd();
 const fixture = (name: string) => resolve(repositoryRoot, "test", "fixtures", name);
@@ -12,15 +19,52 @@ afterEach(() => {
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function cli(args: readonly string[], cwd = repositoryRoot) {
+function isolatedGitEnvironment(root: string): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith("GIT_CONFIG_")) delete environment[name];
+  }
+  environment.GIT_CONFIG_NOSYSTEM = "1";
+  environment.GIT_CONFIG_GLOBAL = join(root, ".codebase-doctor-empty-global-config");
+  return environment;
+}
+
+function cli(args: readonly string[], cwd = repositoryRoot, gitRoot = cwd) {
   return spawnSync(
     process.execPath,
     ["--import", "tsx", resolve(repositoryRoot, "src", "cli.ts"), ...args],
-    { cwd, encoding: "utf8", timeout: 15_000 },
+    { cwd, encoding: "utf8", timeout: 15_000, env: isolatedGitEnvironment(gitRoot) },
   );
 }
 
 describe("scan CLI", () => {
+  it("exposes changed scope with an explicit merge-base ref", async () => {
+    const root = await createTempProject("codebase-doctor-cli-scan-changed-");
+    temporaryRoots.push(root);
+    await initializeGitRepository(root);
+    const initialCommit = await commitInitialContent(root, {
+      "package.json": JSON.stringify({ private: true }),
+    });
+    await runGitFixtureCommand(root, ["branch", "main"]);
+    await writeProjectFile(root, "changed.txt", "changed\n");
+
+    const result = cli([
+      "scan", root, "--changed", "--base", "main", "--json", "--fail-on", "none",
+    ], repositoryRoot, root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.auditScope).toMatchObject({
+      mode: "changed",
+      base: {
+        kind: "merge-base",
+        requestedRef: "main",
+        resolvedCommit: initialCommit,
+      },
+      changes: [{ status: "untracked", path: "changed.txt" }],
+    });
+  });
+
   it("does not run static or live database audit modules", () => {
     const result = cli(["scan", fixture("sql-rls/unsafe"), "--json"]);
     const report = JSON.parse(result.stdout);
