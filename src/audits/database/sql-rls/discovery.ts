@@ -50,6 +50,7 @@ export interface SqlStreamIdentity {
   readonly id: string;
   readonly projectId: string;
   readonly root: string;
+  readonly inferredProject?: true;
 }
 
 function isSqlInput(path: string): boolean {
@@ -58,10 +59,17 @@ function isSqlInput(path: string): boolean {
 
 /** Maps a repository path to one of the SQL stream roots supported by static auditing. */
 export function identifySqlStream(
-  snapshot: Pick<ProjectSnapshot, "projects">,
+  snapshot: ProjectSnapshot,
   path: string,
+  currentStreams: readonly SqlMigrationStream[] = discoverSqlStreams(snapshot),
+  allowInferredProject = true,
 ): SqlStreamIdentity | undefined {
   if (!isSqlInput(path)) return undefined;
+  const current = currentStreams.find((stream) => pathIsInStream(path, stream));
+  if (current !== undefined) {
+    return { id: current.id, projectId: current.projectId, root: current.root };
+  }
+
   const projectList = projects(snapshot);
   const owner = ownerOf(path, projectList);
   const relativePath = relativeToProject(path, owner.root);
@@ -75,11 +83,25 @@ export function identifySqlStream(
       root: projectPath(owner.root, relativeRoot),
     };
   }
-  if (relativePath === "schema.sql") {
+
+  // schema.sql is supported only when discovery made it the active project fallback.
+  if (path === projectPath(owner.root, "schema.sql")) return undefined;
+  if (!allowInferredProject) return undefined;
+
+  const rootsBySpecificity = [...MIGRATION_ROOTS].sort((left, right) =>
+    right.split("/").length - left.split("/").length || left.localeCompare(right)
+  );
+  for (const relativeRoot of rootsBySpecificity) {
+    const marker = `/${relativeRoot}/`;
+    const markerIndex = path.indexOf(marker);
+    if (markerIndex <= 0) continue;
+    const inferredRoot = path.slice(0, markerIndex);
+    const projectId = `project:${inferredRoot}`;
     return {
-      id: `${owner.id}:schema.sql`,
-      projectId: owner.id,
-      root: projectPath(owner.root, "schema.sql"),
+      id: `${projectId}:${relativeRoot}`,
+      projectId,
+      root: `${inferredRoot}/${relativeRoot}`,
+      inferredProject: true,
     };
   }
   return undefined;

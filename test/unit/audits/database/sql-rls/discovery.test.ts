@@ -189,7 +189,7 @@ describe("discoverSqlStreams", () => {
   });
 
   it("maps known roots and schema fallback using deepest project ownership", () => {
-    const value = snapshot([], [".", "packages/app"]);
+    const value = snapshot(["packages/app/schema.sql"], [".", "packages/app"]);
 
     expect(identifySqlStream(value, "packages/app/database/migrations/001.sql")).toEqual({
       id: "project-1:database/migrations",
@@ -210,5 +210,31 @@ describe("discoverSqlStreams", () => {
       .toBeUndefined();
     expect(identifySqlStream(value, "packages/app/sql/one.sql")).toBeUndefined();
     expect(identifySqlStream(value, "packages/app\\migrations/one.sql")).toBeUndefined();
+  });
+
+  it("infers a conservative former project identity from a supported root suffix", () => {
+    const value = snapshot([], ["."]);
+
+    expect(identifySqlStream(value, "packages/app/migrations/001.sql")).toEqual({
+      id: "project:packages/app:migrations",
+      projectId: "project:packages/app",
+      root: "packages/app/migrations",
+      inferredProject: true,
+    });
+    expect(identifySqlStream(value, "packages/app/supabase/migrations/001.sql")).toEqual({
+      id: "project:packages/app:supabase/migrations",
+      projectId: "project:packages/app",
+      root: "packages/app/supabase/migrations",
+      inferredProject: true,
+    });
+  });
+
+  it("does not identify schema.sql when current migration topology suppresses the fallback", () => {
+    const value = snapshot([
+      "packages/app/schema.sql",
+      "packages/app/migrations/001.sql",
+    ], [".", "packages/app"]);
+
+    expect(identifySqlStream(value, "packages/app/schema.sql")).toBeUndefined();
   });
 });

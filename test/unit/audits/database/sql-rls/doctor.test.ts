@@ -23,12 +23,21 @@ function changedAuditScope(changes: readonly ChangedPath[]): AuditScope {
 function snapshot(
   files: Array<{ path: string; size?: number }>,
   auditScope: AuditScope = fullAuditScope(),
+  projectRoots: readonly string[] = [],
 ): ProjectSnapshot {
   return {
     root: "/repo",
     files: files.map(({ path, size = 100 }) => ({ path, size, kind: "file" as const })),
     manifests: [],
-    projects: [],
+    projects: projectRoots.map((root, index) => ({
+      id: index === 0 ? "root" : `project-${index}`,
+      root,
+      ecosystems: ["node"],
+      languages: ["typescript"],
+      frameworks: [],
+      manifestPaths: [],
+      executionSupport: "supported",
+    })),
     workspaces: [],
     auditScope,
   };
@@ -167,13 +176,19 @@ describe("static SQL RLS doctor", () => {
       "supabase/migrations/001.sql",
       "supabase/migrations/002.sql",
     ]);
-    expect(entry?.result.coverage).toEqual([expect.objectContaining({
-      scope: "root:supabase/migrations",
-      filesExamined: 2,
-      limitations: expect.arrayContaining([
-        expect.stringMatching(/outside affected scope.*root:migrations/i),
-      ]),
-    })]);
+    expect(entry?.result.coverage).toEqual([
+      expect.objectContaining({
+        scope: "changed:sql-stream-selection",
+        status: "skipped",
+        limitations: [expect.stringMatching(/outside affected scope.*root:migrations/i)],
+      }),
+      expect.objectContaining({
+        scope: "root:supabase/migrations",
+        status: "completed",
+        filesExamined: 2,
+        limitations: [],
+      }),
+    ]);
   });
 
   it("reconstructs remaining history after deletion and marks omitted content partial", async () => {
@@ -225,6 +240,66 @@ describe("static SQL RLS doctor", () => {
         limitations: [expect.stringMatching(/historical state.*current worktree/i)],
       })],
     });
+  });
+
+  it("infers partial coverage when an entire nested project migration stream was removed", async () => {
+    const reader = vi.fn();
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([], changedAuditScope([{
+        status: "deleted",
+        path: "packages/app/migrations/001.sql",
+      }]), ["."]),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).not.toHaveBeenCalled();
+    expect(entry?.result.coverage).toEqual([expect.objectContaining({
+      scope: "project:packages/app:migrations",
+      status: "partial",
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/former project root.*inferred.*absent/i),
+        expect.stringMatching(/historical state.*current worktree/i),
+      ]),
+    })]);
+  });
+
+  it("does not infer a former project for a current modified path", async () => {
+    const reader = vi.fn();
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([{ path: "packages/app/migrations/001.sql" }], changedAuditScope([{
+        status: "modified",
+        path: "packages/app/migrations/001.sql",
+      }]), ["."]),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).not.toHaveBeenCalled();
+    expect(entry?.result.coverage).toEqual([expect.objectContaining({
+      scope: "changed:supported-sql-migration-streams",
+      status: "skipped",
+    })]);
+  });
+
+  it("infers the absent former project on rename-out without assigning it to root", async () => {
+    const reader = vi.fn(async () => "create table public.docs (id uuid);");
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([{ path: "supabase/migrations/001.sql" }], changedAuditScope([{
+        status: "renamed",
+        previousPath: "packages/app/migrations/001.sql",
+        path: "supabase/migrations/001.sql",
+      }]), ["."]),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(entry?.result.coverage).toContainEqual(expect.objectContaining({
+      scope: "project:packages/app:migrations",
+      status: "partial",
+      limitations: expect.arrayContaining([expect.stringMatching(/former project root.*inferred/i)]),
+    }));
+    expect(entry?.result.coverage?.some(({ scope }) => scope === "root:migrations")).toBe(false);
   });
 
   it("reports partial coverage for a vanished stream after a rename-out", async () => {
@@ -342,6 +417,67 @@ describe("static SQL RLS doctor", () => {
     expect(reader).toHaveBeenCalledWith("/repo", "schema.sql");
     expect(entry?.result.coverage).toEqual([
       expect.objectContaining({ scope: "root:schema.sql", filesExamined: 1 }),
+    ]);
+  });
+
+  it("skips a changed schema.sql when current migrations suppress the fallback", async () => {
+    const reader = vi.fn();
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([
+        { path: "schema.sql" },
+        { path: "migrations/001.sql" },
+      ], changedAuditScope([{ status: "modified", path: "schema.sql" }])),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).not.toHaveBeenCalled();
+    expect(entry?.result.coverage).toEqual([expect.objectContaining({
+      scope: "changed:supported-sql-migration-streams",
+      status: "skipped",
+      limitations: [expect.stringMatching(/no changed supported SQL migration stream was selected/i)],
+    })]);
+  });
+
+  it("replays newly active schema fallback after deletion of the final migration", async () => {
+    const reader = vi.fn(async (_root: string, path: string) => ({
+      "schema.sql": "create table public.docs (id uuid);",
+    })[path]!);
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([{ path: "schema.sql" }], changedAuditScope([{
+        status: "deleted",
+        path: "migrations/001.sql",
+      }])),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).toHaveBeenCalledWith("/repo", "schema.sql");
+    expect(entry?.result.findings).toContainEqual(expect.objectContaining({
+      ruleId: "database/sql-rls/rls-disabled",
+      location: expect.objectContaining({ path: "schema.sql" }),
+    }));
+    expect(entry?.result.coverage).toEqual([
+      expect.objectContaining({ scope: "root:migrations", status: "partial" }),
+      expect.objectContaining({ scope: "root:schema.sql", status: "completed", filesExamined: 1 }),
+    ]);
+  });
+
+  it("selects only the first current migration when it deactivates schema fallback", async () => {
+    const reader = vi.fn(async () => "create table public.docs (id uuid);");
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([
+        { path: "schema.sql" },
+        { path: "migrations/001.sql" },
+      ], changedAuditScope([{ status: "added", path: "migrations/001.sql" }])),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).toHaveBeenCalledTimes(1);
+    expect(reader).toHaveBeenCalledWith("/repo", "migrations/001.sql");
+    expect(entry?.result.coverage).toEqual([
+      expect.objectContaining({ scope: "root:migrations" }),
     ]);
   });
 });
