@@ -52,6 +52,28 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length === 0 ? undefined : normalized;
+}
+
+function dependencyNames(manifest: Extract<ManifestRecord, { status: "valid" }>): string[] {
+  const names = new Set<string>();
+  for (const field of [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ] as const) {
+    for (const name of Object.keys(objectValue(manifest.data[field]) ?? {})) {
+      const normalized = nonEmptyString(name);
+      if (normalized !== undefined) names.add(normalized);
+    }
+  }
+  return [...names].sort();
+}
+
 function addProject(
   projects: Map<string, ProjectAccumulator>,
   root: string,
@@ -227,6 +249,7 @@ export async function detectProjects(
     .sort((left, right) => left.root.localeCompare(right.root))
     .map((project) => {
       const packageManager = detectedPackageManager(project, filePaths);
+      const packageName = nonEmptyString(project.packageManifest?.data.name);
       const executionSupport = project.ecosystems.has("node") || project.ecosystems.has("python")
         ? "supported" as const
         : "detected-only" as const;
@@ -237,6 +260,14 @@ export async function detectProjects(
         languages: [...project.languages].sort(),
         frameworks: [...project.frameworks].sort(),
         ...(packageManager === undefined ? {} : { packageManager }),
+        ...(project.packageManifest === undefined
+          ? {}
+          : {
+              ...(packageName === undefined
+                ? {}
+                : { packageName }),
+              dependencyNames: dependencyNames(project.packageManifest),
+            }),
         manifestPaths: [...project.manifestPaths].sort(),
         executionSupport,
       };

@@ -30,8 +30,16 @@ describe("project detection", () => {
   it("detects Node, TypeScript, frameworks, and the package manager", async () => {
     const result = await detect({
       "package.json": JSON.stringify({
-        dependencies: { next: "latest", react: "latest", "@nestjs/core": "latest" },
-        devDependencies: { typescript: "latest", vite: "latest" },
+        name: "@example/web",
+        dependencies: {
+          next: "latest",
+          react: "latest",
+          "@nestjs/core": "latest",
+          "@example/ui": "workspace:*",
+        },
+        devDependencies: { typescript: "latest", vite: "latest", react: "latest" },
+        peerDependencies: { "@example/ui": "workspace:*" },
+        optionalDependencies: { optional: "latest" },
       }),
       "tsconfig.json": "{}",
       "pnpm-lock.yaml": "lockfileVersion: '9.0'",
@@ -44,9 +52,42 @@ describe("project detection", () => {
       languages: ["javascript", "typescript"],
       frameworks: ["nestjs", "nextjs", "react", "vite"],
       packageManager: "pnpm",
+      packageName: "@example/web",
+      dependencyNames: [
+        "@example/ui",
+        "@nestjs/core",
+        "next",
+        "optional",
+        "react",
+        "typescript",
+        "vite",
+      ],
       manifestPaths: ["package.json"],
       executionSupport: "supported",
     }]);
+  });
+
+  it("omits Node metadata for invalid manifests and invalid package names", async () => {
+    const result = await detect({
+      "apps/broken/package.json": "{not json",
+      "apps/blank/package.json": JSON.stringify({
+        name: "   ",
+        dependencies: { "": "latest", react: "latest" },
+      }),
+    });
+
+    expect(result.projects).toEqual([
+      expect.not.objectContaining({
+        root: "apps/blank",
+        packageName: expect.anything(),
+      }),
+      expect.not.objectContaining({
+        root: "apps/broken",
+        packageName: expect.anything(),
+      }),
+    ]);
+    expect(result.projects[0]).toMatchObject({ dependencyNames: ["react"] });
+    expect(result.projects[1]).not.toHaveProperty("dependencyNames");
   });
 
   it("detects TypeScript from dependency evidence without a tsconfig", async () => {

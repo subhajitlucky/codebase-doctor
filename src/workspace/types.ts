@@ -40,6 +40,8 @@ export interface DetectedProject {
   languages: readonly string[];
   frameworks: readonly string[];
   packageManager?: PackageManager;
+  packageName?: string;
+  dependencyNames?: readonly string[];
   manifestPaths: readonly string[];
   executionSupport: "supported" | "detected-only";
 }
