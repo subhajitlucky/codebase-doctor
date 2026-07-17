@@ -22,6 +22,15 @@ export type {
 export { classifyScanExit } from "./core/normalize.js";
 export type { DoctorRunRecord, ScanResult } from "./core/normalize.js";
 export type { AuditCoverage, CoverageStatus } from "./core/doctor.js";
+export { AUDIT_DOMAINS } from "./core/domain-coverage.js";
+export type {
+  AuditDomain,
+  DomainApplicability,
+  DomainCoverage,
+  DomainCoverageEvidence,
+  DomainCoverageStatus,
+  DomainModuleCoverage,
+} from "./core/domain-coverage.js";
 export {
   BaselineError,
   compareFindingBaseline,

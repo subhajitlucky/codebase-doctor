@@ -2,7 +2,9 @@ import { spawnSync } from "node:child_process";
 import { delimiter, join } from "node:path";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  AUDIT_DOMAINS,
   auditCodebase,
+  type AuditDomain,
   type AuditCoverage,
   type AuditBase,
   type AuditRequest,
@@ -14,6 +16,11 @@ import {
   type DiscoveredChanges,
   type DiscoverChangesOptions,
   type DetectedProject,
+  type DomainApplicability,
+  type DomainCoverage,
+  type DomainCoverageEvidence,
+  type DomainCoverageStatus,
+  type DomainModuleCoverage,
   type Evidence,
   discoverGitChanges,
   fullAuditScope,
@@ -57,6 +64,36 @@ describe("package report output", () => {
     expect(request.includeDatabaseAudit).toBe(true);
     expect(evidence.type).toBe("database");
     expect(coverage.status).toBe("partial");
+  });
+
+  it("exports the complete domain coverage contract", () => {
+    const domain: AuditDomain = "security";
+    const applicability: DomainApplicability = "unknown";
+    const status: DomainCoverageStatus = "unsupported";
+    const evidence: DomainCoverageEvidence = { type: "framework", value: "react" };
+    const module: DomainModuleCoverage = {
+      moduleId: "database/sql-rls",
+      status: "completed",
+      scopes: ["root:migrations"],
+      limitations: [],
+    };
+    const coverage: DomainCoverage = {
+      domain,
+      applicability,
+      status,
+      coverageComplete: false,
+      evidence: [evidence],
+      modules: [module],
+      limitations: ["General security analysis is not implemented."],
+    };
+
+    expect(AUDIT_DOMAINS).toHaveLength(9);
+    expect(coverage).toMatchObject({
+      domain: "security",
+      applicability: "unknown",
+      status: "unsupported",
+      coverageComplete: false,
+    });
   });
 
   it("exports the changed-audit and baseline comparison contracts", () => {

@@ -70,14 +70,14 @@ describe("release package", () => {
 
       const runtimeConsumerPath = join(temporaryRoot, "consumer.mjs");
       await writeFile(runtimeConsumerPath, [
-        'import { GitScopeError, fullAuditScope, planChangedScope } from "codebase-doctor";',
+        'import { AUDIT_DOMAINS, GitScopeError, fullAuditScope, planChangedScope } from "codebase-doctor";',
         'const project = { id: "node:app", root: ".", ecosystems: ["node"],',
         '  languages: ["typescript"], frameworks: [], manifestPaths: ["package.json"],',
         '  executionSupport: "supported" };',
         'const base = { kind: "head", requestedRef: null, resolvedCommit: "abc123" };',
         'const changed = planChangedScope(base, [], [project]);',
         'const error = new GitScopeError("GIT_INVALID_BASE_REF", "invalid");',
-        'console.log(JSON.stringify({ full: fullAuditScope().mode, changed: changed.mode, code: error.code }));',
+        'console.log(JSON.stringify({ full: fullAuditScope().mode, changed: changed.mode, code: error.code, domains: AUDIT_DOMAINS.length }));',
       ].join("\n"));
       const runtimeConsumer = run(process.execPath, [runtimeConsumerPath], temporaryRoot);
       expect(runtimeConsumer.status, runtimeConsumer.stderr).toBe(0);
@@ -85,16 +85,24 @@ describe("release package", () => {
         full: "full",
         changed: "changed",
         code: "GIT_INVALID_BASE_REF",
+        domains: 9,
       });
 
       const typeConsumerPath = join(temporaryRoot, "consumer.ts");
       await writeFile(typeConsumerPath, `
 import {
+  AUDIT_DOMAINS,
   type AuditBase,
+  type AuditDomain,
   type AuditScope,
   type BaselineComparisonOptions,
   type ChangedPath,
   type DetectedProject,
+  type DomainApplicability,
+  type DomainCoverage,
+  type DomainCoverageEvidence,
+  type DomainCoverageStatus,
+  type DomainModuleCoverage,
   type DiscoverChangesOptions,
   type DiscoveredChanges,
   type Finding,
@@ -124,7 +132,18 @@ const finding: Finding = {
   fingerprint: "fingerprint",
 };
 const discovery: (options: DiscoverChangesOptions) => Promise<DiscoveredChanges> = discoverGitChanges;
-void [scope, full, error, comparison, finding, discovery];
+const domain: AuditDomain = "security";
+const applicability: DomainApplicability = "unknown";
+const domainStatus: DomainCoverageStatus = "unsupported";
+const domainEvidence: DomainCoverageEvidence = { type: "framework", value: "react" };
+const domainModule: DomainModuleCoverage = {
+  moduleId: "project", status: "completed", scopes: [], limitations: [],
+};
+const domainCoverage: DomainCoverage = {
+  domain, applicability, status: domainStatus, coverageComplete: false,
+  evidence: [domainEvidence], modules: [domainModule], limitations: [],
+};
+void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_DOMAINS];
 `);
       const typeScript = resolve(
         repositoryRoot,
@@ -166,6 +185,13 @@ void [scope, full, error, comparison, finding, discovery];
         doctorId: "database/rls",
         status: "skipped",
       }));
+      expect(report.domainCoverage).toHaveLength(9);
+      expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+        domain: "security",
+        applicability: "unknown",
+        status: "unsupported",
+        coverageComplete: false,
+      }));
 
       const unsafe = run(binary, [
         "audit",
@@ -205,7 +231,8 @@ void [scope, full, error, comparison, finding, discovery];
         "audit", gitRepository, "--changed", "--json", "--fail-on", "none",
       ], temporaryRoot);
       expect(changed.status, changed.stderr).toBe(0);
-      expect(JSON.parse(changed.stdout).auditScope).toMatchObject({
+      const changedReport = JSON.parse(changed.stdout);
+      expect(changedReport.auditScope).toMatchObject({
         mode: "changed",
         base: { kind: "head", requestedRef: null },
         changes: [
@@ -213,6 +240,18 @@ void [scope, full, error, comparison, finding, discovery];
           { status: "untracked", path: "untracked.txt" },
         ],
       });
+      expect(changedReport.domainCoverage).toHaveLength(9);
+      expect(changedReport.domainCoverage.map(({ domain }: { domain: string }) => domain)).toEqual([
+        "repository",
+        "validation",
+        "frontend",
+        "backend",
+        "database",
+        "security",
+        "infrastructure",
+        "performance",
+        "ai",
+      ]);
 
       const based = run(binary, [
         "audit", gitRepository, "--changed", "--base", "main", "--json", "--fail-on", "none",
