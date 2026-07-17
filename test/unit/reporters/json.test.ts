@@ -11,6 +11,15 @@ function result(): ScanResult {
     auditScope: fullAuditScope(),
     projects: [],
     plannedChecks: [],
+    domainCoverage: [{
+      domain: "security",
+      applicability: "unknown",
+      status: "unsupported",
+      coverageComplete: false,
+      evidence: [],
+      modules: [],
+      limitations: ["General security analysis is not implemented."],
+    }],
     doctorRuns: [{
       doctorId: "broken",
       status: "failed",
@@ -119,6 +128,7 @@ describe("JSON reporter", () => {
       status: "partial",
       statementsRecognized: 1,
     })]);
+    expect(parsed.domainCoverage).toEqual(result().domainCoverage);
   });
 
   it("preserves structured guidance and audit scope without custom serialization loss", () => {

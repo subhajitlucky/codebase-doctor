@@ -100,6 +100,18 @@ describe("scan orchestration", () => {
       reasons: [],
       limitations: [],
     });
+    expect(result.domainCoverage).toHaveLength(9);
+    expect(result.domainCoverage.map(({ domain }) => domain)).toEqual([
+      "repository",
+      "validation",
+      "frontend",
+      "backend",
+      "database",
+      "security",
+      "infrastructure",
+      "performance",
+      "ai",
+    ]);
   });
 
   it("discovers changed scope once after project detection and exposes it to every doctor", async () => {
@@ -153,6 +165,7 @@ describe("scan orchestration", () => {
       mode: "changed",
       affectedProjectIds: ["root"],
     });
+    expect(result.domainCoverage).toHaveLength(9);
   });
 
   it("omits baseRef from discovery when it was not requested", async () => {
@@ -247,6 +260,14 @@ describe("scan orchestration", () => {
       status: "skipped",
       skipReason: expect.stringContaining("network:access"),
     }));
+    expect(scanned.domainCoverage.find(({ domain }) => domain === "database")).toMatchObject({
+      status: "not-selected",
+      coverageComplete: false,
+    });
+    expect(audited.domainCoverage.find(({ domain }) => domain === "database")).toMatchObject({
+      status: "skipped",
+      coverageComplete: false,
+    });
   });
 
   it("reports planned checks without granting process execution", async () => {

@@ -4,6 +4,7 @@ import { createFingerprint, type Finding, type Severity } from "../../../src/cor
 import { classifyScanExit, normalizeScanResult } from "../../../src/core/normalize.js";
 import { fullAuditScope } from "../../../src/scope/planner.js";
 import type { AuditScope } from "../../../src/scope/types.js";
+import type { DomainCoverage } from "../../../src/core/domain-coverage.js";
 
 function finding(severity: Severity, ruleId: string): Finding {
   return {
@@ -143,6 +144,64 @@ describe("scan normalization", () => {
 
     (scope.changes as Array<{ status: "modified"; path: string }>)[0]!.path = "mutated.ts";
     expect(result.auditScope.changes.map(({ path }) => path)).toEqual(["a.ts", "z.ts"]);
+  });
+
+  it("copies and deterministically normalizes domain coverage", () => {
+    const domainCoverage: DomainCoverage[] = [
+      {
+        domain: "security",
+        applicability: "unknown",
+        status: "unsupported",
+        coverageComplete: false,
+        evidence: [],
+        modules: [],
+        limitations: ["z limitation", "a limitation", "a limitation"],
+      },
+      {
+        domain: "repository",
+        applicability: "detected",
+        status: "completed",
+        coverageComplete: true,
+        evidence: [
+          { type: "module", value: "z" },
+          { type: "module", value: "a" },
+        ],
+        modules: [{
+          moduleId: "project",
+          status: "completed",
+          scopes: ["z", "a", "a"],
+          limitations: ["z", "a", "a"],
+        }],
+        limitations: [],
+      },
+    ];
+
+    const result = normalizeScanResult(
+      "/repo",
+      [],
+      fullAuditScope(),
+      [],
+      [],
+      domainCoverage,
+    );
+
+    expect(result.domainCoverage.map(({ domain }) => domain)).toEqual([
+      "repository",
+      "security",
+    ]);
+    expect(result.domainCoverage[0]).toMatchObject({
+      evidence: [
+        { type: "module", value: "a" },
+        { type: "module", value: "z" },
+      ],
+      modules: [{ scopes: ["a", "z"], limitations: ["a", "z"] }],
+    });
+    expect(result.domainCoverage[1]?.limitations).toEqual(["a limitation", "z limitation"]);
+
+    (domainCoverage[0]!.limitations as string[])[0] = "mutated";
+    (domainCoverage[1]!.modules[0]!.scopes as string[])[0] = "mutated";
+    expect(result.domainCoverage[1]?.limitations).toEqual(["a limitation", "z limitation"]);
+    expect(result.domainCoverage[0]?.modules[0]?.scopes).toEqual(["a", "z"]);
   });
 
   it("maps thresholds and operational failure to stable exit classifications", () => {

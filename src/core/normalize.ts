@@ -16,6 +16,11 @@ import type { DetectedProject } from "../workspace/types.js";
 import type { PlannedCheckRecord } from "../execution/types.js";
 import type { FindingComparison } from "./baseline.js";
 import type { AuditScope, ChangedPath, ScopeReason } from "../scope/types.js";
+import {
+  AUDIT_DOMAINS,
+  type DomainCoverage,
+  type DomainCoverageEvidence,
+} from "./domain-coverage.js";
 
 export interface DoctorRunRecord {
   doctorId: string;
@@ -34,6 +39,7 @@ export interface ScanResult {
   projects: readonly DetectedProject[];
   auditScope: AuditScope;
   plannedChecks: readonly PlannedCheckRecord[];
+  domainCoverage: readonly DomainCoverage[];
   doctorRuns: readonly DoctorRunRecord[];
   findings: readonly Finding[];
   summary: FindingSummary;
@@ -73,6 +79,7 @@ export function normalizeScanResult(
   auditScope: AuditScope,
   registeredResults: readonly RegisteredDoctorResult[],
   plannedChecks: readonly PlannedCheckRecord[] = [],
+  domainCoverage: readonly DomainCoverage[] = [],
 ): ScanResult {
   const findings = uniqueFindings(registeredResults.flatMap(({ result }) => result.findings));
   const doctorRuns = registeredResults
@@ -105,6 +112,30 @@ export function normalizeScanResult(
       ),
     limitations: [...auditScope.limitations].sort(),
   };
+  const normalizedDomainCoverage = domainCoverage
+    .map((entry): DomainCoverage => ({
+      ...entry,
+      evidence: [...new Map(entry.evidence.map((evidence) => [
+        JSON.stringify(evidence),
+        { ...evidence },
+      ])).values()].sort((left: DomainCoverageEvidence, right: DomainCoverageEvidence) =>
+        left.type.localeCompare(right.type) ||
+        (left.path ?? left.value).localeCompare(right.path ?? right.value) ||
+        left.value.localeCompare(right.value) ||
+        (left.projectId ?? "").localeCompare(right.projectId ?? "")
+      ),
+      modules: entry.modules
+        .map((module) => ({
+          ...module,
+          scopes: [...new Set(module.scopes)].sort(),
+          limitations: [...new Set(module.limitations)].sort(),
+        }))
+        .sort((left, right) => left.moduleId.localeCompare(right.moduleId)),
+      limitations: [...new Set(entry.limitations)].sort(),
+    }))
+    .sort((left, right) =>
+      AUDIT_DOMAINS.indexOf(left.domain) - AUDIT_DOMAINS.indexOf(right.domain)
+    );
 
   return {
     schemaVersion: "1",
@@ -115,6 +146,7 @@ export function normalizeScanResult(
       left.root < right.root ? -1 : left.root > right.root ? 1 : 0,
     ),
     plannedChecks: [...plannedChecks],
+    domainCoverage: normalizedDomainCoverage,
     doctorRuns,
     findings,
     summary: summarizeFindings(findings),

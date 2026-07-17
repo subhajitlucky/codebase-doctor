@@ -206,6 +206,50 @@ function unsupportedEntry(
   };
 }
 
+function isDomainSelectedInChangedScope(
+  entry: DomainCoverage,
+  snapshot: ProjectSnapshot,
+): boolean {
+  if (snapshot.auditScope.mode === "full") return true;
+  if (entry.domain === "repository" || entry.domain === "database") return true;
+  if (entry.domain === "validation") return entry.evidence.length > 0;
+  if (entry.domain === "security" || entry.domain === "performance") {
+    return snapshot.auditScope.changes.length > 0 ||
+      snapshot.auditScope.affectedProjectIds.length > 0;
+  }
+  const affectedProjects = new Set(snapshot.auditScope.affectedProjectIds);
+  const changedPaths = new Set(snapshot.auditScope.changes.flatMap((change) => [
+    change.path,
+    ...(change.previousPath === undefined ? [] : [change.previousPath]),
+  ]));
+  return entry.evidence.some((evidence) =>
+    (evidence.projectId !== undefined && affectedProjects.has(evidence.projectId)) ||
+    (evidence.path !== undefined && changedPaths.has(evidence.path))
+  );
+}
+
+function applyChangedSelection(
+  entry: DomainCoverage,
+  snapshot: ProjectSnapshot,
+): DomainCoverage {
+  if (
+    snapshot.auditScope.mode === "full" ||
+    entry.status === "not-applicable" ||
+    isDomainSelectedInChangedScope(entry, snapshot)
+  ) {
+    return entry;
+  }
+  return {
+    ...entry,
+    status: "not-selected",
+    coverageComplete: false,
+    limitations: [...new Set([
+      ...entry.limitations,
+      "This domain was outside the selected changed scope.",
+    ])].sort(),
+  };
+}
+
 export function planDomainCoverage(
   input: DomainCoveragePlanningInput,
 ): DomainCoverage[] {
@@ -257,7 +301,7 @@ export function planDomainCoverage(
     module.status === "completed" || module.status === "partial" || module.status === "failed"
   );
 
-  return [
+  const coverage: DomainCoverage[] = [
     {
       domain: "repository",
       applicability: "detected",
@@ -319,4 +363,5 @@ export function planDomainCoverage(
     },
     ai,
   ];
+  return coverage.map((entry) => applyChangedSelection(entry, input.snapshot));
 }

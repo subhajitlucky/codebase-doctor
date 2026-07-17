@@ -1,5 +1,6 @@
 import type { Finding, Severity } from "../core/findings.js";
 import type { ScanResult } from "../core/normalize.js";
+import type { DomainCoverageEvidence } from "../core/domain-coverage.js";
 
 export interface TextReportOptions {
   color?: boolean;
@@ -91,6 +92,12 @@ function auditScopeLines(result: ScanResult): string[] {
   return lines;
 }
 
+function domainEvidenceLine(evidence: DomainCoverageEvidence): string {
+  const project = evidence.projectId === undefined ? "" : ` (project ${evidence.projectId})`;
+  const path = evidence.path === undefined ? "" : ` — ${evidence.path}`;
+  return `  Evidence: ${evidence.type} ${evidence.value}${project}${path}`;
+}
+
 export function renderTextReport(
   result: ScanResult,
   options: TextReportOptions = {},
@@ -131,6 +138,26 @@ export function renderTextReport(
     }
   }
 
+  lines.push("", "Domain coverage");
+  for (const coverage of result.domainCoverage) {
+    lines.push(
+      `${coverage.domain}: ${coverage.status} ` +
+      `(applicability: ${coverage.applicability}; ` +
+      `coverage complete: ${coverage.coverageComplete ? "yes" : "no"})`,
+    );
+    for (const module of coverage.modules) {
+      const scopes = module.scopes.length === 0 ? "" : `; scopes: ${module.scopes.join(", ")}`;
+      lines.push(`  Module: ${module.moduleId} — ${module.status}${scopes}`);
+      for (const limitation of module.limitations) {
+        lines.push(`    Module limitation: ${limitation}`);
+      }
+    }
+    for (const evidence of coverage.evidence) lines.push(domainEvidenceLine(evidence));
+    for (const limitation of coverage.limitations) {
+      lines.push(`  Limitation: ${limitation}`);
+    }
+  }
+
   lines.push("", "Doctor runs");
   if (result.doctorRuns.length === 0) {
     lines.push("No doctors ran.");
@@ -165,7 +192,10 @@ export function renderTextReport(
     const changedEmptyMessage = result.coverage === undefined
       ? "No findings in the selected changed scope; review the selected scope and Doctor runs."
       : "No findings in the selected changed scope; review the selected scope, Doctor runs, and Audit coverage.";
-    lines.push(result.auditScope.mode === "changed" ? changedEmptyMessage : "Clean scan: no findings.");
+    const fullEmptyMessage = result.domainCoverage.every(({ coverageComplete }) => coverageComplete)
+      ? "No findings in completed declared domain coverage."
+      : "No findings, but domain coverage is incomplete; review Domain coverage before calling the codebase clean.";
+    lines.push(result.auditScope.mode === "changed" ? changedEmptyMessage : fullEmptyMessage);
   } else {
     for (const finding of result.findings) {
       lines.push(`${severityLabel(finding.severity, colorEnabled)} ${finding.title} (${finding.ruleId})`);

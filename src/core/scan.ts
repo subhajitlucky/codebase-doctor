@@ -18,6 +18,7 @@ import {
   type DiscoveredChanges,
 } from "../scope/git.js";
 import { fullAuditScope, planChangedScope } from "../scope/planner.js";
+import { planDomainCoverage } from "./domain-coverage.js";
 import type {
   FileInventory,
   FileInventoryOptions,
@@ -128,6 +129,12 @@ export async function scanCodebase(
       withDatabase: request.withDatabase === true,
     },
   );
+  const domainCoverage = planDomainCoverage({
+    snapshot,
+    registeredResults: results,
+    plans,
+    includeDatabaseAudit: request.includeDatabaseAudit === true,
+  });
 
   return normalizeScanResult(
     inventory.root,
@@ -140,6 +147,7 @@ export async function scanCodebase(
       label: plan.label,
       command: displayCommand(plan),
     })),
+    domainCoverage,
   );
 }
 

@@ -10,6 +10,7 @@ import {
 import type { RegisteredDoctorResult } from "../../../src/core/doctor.js";
 import type { CommandPlan } from "../../../src/execution/types.js";
 import { fullAuditScope } from "../../../src/scope/planner.js";
+import type { AuditScope } from "../../../src/scope/types.js";
 import type { ProjectSnapshot } from "../../../src/workspace/types.js";
 
 function snapshot(overrides: Partial<ProjectSnapshot> = {}): ProjectSnapshot {
@@ -39,6 +40,20 @@ function result(
         ? { error: { code: "fixture_failed", message: "Fixture failure." } }
         : {}),
     },
+  };
+}
+
+function changedScope(
+  affectedProjectIds: readonly string[],
+  changes: AuditScope["changes"] = [],
+): AuditScope {
+  return {
+    mode: "changed",
+    base: { kind: "head", requestedRef: null, resolvedCommit: "a".repeat(40) },
+    changes,
+    affectedProjectIds,
+    reasons: [],
+    limitations: [],
   };
 }
 
@@ -245,6 +260,87 @@ describe("domain coverage planning", () => {
       status: "partial",
       coverageComplete: false,
       limitations: ["Dynamic SQL was not evaluated."],
+    });
+  });
+
+  it("marks detected domains outside an empty changed scope as not selected", () => {
+    const project: ProjectSnapshot["projects"][number] = {
+      id: "root",
+      root: ".",
+      ecosystems: ["node"],
+      languages: ["typescript"],
+      frameworks: ["react"],
+      manifestPaths: ["package.json"],
+      executionSupport: "supported",
+    };
+    const coverage = planDomainCoverage({
+      snapshot: snapshot({
+        projects: [project],
+        auditScope: changedScope([]),
+      }),
+      registeredResults: [result("project")],
+      plans: [],
+      includeDatabaseAudit: true,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "repository")).toMatchObject({
+      status: "completed",
+      coverageComplete: true,
+    });
+    expect(coverage.find(({ domain }) => domain === "frontend")).toMatchObject({
+      applicability: "detected",
+      status: "not-selected",
+      coverageComplete: false,
+    });
+    expect(coverage.find(({ domain }) => domain === "security")).toMatchObject({
+      applicability: "unknown",
+      status: "not-selected",
+      coverageComplete: false,
+    });
+  });
+
+  it("keeps detected evidence in an affected changed project actionable", () => {
+    const project: ProjectSnapshot["projects"][number] = {
+      id: "web",
+      root: "apps/web",
+      ecosystems: ["node"],
+      languages: ["typescript"],
+      frameworks: ["nextjs", "react"],
+      manifestPaths: ["apps/web/package.json"],
+      executionSupport: "supported",
+    };
+    const coverage = planDomainCoverage({
+      snapshot: snapshot({
+        projects: [project],
+        auditScope: changedScope(["web"], [
+          { status: "modified", path: "apps/web/src/page.tsx" },
+        ]),
+      }),
+      registeredResults: [result("project")],
+      plans: [],
+      includeDatabaseAudit: true,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "frontend")).toMatchObject({
+      applicability: "detected",
+      status: "unsupported",
+      coverageComplete: false,
+    });
+  });
+
+  it("marks database modules as not selected by the repository-only scan", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [result("project")],
+      plans: [],
+      includeDatabaseAudit: false,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "database")).toMatchObject({
+      applicability: "unknown",
+      status: "not-selected",
+      coverageComplete: false,
+      limitations: ["The repository-only scan command does not select database audit modules."],
     });
   });
 });

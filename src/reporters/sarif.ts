@@ -99,6 +99,7 @@ export function renderSarifReport(result: ScanResult): string {
       results: result.findings.map((finding) => sarifResult(result, finding)),
       properties: {
         auditScope: result.auditScope,
+        domainCoverage: result.domainCoverage,
         ...(result.coverage === undefined ? {} : { coverage: result.coverage }),
       },
     }],

@@ -11,6 +11,15 @@ function result(): ScanResult {
     auditScope: fullAuditScope(),
     projects: [],
     plannedChecks: [],
+    domainCoverage: [{
+      domain: "repository",
+      applicability: "detected",
+      status: "completed",
+      coverageComplete: true,
+      evidence: [{ type: "module", value: "project" }],
+      modules: [{ moduleId: "project", status: "completed", scopes: [], limitations: [] }],
+      limitations: [],
+    }],
     doctorRuns: [],
     findings: [{
       ruleId: "repository/invalid-manifest",
@@ -78,6 +87,7 @@ describe("SARIF reporter", () => {
       },
     });
     expect(run.tool.driver.rules[0].help.text).toBe("Correct the JSON syntax.");
+    expect(run.properties.domainCoverage).toEqual(result().domainCoverage);
   });
 
   it("keeps database evidence on a locationless result", () => {

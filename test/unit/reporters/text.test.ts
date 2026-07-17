@@ -25,6 +25,26 @@ function result(): ScanResult {
       label: "JavaScript test",
       command: "npm run test",
     }],
+    domainCoverage: [
+      {
+        domain: "repository",
+        applicability: "detected",
+        status: "completed",
+        coverageComplete: true,
+        evidence: [{ type: "module", value: "project" }],
+        modules: [{ moduleId: "project", status: "completed", scopes: [], limitations: [] }],
+        limitations: [],
+      },
+      {
+        domain: "frontend",
+        applicability: "detected",
+        status: "unsupported",
+        coverageComplete: false,
+        evidence: [{ type: "framework", value: "react", projectId: "root" }],
+        modules: [],
+        limitations: ["Semantic frontend analysis is not implemented."],
+      },
+    ],
     doctorRuns: [
       {
         doctorId: "checks",
@@ -85,6 +105,18 @@ describe("text reporter", () => {
     expect(report).toContain("npm run test");
   });
 
+  it("renders domain applicability, status, completeness, modules, evidence, and limitations", () => {
+    const report = renderTextReport(result());
+
+    expect(report).toContain("Domain coverage");
+    expect(report).toContain("repository: completed (applicability: detected; coverage complete: yes)");
+    expect(report).toContain("Module: project — completed");
+    expect(report).toContain("frontend: unsupported (applicability: detected; coverage complete: no)");
+    expect(report).toContain("Evidence: framework react (project root)");
+    expect(report).toContain("Limitation: Semantic frontend analysis is not implemented.");
+    expect(report.indexOf("Domain coverage")).toBeLessThan(report.indexOf("Doctor runs"));
+  });
+
   it("renders evidence and model guidance in stable order", () => {
     const report = renderTextReport(result());
 
@@ -137,7 +169,7 @@ describe("text reporter", () => {
     expect(nonTty).not.toMatch(/\u001b\[/);
   });
 
-  it("prints an explicit clean summary for an empty scan", () => {
+  it("does not call an incomplete domain audit clean when it has no findings", () => {
     const empty: ScanResult = {
       ...result(),
       projects: [],
@@ -150,7 +182,10 @@ describe("text reporter", () => {
       },
     };
 
-    expect(renderTextReport(empty)).toContain("Clean scan: no findings.");
+    expect(renderTextReport(empty)).toContain(
+      "No findings, but domain coverage is incomplete; review Domain coverage before calling the codebase clean.",
+    );
+    expect(renderTextReport(empty)).not.toContain("Clean scan");
   });
 
   it("renders changed scope honestly and never calls it a global clean scan", () => {
