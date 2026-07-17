@@ -1,9 +1,9 @@
-import { mkdir, rm } from 'node:fs/promises';
+import { chmod, mkdir, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { discoverGitChanges, GitScopeError } from '../../src/scope/git.js';
 import {
-  captureGitStatus,
+  captureGitRepositorySnapshot,
   commitInitialContent,
   createTempProject,
   initializeGitRepository,
@@ -88,6 +88,46 @@ describe('discoverGitChanges', () => {
     });
   });
 
+  it.each(['--fork-point', '--octopus', '--independent'])(
+    'treats the option-like base ref %s only as a ref name',
+    async (baseRef) => {
+      const { root } = await createRepository();
+
+      await expect(discoverGitChanges({ root, baseRef })).rejects.toMatchObject({
+        code: 'GIT_INVALID_BASE_REF',
+      });
+    },
+  );
+
+  it('reports a file-to-symlink type change as modified', async () => {
+    const { root } = await createRepository({
+      'target.txt': 'target\n',
+      'typed-path': 'regular file\n',
+    });
+    await rm(join(root, 'typed-path'));
+    await symlink('target.txt', join(root, 'typed-path'));
+
+    const result = await discoverGitChanges({ root });
+
+    expect(result.changes).toEqual([
+      { status: 'modified', path: 'typed-path' },
+    ]);
+  });
+
+  it('preserves trailing whitespace in the canonical repository root', async () => {
+    const parent = await createTempProject('codebase-doctor-space-root-');
+    temporaryRoots.push(parent);
+    const root = join(parent, 'repository ');
+    await mkdir(root);
+    await initializeGitRepository(root);
+    const initialCommit = await commitInitialContent(root);
+
+    await expect(discoverGitChanges({ root })).resolves.toMatchObject({
+      base: { resolvedCommit: initialCommit },
+      changes: [],
+    });
+  });
+
   it('rejects invalid refs with a concise redacted operational error', async () => {
     const { root } = await createRepository();
     const invalidRef = 'https://user:credential@example.invalid/missing';
@@ -120,14 +160,25 @@ describe('discoverGitChanges', () => {
     });
   });
 
-  it('does not mutate index, refs, config, or worktree while discovering changes', async () => {
+  it('does not mutate status, HEAD, or local config while discovering changes', async () => {
     const { root } = await createRepository({ 'tracked.txt': 'initial\n' });
     await writeProjectFile(root, 'tracked.txt', 'changed\n');
     await writeProjectFile(root, 'untracked.txt', 'new\n');
-    const before = await captureGitStatus(root);
+    const before = await captureGitRepositorySnapshot(root);
 
     await discoverGitChanges({ root });
 
-    expect(await captureGitStatus(root)).toBe(before);
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+  });
+
+  it('disables repository hooks and commit signing for disposable fixture commits', async () => {
+    const root = await createTempProject('codebase-doctor-hook-isolation-');
+    temporaryRoots.push(root);
+    await initializeGitRepository(root);
+    await runGitFixtureCommand(root, ['config', '--local', 'commit.gpgSign', 'true']);
+    await writeProjectFile(root, '.git/hooks/pre-commit', '#!/bin/sh\nexit 1\n');
+    await chmod(join(root, '.git/hooks/pre-commit'), 0o755);
+
+    await expect(commitInitialContent(root)).resolves.toMatch(/^[0-9a-f]{40}$/u);
   });
 });

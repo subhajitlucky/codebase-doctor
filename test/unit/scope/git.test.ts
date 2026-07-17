@@ -18,6 +18,7 @@ describe('parseNameStatus', () => {
   it('parses every supported status and sorts normalized paths deterministically', () => {
     const output = [
       'M', 'zeta/file.ts',
+      'T', 'changed-type.ts',
       'A', 'source file.ts',
       'D', 'removed.ts',
       'R087', 'old\\location.ts', 'renamed/location.ts',
@@ -25,6 +26,7 @@ describe('parseNameStatus', () => {
     ].join('\0') + '\0';
 
     expect(parseNameStatus(output)).toEqual([
+      { status: 'modified', path: 'changed-type.ts' },
       {
         status: 'copied',
         path: 'copied/location.ts',
@@ -70,7 +72,7 @@ describe('parseNameStatus', () => {
     expect(() => parseNameStatus(output)).toThrow();
   });
 
-  it.each(['X\0file.ts\0', 'T\0file.ts\0', 'U\0file.ts\0'])(
+  it.each(['X\0file.ts\0', 'U\0file.ts\0'])(
     'rejects the unknown status in %s',
     (output) => {
       expect(() => parseNameStatus(output)).toThrow(/status/i);

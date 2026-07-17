@@ -52,10 +52,11 @@ const defaultGitRunner: GitRunner = {
   },
 };
 
-const STATUS_BY_CODE: Readonly<Record<'A' | 'D' | 'M', ChangeStatus>> = {
+const STATUS_BY_CODE: Readonly<Record<'A' | 'D' | 'M' | 'T', ChangeStatus>> = {
   A: 'added',
   D: 'deleted',
   M: 'modified',
+  T: 'modified',
 };
 
 const STATUS_PRIORITY: Readonly<Record<ChangeStatus, number>> = {
@@ -154,7 +155,12 @@ export function parseNameStatus(output: string): ChangedPath[] {
     }
     index += 1;
 
-    if (statusToken === 'A' || statusToken === 'D' || statusToken === 'M') {
+    if (
+      statusToken === 'A'
+      || statusToken === 'D'
+      || statusToken === 'M'
+      || statusToken === 'T'
+    ) {
       const path = tokens[index];
       if (path === undefined) {
         throw new Error(`Git ${statusToken} record is missing its path.`);
@@ -279,6 +285,16 @@ function parseCommit(output: string): string {
   return commit;
 }
 
+function stripGitLineEnding(output: string): string {
+  if (output.endsWith('\r\n')) {
+    return output.slice(0, -2);
+  }
+  if (output.endsWith('\n')) {
+    return output.slice(0, -1);
+  }
+  return output;
+}
+
 export async function discoverGitChanges(
   options: DiscoverChangesOptions,
   runner: GitRunner = defaultGitRunner,
@@ -301,7 +317,7 @@ export async function discoverGitChanges(
 
   let repositoryRoot: string;
   try {
-    repositoryRoot = await realpath(reportedRoot.trim());
+    repositoryRoot = await realpath(stripGitLineEnding(reportedRoot));
   } catch {
     throw new GitScopeError('GIT_INVALID_OUTPUT', 'Git returned an invalid repository root.');
   }
@@ -317,7 +333,7 @@ export async function discoverGitChanges(
     ? await runGit(
       runner,
       root,
-      ['merge-base', options.baseRef, 'HEAD'],
+      ['merge-base', '--', options.baseRef, 'HEAD'],
       'GIT_INVALID_BASE_REF',
       'Git base reference could not be resolved.',
     )

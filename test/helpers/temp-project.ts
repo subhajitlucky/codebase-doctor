@@ -7,9 +7,24 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 async function runTestGit(root: string, args: readonly string[]): Promise<string> {
-  const { stdout } = await execFileAsync("git", [...args], {
+  const environment = { ...process.env };
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith("GIT_CONFIG_")) {
+      delete environment[name];
+    }
+  }
+  environment.GIT_CONFIG_NOSYSTEM = "1";
+  environment.GIT_CONFIG_GLOBAL = join(root, ".codebase-doctor-empty-global-config");
+
+  const configOverrides = [
+    "-c", `core.hooksPath=${join(root, ".codebase-doctor-disabled-hooks")}`,
+    "-c", "commit.gpgSign=false",
+    "-c", "tag.gpgSign=false",
+  ];
+  const { stdout } = await execFileAsync("git", [...configOverrides, ...args], {
     cwd: root,
     encoding: "utf8",
+    env: environment,
   });
   return stdout;
 }
@@ -48,6 +63,23 @@ export async function commitInitialContent(
 
 export async function captureGitStatus(root: string): Promise<string> {
   return runTestGit(root, ["status", "--porcelain=v1", "-z"]);
+}
+
+export interface GitRepositorySnapshot {
+  readonly status: string;
+  readonly head: string;
+  readonly localConfig: string;
+}
+
+export async function captureGitRepositorySnapshot(
+  root: string,
+): Promise<GitRepositorySnapshot> {
+  const [status, head, localConfig] = await Promise.all([
+    captureGitStatus(root),
+    runTestGit(root, ["rev-parse", "HEAD^{commit}"]),
+    runTestGit(root, ["config", "--local", "--null", "--list"]),
+  ]);
+  return { status, head, localConfig };
 }
 
 export async function runGitFixtureCommand(
