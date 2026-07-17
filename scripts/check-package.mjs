@@ -42,6 +42,7 @@ const forbidden = [
   /^\.env(?:\.|$)/,
   /^scripts\//,
   /^\.github\//,
+  /^docs\/plans\/private(?:\/|$)/,
   /(?:^|\/)__pycache__\//,
   /(?:^|\/)\.cache\//,
   /(?:^|\/)\.DS_Store$/,

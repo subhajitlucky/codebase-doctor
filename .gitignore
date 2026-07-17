@@ -6,3 +6,7 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# Local design and implementation plans. These may contain private product
+# strategy and must never be committed or included in published packages.
+docs/plans/private/

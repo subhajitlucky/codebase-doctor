@@ -14,7 +14,8 @@
   },
   "files": [
     "dist",
-    "docs",
+    "docs/*.md",
+    "docs/plans/*.md",
     ".agents/skills/codebase-doctor",
     "CHANGELOG.md",
     "README.md",
