@@ -98,7 +98,10 @@ describe("planChangedScope", () => {
   });
 
   it("propagates direct changes through transitive reverse workspace dependencies", () => {
-    const ui = project("packages/ui", { packageName: "@example/ui" });
+    const ui = project("packages/ui", {
+      packageName: "@example/ui",
+      dependencyNames: [],
+    });
     const web = project("apps/web", {
       packageName: "@example/web",
       dependencyNames: ["@example/ui", "react"],
@@ -171,8 +174,8 @@ describe("planChangedScope", () => {
 
   it("does not invent edges for ambiguous duplicate package names", () => {
     const scope = planChangedScope(base, [change("packages/one/index.ts")], [
-      project("packages/one", { packageName: "shared" }),
-      project("packages/two", { packageName: "shared" }),
+      project("packages/one", { packageName: "shared", dependencyNames: [] }),
+      project("packages/two", { packageName: "shared", dependencyNames: [] }),
       project("apps/web", { packageName: "web", dependencyNames: ["shared"] }),
     ]);
 
@@ -182,7 +185,7 @@ describe("planChangedScope", () => {
     ]);
   });
 
-  it("does not report noisy limitations for unnamed projects or external dependencies", () => {
+  it("discloses unnamed Node projects without flagging external dependency names", () => {
     const scope = planChangedScope(base, [change("packages/ui/index.ts")], [
       project("packages/ui"),
       project("apps/web", {
@@ -192,7 +195,35 @@ describe("planChangedScope", () => {
     ]);
 
     expect(scope.affectedProjectIds).toEqual(["project:packages/ui"]);
+    expect(scope.limitations).toEqual([
+      'Node project "project:packages/ui" has no valid package name; it cannot be identified as an internal dependency target.',
+    ]);
+  });
+
+  it("does not report package metadata limitations for non-Node projects", () => {
+    const python = {
+      ...project("services/api"),
+      ecosystems: ["python"],
+      languages: ["python"],
+    } satisfies DetectedProject;
+
+    const scope = planChangedScope(base, [change("services/api/app.py")], [python]);
+
     expect(scope.limitations).toEqual([]);
+  });
+
+  it("distinguishes unavailable dependency metadata from a known empty dependency set", () => {
+    const scope = planChangedScope(base, [change("packages/unknown/index.ts")], [
+      project("packages/unknown", { packageName: "@example/unknown" }),
+      project("packages/leaf", {
+        packageName: "@example/leaf",
+        dependencyNames: [],
+      }),
+    ]);
+
+    expect(scope.limitations).toEqual([
+      'Node project "project:packages/unknown" (@example/unknown) has unavailable dependency metadata; reverse workspace dependency relationships may be incomplete.',
+    ]);
   });
 
   it("considers both rename and copy paths and maps deleted paths by text", () => {
@@ -231,8 +262,8 @@ describe("planChangedScope", () => {
   it("returns a deterministic empty changed scope without mutating inputs", () => {
     const changes: readonly ChangedPath[] = [];
     const projects = [
-      project("apps/web", { packageName: "duplicate" }),
-      project("packages/ui", { packageName: "duplicate" }),
+      project("apps/web", { packageName: "duplicate", dependencyNames: [] }),
+      project("packages/ui", { packageName: "duplicate", dependencyNames: [] }),
     ];
 
     const scope = planChangedScope(base, changes, projects);
@@ -246,8 +277,8 @@ describe("planChangedScope", () => {
       limitations: [],
     });
     expect(projects).toEqual([
-      project("apps/web", { packageName: "duplicate" }),
-      project("packages/ui", { packageName: "duplicate" }),
+      project("apps/web", { packageName: "duplicate", dependencyNames: [] }),
+      project("packages/ui", { packageName: "duplicate", dependencyNames: [] }),
     ]);
     expectTypeOf(scope).toEqualTypeOf<AuditScope>();
     expectTypeOf(scope.changes).toEqualTypeOf<readonly ChangedPath[]>();

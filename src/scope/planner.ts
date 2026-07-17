@@ -99,15 +99,26 @@ function reverseEdges(projects: readonly DetectedProject[]): {
   limitations: readonly string[];
 } {
   const projectsByName = new Map<string, DetectedProject[]>();
+  const limitations: string[] = [];
   for (const project of projects) {
     const name = packageName(project);
-    if (name.length === 0) continue;
+    if (!project.ecosystems.includes("node")) continue;
+    if (name.length === 0) {
+      limitations.push(
+        `Node project "${project.id}" has no valid package name; it cannot be identified as an internal dependency target.`,
+      );
+      continue;
+    }
+    if (project.dependencyNames === undefined) {
+      limitations.push(
+        `Node project "${project.id}" (${name}) has unavailable dependency metadata; reverse workspace dependency relationships may be incomplete.`,
+      );
+    }
     const sameName = projectsByName.get(name) ?? [];
     sameName.push(project);
     projectsByName.set(name, sameName);
   }
 
-  const limitations: string[] = [];
   const uniqueProjectsByName = new Map<string, DetectedProject>();
   for (const [name, namedProjects] of [...projectsByName].sort(([left], [right]) =>
     left.localeCompare(right),
@@ -140,7 +151,7 @@ function reverseEdges(projects: readonly DetectedProject[]): {
       left.consumer.id.localeCompare(right.consumer.id) ||
       left.dependencyName.localeCompare(right.dependencyName),
     ),
-    limitations,
+    limitations: limitations.sort(),
   };
 }
 
