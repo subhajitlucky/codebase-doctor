@@ -45,14 +45,16 @@ CLI request
               |               |                |
               v               v                v
        project doctor     check planner     SQL stream selector
-       full context for   affected plans    complete selected streams
-       selected projects       |                |
+       full snapshot      affected plans    affected streams
+                              |                |
                               v                v
                          optional checks   offline SQL/RLS doctor
                               |                |
                               +-------+--------+
                                       |
                          optional live database doctor
+                         full observed schema set
+                         separate `--with-database`
                                       |
                                       v
                       normalize findings, runs, coverage,
@@ -63,9 +65,11 @@ CLI request
                    text              JSON              SARIF
 ```
 
-The snapshot remains repository-wide in changed mode. Selection is applied to
-doctor work and check plans, which preserves manifest and workspace context for
-the projects that are actually audited.
+The snapshot remains repository-wide in changed mode, and Project Doctor uses
+that full repository snapshot. Changed selection filters configured check plans
+and static SQL streams doctor-specifically; each selected SQL stream still
+replays its full current history. Live database remains a separately requested
+full observed schema set through `--with-database`.
 
 ## Git discovery
 

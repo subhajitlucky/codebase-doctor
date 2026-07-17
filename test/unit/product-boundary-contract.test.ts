@@ -77,6 +77,20 @@ describe("independent auditor product boundary", () => {
     }
   });
 
+  it("maps the changed-audit pipeline without an affected-only Project Doctor", async () => {
+    const architecture = await readFile("docs/architecture.md", "utf8");
+
+    expect(architecture).not.toMatch(/full context for\s+selected projects/is);
+    expect(architecture).not.toMatch(/projects that are actually audited/i);
+    expect(architecture).not.toMatch(/selection is applied to\s+doctor work/is);
+    expect(architecture).toMatch(
+      /project doctor.*check planner.*SQL stream selector.*full (?:repository )?snapshot.*affected plans.*affected streams/is,
+    );
+    expect(architecture).toMatch(
+      /live database doctor.*full observed schema set.*separate.*--with-database/is,
+    );
+  });
+
   it("keeps historical plans inside the same permanent boundary", async () => {
     const forbidden = [
       /repair-loop coordination/i,
