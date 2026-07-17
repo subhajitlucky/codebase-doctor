@@ -4,7 +4,12 @@ import type { AuditCoverage, Doctor } from "../../../core/doctor.js";
 import { sortFindings, type Finding } from "../../../core/findings.js";
 import type { ProjectSnapshot } from "../../../workspace/types.js";
 import { analyzeStaticSqlRls } from "./analyzer.js";
-import { discoverSqlStreams } from "./discovery.js";
+import {
+  discoverSqlStreams,
+  identifySqlStream,
+  selectSqlStreams,
+  type SqlStreamIdentity,
+} from "./discovery.js";
 import { parseSqlStatement } from "./parser.js";
 import { reduceSqlStream } from "./reducer.js";
 import { splitSql } from "./splitter.js";
@@ -48,6 +53,46 @@ function validateMaxFileBytes(value: number): void {
   }
 }
 
+function changedStreamIdentities(snapshot: ProjectSnapshot): SqlStreamIdentity[] {
+  if (snapshot.auditScope.mode === "full") return [];
+  const identities = new Map<string, SqlStreamIdentity>();
+  for (const change of snapshot.auditScope.changes) {
+    const paths = [
+      change.path,
+      ...(change.status === "renamed" && change.previousPath !== undefined
+        ? [change.previousPath]
+        : []),
+    ];
+    for (const path of paths) {
+      const identity = identifySqlStream(snapshot, path);
+      if (identity !== undefined) identities.set(identity.id, identity);
+    }
+  }
+  return [...identities.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function streamsMissingHistoricalContent(snapshot: ProjectSnapshot): Set<string> {
+  const streamIds = new Set<string>();
+  if (snapshot.auditScope.mode === "full") return streamIds;
+  for (const change of snapshot.auditScope.changes) {
+    if (change.status === "deleted") {
+      const identity = identifySqlStream(snapshot, change.path);
+      if (identity !== undefined) streamIds.add(identity.id);
+      continue;
+    }
+    if (change.status !== "renamed" || change.previousPath === undefined) continue;
+    const previous = identifySqlStream(snapshot, change.previousPath);
+    const current = identifySqlStream(snapshot, change.path);
+    if (previous !== undefined && previous.id !== current?.id) streamIds.add(previous.id);
+  }
+  return streamIds;
+}
+
+function outsideScopeLimitation(unselectedIds: readonly string[]): string | undefined {
+  if (unselectedIds.length === 0) return undefined;
+  return `Changed-scope audit examined only selected SQL migration streams; current stream(s) outside affected scope: ${unselectedIds.join(", ")}.`;
+}
+
 export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   validateMaxFileBytes(maxFileBytes);
@@ -60,8 +105,8 @@ export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
     supports: () => true,
     diagnose: async ({ snapshot }) => {
       const startedAt = Date.now();
-      const streams = discoverSqlStreams(snapshot);
-      if (streams.length === 0) {
+      const discoveredStreams = discoverSqlStreams(snapshot);
+      if (snapshot.auditScope.mode === "full" && discoveredStreams.length === 0) {
         return {
           status: "completed",
           findings: [],
@@ -70,10 +115,49 @@ export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
         };
       }
 
+      const streams = selectSqlStreams(discoveredStreams, snapshot.auditScope);
+      const affectedIdentities = changedStreamIdentities(snapshot);
+      if (
+        snapshot.auditScope.mode === "changed" &&
+        streams.length === 0 &&
+        affectedIdentities.length === 0
+      ) {
+        const outsideScope = discoveredStreams.map(({ id }) => id).sort();
+        const suffix = outsideScope.length === 0
+          ? ""
+          : ` Current stream(s) outside affected scope: ${outsideScope.join(", ")}.`;
+        return {
+          status: "completed",
+          findings: [],
+          coverage: [{
+            moduleId: DOCTOR_ID,
+            status: "skipped",
+            scope: "changed:supported-sql-migration-streams",
+            filesExamined: 0,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [
+              `No changed supported SQL migration stream was selected.${suffix}`,
+            ],
+          }],
+          durationMs: Date.now() - startedAt,
+        };
+      }
+
       const inventory = new Map(snapshot.files.map((file) => [file.path, file]));
       const findings: Finding[] = [];
       const coverage: AuditCoverage[] = [];
       const readFailures: string[] = [];
+      const selectedIds = new Set(streams.map(({ id }) => id));
+      const missingIdentities = affectedIdentities.filter(({ id }) => !selectedIds.has(id));
+      const unselectedIds = discoveredStreams
+        .filter(({ id }) => !selectedIds.has(id))
+        .map(({ id }) => id)
+        .sort();
+      const scopeLimitation = snapshot.auditScope.mode === "changed"
+        ? outsideScopeLimitation(unselectedIds)
+        : undefined;
+      const missingHistoricalContent = streamsMissingHistoricalContent(snapshot);
 
       for (const stream of streams) {
         const statements = [];
@@ -111,17 +195,54 @@ export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
         const state = reduceSqlStream(stream.id, statements.map(parseSqlStatement));
         findings.push(...analyzeStaticSqlRls(state));
         limitations.push(...state.coverage.limitations);
+        const analysisPartial = limitations.length > 0;
+        const reconstructionPartial = missingHistoricalContent.has(stream.id);
+        if (reconstructionPartial) {
+          limitations.push(
+            "Stream includes a deleted or renamed-out migration; deleted content cannot be reconstructed from the current worktree.",
+          );
+        }
         coverage.push({
           moduleId: DOCTOR_ID,
           status: streamReadFailed
             ? "failed"
-            : limitations.length > 0 ? "partial" : "completed",
+            : reconstructionPartial || analysisPartial
+              ? "partial"
+              : "completed",
           scope: stream.id,
           filesExamined,
           statementsExamined: state.coverage.statementsExamined,
           statementsRecognized: state.coverage.statementsRecognized,
           limitations,
         });
+      }
+
+      for (const identity of missingIdentities) {
+        const historical = missingHistoricalContent.has(identity.id);
+        const limitations = [
+          historical
+            ? "Historical state for this deleted or renamed-out SQL migration stream cannot be reconstructed from the current worktree."
+            : "No current files were discovered for this affected SQL migration stream; its state cannot be reconstructed from the current worktree.",
+        ];
+        coverage.push({
+          moduleId: DOCTOR_ID,
+          status: "partial",
+          scope: identity.id,
+          filesExamined: 0,
+          statementsExamined: 0,
+          statementsRecognized: 0,
+          limitations,
+        });
+      }
+      if (snapshot.auditScope.mode === "changed") {
+        coverage.sort((left, right) => left.scope.localeCompare(right.scope));
+      }
+      const firstCoverage = coverage[0];
+      if (scopeLimitation !== undefined && firstCoverage !== undefined) {
+        coverage[0] = {
+          ...firstCoverage,
+          limitations: [...firstCoverage.limitations, scopeLimitation],
+        };
       }
 
       return {

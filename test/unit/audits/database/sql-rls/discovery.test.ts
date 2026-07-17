@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { discoverSqlStreams } from "../../../../../src/audits/database/sql-rls/discovery.js";
+import {
+  discoverSqlStreams,
+  identifySqlStream,
+  selectSqlStreams,
+} from "../../../../../src/audits/database/sql-rls/discovery.js";
 import { fullAuditScope } from "../../../../../src/scope/planner.js";
+import type { AuditScope, ChangedPath } from "../../../../../src/scope/types.js";
 import type { ProjectSnapshot } from "../../../../../src/workspace/types.js";
 
 function snapshot(paths: readonly string[], projectRoots: readonly string[] = ["."]): ProjectSnapshot {
@@ -19,6 +24,21 @@ function snapshot(paths: readonly string[], projectRoots: readonly string[] = ["
     })),
     workspaces: [],
     auditScope: fullAuditScope(),
+  };
+}
+
+function changedAuditScope(changes: readonly ChangedPath[]): AuditScope {
+  return {
+    mode: "changed",
+    base: {
+      kind: "head",
+      requestedRef: null,
+      resolvedCommit: "0123456789abcdef0123456789abcdef01234567",
+    },
+    changes,
+    affectedProjectIds: [],
+    reasons: [],
+    limitations: [],
   };
 }
 
@@ -83,5 +103,74 @@ describe("discoverSqlStreams", () => {
         root: "packages/app/supabase/migrations",
       }),
     ]);
+  });
+
+  it("selects every stream in full mode without changing discovery order", () => {
+    const streams = discoverSqlStreams(snapshot([
+      "supabase/migrations/001.sql",
+      "migrations/001.sql",
+    ]));
+
+    expect(selectSqlStreams(streams, fullAuditScope())).toEqual(streams);
+  });
+
+  it("selects only the stream containing a changed SQL migration", () => {
+    const streams = discoverSqlStreams(snapshot([
+      "supabase/migrations/001.sql",
+      "supabase/migrations/002.sql",
+      "migrations/001.sql",
+    ]));
+
+    expect(selectSqlStreams(streams, changedAuditScope([
+      { status: "modified", path: "supabase/migrations/002.sql" },
+    ])).map(({ root }) => root)).toEqual(["supabase/migrations"]);
+  });
+
+  it("uses both rename paths but only the destination of a copy", () => {
+    const streams = discoverSqlStreams(snapshot([
+      "db/migrations/001.sql",
+      "prisma/migrations/001/migration.sql",
+      "supabase/migrations/002.sql",
+    ]));
+
+    expect(selectSqlStreams(streams, changedAuditScope([{
+      status: "renamed",
+      previousPath: "db/migrations/001.sql",
+      path: "supabase/migrations/002.sql",
+    }])).map(({ root }) => root)).toEqual(["db/migrations", "supabase/migrations"]);
+    expect(selectSqlStreams(streams, changedAuditScope([{
+      status: "copied",
+      previousPath: "prisma/migrations/001/migration.sql",
+      path: "supabase/migrations/002.sql",
+    }])).map(({ root }) => root)).toEqual(["supabase/migrations"]);
+  });
+
+  it("matches stream roots on slash segment boundaries and preserves literal backslashes", () => {
+    const streams = discoverSqlStreams(snapshot([
+      "migrations/001.sql",
+      "migrations-old/001.sql",
+    ]));
+
+    expect(selectSqlStreams(streams, changedAuditScope([
+      { status: "modified", path: "migrations-old/001.sql" },
+      { status: "modified", path: "migrations\\002.sql" },
+    ]))).toEqual([]);
+  });
+
+  it("maps known roots and schema fallback using deepest project ownership", () => {
+    const value = snapshot([], [".", "packages/app"]);
+
+    expect(identifySqlStream(value, "packages/app/database/migrations/001.sql")).toEqual({
+      id: "project-1:database/migrations",
+      projectId: "project-1",
+      root: "packages/app/database/migrations",
+    });
+    expect(identifySqlStream(value, "packages/app/schema.sql")).toEqual({
+      id: "project-1:schema.sql",
+      projectId: "project-1",
+      root: "packages/app/schema.sql",
+    });
+    expect(identifySqlStream(value, "packages/app/sql/one.sql")).toBeUndefined();
+    expect(identifySqlStream(value, "packages/app\\migrations/one.sql")).toBeUndefined();
   });
 });

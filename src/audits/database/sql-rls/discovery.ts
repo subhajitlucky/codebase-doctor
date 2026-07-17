@@ -1,4 +1,5 @@
 import type { DetectedProject, ProjectSnapshot } from "../../../workspace/types.js";
+import type { AuditScope } from "../../../scope/types.js";
 import type { SqlMigrationStream } from "./types.js";
 
 const MIGRATION_ROOTS = [
@@ -24,7 +25,7 @@ function projectDepth(project: DetectedProject): number {
   return project.root === "." ? 0 : project.root.split("/").length;
 }
 
-function projects(snapshot: ProjectSnapshot): readonly DetectedProject[] {
+function projects(snapshot: Pick<ProjectSnapshot, "projects">): readonly DetectedProject[] {
   if (snapshot.projects.length > 0) return snapshot.projects;
   return [{
     id: "root",
@@ -40,7 +41,62 @@ function projects(snapshot: ProjectSnapshot): readonly DetectedProject[] {
 function ownerOf(path: string, candidates: readonly DetectedProject[]): DetectedProject {
   return [...candidates]
     .filter((project) => relativeToProject(path, project.root) !== undefined)
-    .sort((left, right) => projectDepth(right) - projectDepth(left))[0] ?? candidates[0]!;
+    .sort((left, right) =>
+      projectDepth(right) - projectDepth(left) || left.id.localeCompare(right.id)
+    )[0] ?? candidates[0]!;
+}
+
+export interface SqlStreamIdentity {
+  readonly id: string;
+  readonly projectId: string;
+  readonly root: string;
+}
+
+/** Maps a repository path to one of the SQL stream roots supported by static auditing. */
+export function identifySqlStream(
+  snapshot: Pick<ProjectSnapshot, "projects">,
+  path: string,
+): SqlStreamIdentity | undefined {
+  const projectList = projects(snapshot);
+  const owner = ownerOf(path, projectList);
+  const relativePath = relativeToProject(path, owner.root);
+  if (relativePath === undefined) return undefined;
+
+  for (const relativeRoot of MIGRATION_ROOTS) {
+    if (relativePath !== relativeRoot && !relativePath.startsWith(`${relativeRoot}/`)) continue;
+    return {
+      id: `${owner.id}:${relativeRoot}`,
+      projectId: owner.id,
+      root: projectPath(owner.root, relativeRoot),
+    };
+  }
+  if (relativePath === "schema.sql") {
+    return {
+      id: `${owner.id}:schema.sql`,
+      projectId: owner.id,
+      root: projectPath(owner.root, "schema.sql"),
+    };
+  }
+  return undefined;
+}
+
+function pathIsInStream(path: string, stream: SqlMigrationStream): boolean {
+  return path === stream.root || path.startsWith(`${stream.root}/`);
+}
+
+/** Selects current streams affected by an audit scope without mutating either input. */
+export function selectSqlStreams(
+  streams: readonly SqlMigrationStream[],
+  scope: AuditScope,
+): SqlMigrationStream[] {
+  if (scope.mode === "full") return [...streams];
+  const paths = scope.changes.flatMap((change) => [
+    change.path,
+    ...(change.status === "renamed" && change.previousPath !== undefined
+      ? [change.previousPath]
+      : []),
+  ]);
+  return streams.filter((stream) => paths.some((path) => pathIsInStream(path, stream)));
 }
 
 export function discoverSqlStreams(snapshot: ProjectSnapshot): SqlMigrationStream[] {
