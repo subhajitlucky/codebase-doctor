@@ -264,4 +264,23 @@ describe("combined check planning", () => {
 
     expect(plans).toEqual([]);
   });
+
+  it("preserves nested Python ownership boundaries before filtering affected plans", () => {
+    const parent = pythonProject();
+    const child = pythonProject("services/api");
+    const plans = planChecks(snapshot({
+      auditScope: {
+        mode: "changed",
+        base: { kind: "head", requestedRef: null, resolvedCommit: "a".repeat(40) },
+        changes: [{ status: "modified", path: "README.md" }],
+        affectedProjectIds: [parent.id],
+        reasons: [{ projectId: parent.id, reason: "direct-change", source: "README.md" }],
+        limitations: [],
+      },
+      projects: [parent, child],
+      files: [file("services/api/pytest.ini")],
+    }), 10_000);
+
+    expect(plans).toEqual([]);
+  });
 });

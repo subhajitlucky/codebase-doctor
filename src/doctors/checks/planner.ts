@@ -7,16 +7,12 @@ export function planChecks(
   snapshot: ProjectSnapshot,
   timeoutMs: number,
 ): readonly CommandPlan[] {
-  let selectedSnapshot = snapshot;
-  if (snapshot.auditScope.mode === "changed") {
-    const affectedProjectIds = new Set(snapshot.auditScope.affectedProjectIds);
-    selectedSnapshot = {
-      ...snapshot,
-      projects: snapshot.projects.filter(({ id }) => affectedProjectIds.has(id)),
-    };
-  }
-  return Object.freeze([
-    ...planJavaScriptChecks(selectedSnapshot, timeoutMs),
-    ...planPythonChecks(selectedSnapshot, timeoutMs),
-  ]);
+  const plans = [
+    ...planJavaScriptChecks(snapshot, timeoutMs),
+    ...planPythonChecks(snapshot, timeoutMs),
+  ];
+  if (snapshot.auditScope.mode === "full") return Object.freeze(plans);
+
+  const affectedProjectIds = new Set(snapshot.auditScope.affectedProjectIds);
+  return Object.freeze(plans.filter(({ projectId }) => affectedProjectIds.has(projectId)));
 }
