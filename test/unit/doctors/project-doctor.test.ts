@@ -11,6 +11,18 @@ import type {
   ProjectSnapshot,
   WorkspaceRecord,
 } from "../../../src/workspace/types.js";
+import type { Finding } from "../../../src/core/findings.js";
+
+function expectGuidance(finding: Finding | undefined): void {
+  expect(finding).toMatchObject({
+    impact: expect.any(String),
+    remediationConstraints: [expect.any(String)],
+    verification: {
+      command: "codebase-doctor audit . --format json",
+      expected: expect.stringMatching(/fingerprint.*absent.*coverage.*completed/i),
+    },
+  });
+}
 
 function project(root = ".", packageManager?: DetectedProject["packageManager"]): DetectedProject {
   return {
@@ -57,6 +69,7 @@ describe("Project Doctor rules", () => {
         { type: "file", path: "yarn.lock" },
       ],
     });
+    expectGuidance(findings[0]);
   });
 
   it("does not confuse package lockfiles across pnpm workspace boundaries", () => {
@@ -104,6 +117,7 @@ describe("Project Doctor rules", () => {
         detail: "Expected property name at position 2",
       }],
     });
+    expectGuidance(findings[0]);
   });
 
   it("reports supported workspace patterns with no detected match", () => {
@@ -134,6 +148,7 @@ describe("Project Doctor rules", () => {
       location: { path: "package.json" },
       evidence: [{ type: "manifest", path: "package.json" }],
     });
+    expectGuidance(findings[0]);
   });
 
   it("reports absent tests as informational and accepts common test paths", () => {
@@ -150,6 +165,7 @@ describe("Project Doctor rules", () => {
       severity: "info",
       confidence: "medium",
     });
+    expectGuidance(missing[0]);
     expect(visible).toEqual([]);
   });
 });

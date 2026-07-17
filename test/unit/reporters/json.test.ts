@@ -39,6 +39,13 @@ function result(): ScanResult {
         title: "High finding",
         message: "High message",
         evidence: [{ type: "observation", detail: "high" }],
+        impact: "A high-impact validation issue remains.",
+        remediationConstraints: ["Preserve existing public behavior."],
+        remediation: "Correct the validation issue.",
+        verification: {
+          command: "codebase-doctor audit . --format json",
+          expected: "The fingerprint is absent and applicable audit coverage is completed.",
+        },
         fingerprint: "high",
       },
       {
@@ -112,5 +119,30 @@ describe("JSON reporter", () => {
       status: "partial",
       statementsRecognized: 1,
     })]);
+  });
+
+  it("preserves structured guidance and audit scope without custom serialization loss", () => {
+    const scoped: ScanResult = {
+      ...result(),
+      auditScope: {
+        mode: "changed",
+        base: { kind: "merge-base", requestedRef: "main", resolvedCommit: "1234567890abcdef" },
+        changes: [{ status: "renamed", path: "src/new.ts", previousPath: "src/old.ts" }],
+        affectedProjectIds: ["root"],
+        reasons: [{ projectId: "root", reason: "direct-change", source: "src/new.ts" }],
+        limitations: ["Unchanged files were not independently re-audited."],
+      },
+    };
+
+    const parsed = JSON.parse(renderJsonReport(scoped));
+    expect(parsed.auditScope).toEqual(scoped.auditScope);
+    expect(parsed.findings[0]).toMatchObject({
+      impact: "A high-impact validation issue remains.",
+      remediationConstraints: ["Preserve existing public behavior."],
+      verification: {
+        command: "codebase-doctor audit . --format json",
+        expected: expect.stringContaining("coverage is completed"),
+      },
+    });
   });
 });

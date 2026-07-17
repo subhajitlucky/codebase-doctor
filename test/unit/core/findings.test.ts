@@ -28,6 +28,12 @@ function finding(
     location: { path, line: 1, column: 1 },
     evidence: [{ type: "manifest", path, detail: "scripts.test is absent" }],
     remediation: "Add a test command.",
+    impact: "Validation regressions can escape detection.",
+    remediationConstraints: ["Keep the validation command deterministic and repository-local."],
+    verification: {
+      command: "codebase-doctor audit . --format json",
+      expected: "The fingerprint is absent and applicable audit coverage is completed.",
+    },
     fingerprint: createFingerprint({
       doctorId,
       ruleId,
@@ -62,6 +68,31 @@ describe("finding fingerprints", () => {
     { identity: "different-evidence" },
   ])("changes when logical identity changes: %o", (change) => {
     expect(finding(change).fingerprint).not.toBe(finding().fingerprint);
+  });
+
+  it("does not include model-oriented guidance in the fingerprint", () => {
+    const original = finding();
+    const changed = {
+      ...original,
+      impact: "Different impact wording.",
+      remediationConstraints: ["A different invariant."],
+      verification: { command: "codebase-doctor scan . --format json", expected: "Different expectation." },
+    } satisfies Finding;
+
+    expect(changed.fingerprint).toBe(original.fingerprint);
+  });
+
+  it("supports deterministic, nonempty, readonly guidance", () => {
+    const first = finding();
+    const second = finding();
+
+    expect(first.impact?.trim()).not.toBe("");
+    expect(first.remediationConstraints?.every((constraint) => constraint.trim().length > 0)).toBe(true);
+    expect(first.verification?.command.trim()).not.toBe("");
+    expect(first.verification?.expected.trim()).not.toBe("");
+    expect(first).toEqual(second);
+    expect(() => (Object.freeze(first.remediationConstraints) as string[] | undefined)?.push("mutation"))
+      .toThrow();
   });
 });
 

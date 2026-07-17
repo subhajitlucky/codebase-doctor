@@ -42,7 +42,16 @@ function mappedFinding(
     title: finding.title,
     message: finding.detail,
     evidence: [evidence],
+    impact: `The database condition "${finding.title}" can weaken the intended access-control boundary.`,
+    remediationConstraints: [
+      "Preserve least-privilege database access; live re-verification requires separately authorized database access.",
+      "The remediated database policy set must preserve the intended role and row-access boundary.",
+    ],
     remediation: remediation(finding.recommendation, finding.suggestedSql),
+    verification: {
+      command: "codebase-doctor audit . --with-database --format json",
+      expected: "This fingerprint is absent and applicable live database audit coverage is completed.",
+    },
     fingerprint: createFingerprint({
       doctorId: DOCTOR_ID,
       ruleId,

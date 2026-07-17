@@ -118,6 +118,15 @@ describe("Check Doctor", () => {
         exitCode: 2,
         output: "2 tests failed",
       }],
+      impact: expect.any(String),
+      remediationConstraints: expect.arrayContaining([
+        expect.stringContaining("separately authorized"),
+        expect.stringContaining("must complete successfully"),
+      ]),
+      verification: {
+        command: "codebase-doctor audit . --run-checks --format json",
+        expected: expect.stringMatching(/fingerprint.*absent.*coverage.*completed/i),
+      },
     });
   });
 
@@ -132,6 +141,15 @@ describe("Check Doctor", () => {
       ruleId: "checks/command-timeout",
       severity: "medium",
       confidence: "high",
+      impact: expect.any(String),
+      remediationConstraints: expect.arrayContaining([
+        expect.stringContaining("separately authorized"),
+        expect.stringContaining("time bound"),
+      ]),
+      verification: {
+        command: "codebase-doctor audit . --run-checks --format json",
+        expected: expect.stringMatching(/fingerprint.*absent.*coverage.*completed/i),
+      },
     });
     expect(result.checkRuns[0]).toMatchObject({ status: "timed-out" });
   });

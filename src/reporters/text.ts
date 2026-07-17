@@ -53,6 +53,33 @@ function evidenceLines(finding: Finding): string[] {
   });
 }
 
+function auditScopeLines(result: ScanResult): string[] {
+  const { auditScope } = result;
+  const lines = ["Audit scope", `Audit scope: ${auditScope.mode}`];
+  if (auditScope.base !== null) {
+    lines.push(
+      `Base: ${auditScope.base.kind}; requested ${auditScope.base.requestedRef ?? "default"}; ` +
+      `resolved ${auditScope.base.resolvedCommit.slice(0, 12)}`,
+    );
+  }
+  lines.push(
+    `Changes: ${auditScope.changes.length}; affected projects: ${auditScope.affectedProjectIds.length}`,
+  );
+  for (const change of auditScope.changes) {
+    lines.push(
+      `  ${change.status}: ${change.path}` +
+      (change.previousPath === undefined ? "" : ` (previous: ${change.previousPath})`),
+    );
+  }
+  for (const reason of auditScope.reasons) {
+    lines.push(`Scope reason: ${reason.projectId} — ${reason.reason} from ${reason.source}`);
+  }
+  for (const limitation of auditScope.limitations) {
+    lines.push(`Scope limitation: ${limitation}`);
+  }
+  return lines;
+}
+
 export function renderTextReport(
   result: ScanResult,
   options: TextReportOptions = {},
@@ -61,6 +88,8 @@ export function renderTextReport(
   const lines = [
     `Codebase Doctor ${result.tool.version}`,
     `Repository: ${result.repository.root}`,
+    "",
+    ...auditScopeLines(result),
     "",
     "Projects",
   ];
@@ -122,7 +151,9 @@ export function renderTextReport(
 
   lines.push("", "Findings");
   if (result.findings.length === 0) {
-    lines.push("Clean scan: no findings.");
+    lines.push(result.auditScope.mode === "changed"
+      ? "No findings in the selected changed scope; review Audit coverage."
+      : "Clean scan: no findings.");
   } else {
     for (const finding of result.findings) {
       lines.push(`${severityLabel(finding.severity, colorEnabled)} ${finding.title} (${finding.ruleId})`);
@@ -130,8 +161,16 @@ export function renderTextReport(
       if (findingLocation !== undefined) lines.push(`  Location: ${findingLocation}`);
       lines.push(`  ${finding.message}`);
       lines.push(...evidenceLines(finding));
+      if (finding.impact !== undefined) lines.push(`  Impact: ${finding.impact}`);
+      for (const constraint of finding.remediationConstraints ?? []) {
+        lines.push(`  Repair constraint: ${constraint}`);
+      }
       if (finding.remediation !== undefined) {
         lines.push(`  Remediation: ${finding.remediation}`);
+      }
+      if (finding.verification !== undefined) {
+        lines.push(`  Verification command: ${finding.verification.command}`);
+        lines.push(`  Verification expected: ${finding.verification.expected}`);
       }
     }
   }

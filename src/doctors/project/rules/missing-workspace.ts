@@ -23,7 +23,13 @@ export function findMissingWorkspaces(snapshot: ProjectSnapshot): Finding[] {
           path: workspace.sourcePath,
           detail: `Supported workspace pattern "${workspace.pattern}" has no match.`,
         }],
+        impact: "Workspace tooling can omit an intended package or retain a stale project boundary.",
+        remediationConstraints: ["Every supported workspace pattern must match an intended project or be removed."],
         remediation: "Create the expected workspace package or remove the stale workspace entry.",
+        verification: {
+          command: "codebase-doctor audit . --format json",
+          expected: "This fingerprint is absent and applicable repository audit coverage is completed.",
+        },
         fingerprint: createFingerprint({
           doctorId: "project",
           ruleId: "repository/missing-workspace",

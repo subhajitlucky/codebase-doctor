@@ -20,8 +20,58 @@ const applicationRoles = new Set(["public", "anon", "anonymous", "authenticated"
 const rowPrivileges = new Set(["SELECT", "INSERT", "UPDATE", "DELETE"]);
 const concreteCommands: Exclude<SqlPolicyCommand, "ALL">[] = ["SELECT", "INSERT", "UPDATE", "DELETE"];
 
+const STATIC_GUIDANCE = {
+  "public-unconditional-read": {
+    impact: "A public-like role can read every row covered by the policy.",
+    constraint: "Public reads must remain limited by an explicit, reviewed row predicate.",
+  },
+  "public-unconditional-write": {
+    impact: "A public-like role can create, change, or remove rows outside an ownership boundary.",
+    constraint: "Application writes must enforce authenticated ownership or tenant boundaries.",
+  },
+  "write-policy-missing-check": {
+    impact: "Inserted or updated rows can escape the intended ownership or tenant boundary.",
+    constraint: "Every application write policy must enforce its invariant on resulting rows.",
+  },
+  "write-policy-unconditional-check": {
+    impact: "The write policy accepts resulting rows without enforcing a row-level invariant.",
+    constraint: "Write checks must reject rows outside the intended ownership or tenant boundary.",
+  },
+  "public-permissive-policy": {
+    impact: "This policy can broaden public access when OR-combined with other permissive policies.",
+    constraint: "The effective union of permissive policies must preserve least-privilege access.",
+  },
+  "multiple-permissive-policies": {
+    impact: "Overlapping permissive policies can grant more access than any policy appears to grant alone.",
+    constraint: "The OR-combined policy set must preserve the intended role and command boundary.",
+  },
+  "reachable-truncate": {
+    impact: "An application-facing role can remove all table rows because RLS does not protect TRUNCATE.",
+    constraint: "Application-facing roles must not retain TRUNCATE privilege.",
+  },
+  "rls-disabled": {
+    impact: "Rows are not protected by PostgreSQL row-level policy enforcement.",
+    constraint: "Tables requiring row isolation must have RLS enabled before application access is granted.",
+  },
+  "rls-disabled-exposed": {
+    impact: "An application-facing role can reach rows without row-level policy enforcement.",
+    constraint: "Application access must remain least-privilege and protected by enabled RLS.",
+  },
+  "rls-enabled-no-policies": {
+    impact: "Required non-owner workflows can be denied because the reconstructed policy set is empty.",
+    constraint: "Each required application command must have an explicit least-privilege policy.",
+  },
+  "force-rls-disabled": {
+    impact: "Table-owner workflows can bypass row-level policies.",
+    constraint: "Owner bypass must remain intentional and documented, or FORCE RLS must be enabled.",
+  },
+} as const satisfies Readonly<Record<string, {
+  readonly impact: string;
+  readonly constraint: string;
+}>>;
+
 interface FindingOptions {
-  rule: string;
+  rule: keyof typeof STATIC_GUIDANCE;
   severity: Severity;
   confidence?: Confidence;
   title: string;
@@ -53,6 +103,7 @@ function finding(streamId: string, table: StaticTableState, options: FindingOpti
     ...(options.policy === undefined ? {} : { policy: options.policy }),
     detail: options.message,
   };
+  const guidance = STATIC_GUIDANCE[options.rule];
   return {
     ruleId,
     doctorId: DOCTOR_ID,
@@ -66,7 +117,13 @@ function finding(streamId: string, table: StaticTableState, options: FindingOpti
       databaseEvidence,
       { type: "file", path: options.evidence.path, detail: `SQL statement at line ${options.evidence.startLine}.` },
     ],
+    impact: guidance.impact,
+    remediationConstraints: [guidance.constraint],
     remediation: options.remediation,
+    verification: {
+      command: "codebase-doctor audit . --format json",
+      expected: "This fingerprint is absent and applicable static SQL RLS coverage is completed.",
+    },
     fingerprint: createFingerprint({
       doctorId: DOCTOR_ID,
       ruleId,

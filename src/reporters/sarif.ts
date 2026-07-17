@@ -67,7 +67,12 @@ function sarifResult(result: ScanResult, finding: Finding): object {
       confidence: finding.confidence,
       doctorId: finding.doctorId,
       evidence: finding.evidence,
+      ...(finding.impact === undefined ? {} : { impact: finding.impact }),
+      ...(finding.remediationConstraints === undefined
+        ? {}
+        : { remediationConstraints: finding.remediationConstraints }),
       ...(finding.remediation === undefined ? {} : { remediation: finding.remediation }),
+      ...(finding.verification === undefined ? {} : { verification: finding.verification }),
     },
   };
 }
@@ -92,9 +97,10 @@ export function renderSarifReport(result: ScanResult): string {
         },
       },
       results: result.findings.map((finding) => sarifResult(result, finding)),
-      ...(result.coverage === undefined
-        ? {}
-        : { properties: { coverage: result.coverage } }),
+      properties: {
+        auditScope: result.auditScope,
+        ...(result.coverage === undefined ? {} : { coverage: result.coverage }),
+      },
     }],
   };
   return `${JSON.stringify(report, null, 2)}\n`;

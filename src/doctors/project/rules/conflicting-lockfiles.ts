@@ -44,7 +44,15 @@ export function findConflictingLockfiles(snapshot: ProjectSnapshot): Finding[] {
       message: `Project ${project.root} contains lockfiles for ${managers.join(" and ")}.`,
       location,
       evidence,
+      impact: "Competing lockfiles can resolve different dependency graphs across tools and environments.",
+      remediationConstraints: [
+        "Retain exactly one package-manager lockfile for this project boundary.",
+      ],
       remediation: "Keep the lockfile for the package manager this project uses and remove stale competing lockfiles.",
+      verification: {
+        command: "codebase-doctor audit . --format json",
+        expected: "This fingerprint is absent and applicable repository audit coverage is completed.",
+      },
       fingerprint: createFingerprint({
         doctorId: "project",
         ruleId: "repository/conflicting-lockfiles",

@@ -73,7 +73,16 @@ function failedFinding(
     title: `${plan.label} failed`,
     message: `${displayCommand(plan)} exited with code ${result.exitCode}.`,
     evidence: [commandEvidence(plan, result, environment)],
+    impact: "The configured validation did not establish the expected quality or correctness signal.",
+    remediationConstraints: [
+      "Re-running executable checks requires separately authorized --run-checks permission.",
+      "The configured validation must complete successfully without weakening its assertions.",
+    ],
     remediation: "Review the command output, fix the reported validation failures, and run the configured check again.",
+    verification: {
+      command: "codebase-doctor audit . --run-checks --format json",
+      expected: "This fingerprint is absent and applicable check coverage is completed.",
+    },
     fingerprint: createFingerprint({
       doctorId: "checks",
       ruleId: "checks/command-failed",
@@ -96,7 +105,16 @@ function timeoutFinding(
     title: `${plan.label} timed out`,
     message: `${displayCommand(plan)} exceeded its ${plan.timeoutMs} ms timeout.`,
     evidence: [commandEvidence(plan, result, environment)],
+    impact: "The configured validation produced no completed result within its allowed time.",
+    remediationConstraints: [
+      "Re-running executable checks requires separately authorized --run-checks permission.",
+      "The configured validation must complete within an explicitly accepted time bound.",
+    ],
     remediation: "Investigate the hanging check or rerun with an explicitly larger timeout.",
+    verification: {
+      command: "codebase-doctor audit . --run-checks --format json",
+      expected: "This fingerprint is absent and applicable check coverage is completed.",
+    },
     fingerprint: createFingerprint({
       doctorId: "checks",
       ruleId: "checks/command-timeout",

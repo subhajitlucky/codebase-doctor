@@ -50,6 +50,33 @@ describe("baseline comparison", () => {
     });
   });
 
+  it("remains fingerprint-based when guidance text changes", () => {
+    const current = {
+      ...finding("same"),
+      impact: "Current impact wording.",
+      remediationConstraints: ["Current invariant."],
+      verification: {
+        command: "codebase-doctor audit . --format json",
+        expected: "The fingerprint is absent and applicable coverage is completed.",
+      },
+    } satisfies Finding;
+    const baseline = {
+      ...finding("same"),
+      impact: "Previous impact wording.",
+      remediationConstraints: ["Previous invariant."],
+      verification: {
+        command: "codebase-doctor scan . --format json",
+        expected: "Previous expectation.",
+      },
+    } satisfies Finding;
+
+    expect(compareFindingBaseline([current], [baseline])).toMatchObject({
+      new: [],
+      unchanged: ["same"],
+      resolved: [],
+    });
+  });
+
   it("can conservatively omit resolved classifications for a partial scope", () => {
     const comparison = compareFindingBaseline(
       [finding("same"), finding("new-high")],

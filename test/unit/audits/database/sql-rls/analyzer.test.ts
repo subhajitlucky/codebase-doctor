@@ -34,6 +34,12 @@ describe("analyzeStaticSqlRls", () => {
       schema: "public",
       table: "documents",
     }));
+    expect(findings.every((finding) =>
+      finding.impact?.trim() !== "" &&
+      finding.remediationConstraints?.every((constraint) => constraint.trim() !== "") === true &&
+      finding.verification?.command === "codebase-doctor audit . --format json" &&
+      /fingerprint.*absent.*coverage.*completed/i.test(finding.verification.expected)
+    )).toBe(true);
   });
 
   it("raises severity when an application-facing grant reaches an RLS-disabled table", () => {

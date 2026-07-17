@@ -22,7 +22,13 @@ function result(): ScanResult {
       message: "package.json could not be parsed.",
       location: { path: "config/package #1.json", line: 2, column: 4 },
       evidence: [{ type: "manifest", path: "package.json", detail: "Unexpected token" }],
+      impact: "Dependency and project detection may be incomplete or incorrect.",
+      remediationConstraints: ["Preserve the intended package metadata."],
       remediation: "Correct the JSON syntax.",
+      verification: {
+        command: "codebase-doctor audit . --format json",
+        expected: "The fingerprint is absent and applicable audit coverage is completed.",
+      },
       fingerprint: "stable-fingerprint",
     }],
     summary: {
@@ -62,6 +68,16 @@ describe("SARIF reporter", () => {
       } }],
       properties: { category: "repository", confidence: "high" },
     });
+    expect(finding.properties).toMatchObject({
+      impact: "Dependency and project detection may be incomplete or incorrect.",
+      remediationConstraints: ["Preserve the intended package metadata."],
+      remediation: "Correct the JSON syntax.",
+      verification: {
+        command: "codebase-doctor audit . --format json",
+        expected: expect.stringContaining("coverage is completed"),
+      },
+    });
+    expect(run.tool.driver.rules[0].help.text).toBe("Correct the JSON syntax.");
   });
 
   it("keeps database evidence on a locationless result", () => {
@@ -91,10 +107,18 @@ describe("SARIF reporter", () => {
     ]);
   });
 
-  it("stores coverage in run properties without creating results", () => {
+  it("stores full changed audit scope alongside coverage without creating results", () => {
     const covered: ScanResult = {
       ...result(),
       findings: [],
+      auditScope: {
+        mode: "changed",
+        base: { kind: "merge-base", requestedRef: "main", resolvedCommit: "1234567890abcdef" },
+        changes: [{ status: "renamed", path: "src/new.ts", previousPath: "src/old.ts" }],
+        affectedProjectIds: ["root"],
+        reasons: [{ projectId: "root", reason: "direct-change", source: "src/new.ts" }],
+        limitations: ["Unchanged files were not independently re-audited."],
+      },
       coverage: [{
         moduleId: "database/sql-rls",
         status: "partial",
@@ -110,5 +134,6 @@ describe("SARIF reporter", () => {
 
     expect(run.results).toEqual([]);
     expect(run.properties.coverage).toEqual(covered.coverage);
+    expect(run.properties.auditScope).toEqual(covered.auditScope);
   });
 });

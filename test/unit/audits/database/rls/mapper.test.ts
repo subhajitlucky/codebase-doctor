@@ -54,6 +54,17 @@ describe("mapRlsReport", () => {
     });
     expect(finding?.location).toBeUndefined();
     expect(finding?.remediation).toContain("Suggested SQL:");
+    expect(finding).toMatchObject({
+      impact: expect.any(String),
+      remediationConstraints: expect.arrayContaining([
+        expect.stringContaining("database"),
+        expect.stringContaining("row-access boundary"),
+      ]),
+      verification: {
+        command: "codebase-doctor audit . --with-database --format json",
+        expected: expect.stringMatching(/fingerprint.*absent.*coverage.*completed/i),
+      },
+    });
   });
 
   it("maps schema findings without inventing a table", () => {

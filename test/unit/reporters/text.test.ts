@@ -55,7 +55,13 @@ function result(): ScanResult {
       message: "package.json could not be parsed.",
       location: { path: "package.json", line: 1 },
       evidence: [{ type: "manifest", path: "package.json", detail: "Unexpected token" }],
+      impact: "Dependency and project detection may be incomplete or incorrect.",
+      remediationConstraints: ["Preserve the intended package metadata."],
       remediation: "Correct the JSON syntax.",
+      verification: {
+        command: "codebase-doctor audit . --format json",
+        expected: "The fingerprint is absent and applicable audit coverage is completed.",
+      },
       fingerprint: "fingerprint",
     }],
     summary: {
@@ -79,13 +85,21 @@ describe("text reporter", () => {
     expect(report).toContain("npm run test");
   });
 
-  it("renders severity, evidence, and remediation readably", () => {
+  it("renders evidence and model guidance in stable order", () => {
     const report = renderTextReport(result());
 
     expect(report).toContain("[HIGH] Invalid package manifest");
     expect(report).toContain("package.json:1");
     expect(report).toContain("Evidence: manifest package.json — Unexpected token");
+    expect(report).toContain("Impact: Dependency and project detection may be incomplete or incorrect.");
+    expect(report).toContain("Repair constraint: Preserve the intended package metadata.");
     expect(report).toContain("Remediation: Correct the JSON syntax.");
+    expect(report).toContain("Verification command: codebase-doctor audit . --format json");
+    expect(report).toContain("Verification expected: The fingerprint is absent and applicable audit coverage is completed.");
+    expect(report.indexOf("Evidence:")).toBeLessThan(report.indexOf("Impact:"));
+    expect(report.indexOf("Impact:")).toBeLessThan(report.indexOf("Repair constraint:"));
+    expect(report.indexOf("Repair constraint:")).toBeLessThan(report.indexOf("Remediation:"));
+    expect(report.indexOf("Remediation:")).toBeLessThan(report.indexOf("Verification command:"));
   });
 
   it("renders database evidence without inventing a file location", () => {
@@ -137,6 +151,37 @@ describe("text reporter", () => {
     };
 
     expect(renderTextReport(empty)).toContain("Clean scan: no findings.");
+  });
+
+  it("renders changed scope honestly and never calls it a global clean scan", () => {
+    const changed: ScanResult = {
+      ...result(),
+      auditScope: {
+        mode: "changed",
+        base: { kind: "merge-base", requestedRef: "main", resolvedCommit: "1234567890abcdef" },
+        changes: [
+          { status: "renamed", path: "src/new.ts", previousPath: "src/old.ts" },
+          { status: "modified", path: "package.json" },
+        ],
+        affectedProjectIds: ["root"],
+        reasons: [{ projectId: "root", reason: "direct-change", source: "package.json" }],
+        limitations: ["Unchanged files were not independently re-audited."],
+      },
+      findings: [],
+      summary: { total: 0, counts: { info: 0, low: 0, medium: 0, high: 0, critical: 0 }, highestSeverity: null },
+      coverage: [{ moduleId: "database/sql-rls", status: "skipped", scope: "changed", filesExamined: 0, statementsExamined: 0, statementsRecognized: 0, limitations: ["No changed SQL stream was selected."] }],
+    };
+
+    const report = renderTextReport(changed);
+    expect(report).toContain("Audit scope: changed");
+    expect(report).toContain("Base: merge-base; requested main; resolved 1234567890ab");
+    expect(report).toContain("Changes: 2; affected projects: 1");
+    expect(report).toContain("renamed: src/new.ts (previous: src/old.ts)");
+    expect(report).toContain("Scope reason: root — direct-change from package.json");
+    expect(report).toContain("Scope limitation: Unchanged files were not independently re-audited.");
+    expect(report).toContain("No findings in the selected changed scope; review Audit coverage.");
+    expect(report).not.toContain("Clean scan");
+    expect(report.indexOf("Audit scope")).toBeLessThan(report.indexOf("Projects"));
   });
 
   it("renders partial audit coverage separately from findings", () => {
