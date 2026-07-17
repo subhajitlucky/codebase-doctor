@@ -183,7 +183,9 @@ export function planChangedScope(
   for (const change of orderedChanges) {
     const paths = [...new Set([
       change.path,
-      ...(change.previousPath === undefined ? [] : [change.previousPath]),
+      ...(change.status === "renamed" && change.previousPath !== undefined
+        ? [change.previousPath]
+        : []),
     ])].sort();
     for (const path of paths) {
       if (isRootContext(path)) {

@@ -226,37 +226,70 @@ describe("planChangedScope", () => {
     ]);
   });
 
-  it("considers both rename and copy paths and maps deleted paths by text", () => {
-    const scope = planChangedScope(base, [
-      change("apps/web/new.ts", "renamed", "packages/ui/old.ts"),
-      change("packages/ui/copy.ts", "copied", "package.json"),
-      change("apps/api/deleted.ts", "deleted"),
-    ], [
-      project("apps/api"),
+  it("uses both the old and new paths of a rename for direct ownership", () => {
+    const scope = planChangedScope(
+      base,
+      [change("apps/web/new.ts", "renamed", "packages/ui/old.ts")],
+      [project("apps/web"), project("packages/ui")],
+    );
+
+    expect(scope.affectedProjectIds).toEqual([
+      "project:apps/web",
+      "project:packages/ui",
+    ]);
+    expect(scope.reasons).toEqual([
+      {
+        projectId: "project:apps/web",
+        reason: "direct-change",
+        source: "apps/web/new.ts",
+      },
+      {
+        projectId: "project:packages/ui",
+        reason: "direct-change",
+        source: "packages/ui/old.ts",
+      },
+    ]);
+  });
+
+  it("scopes a copy by its destination while retaining its source metadata", () => {
+    const copied = change("packages/ui/copy.ts", "copied", "package.json");
+    const scope = planChangedScope(base, [copied], [
       project("apps/web"),
       project("packages/ui"),
     ]);
 
-    expect(scope.affectedProjectIds).toEqual([
-      "project:apps/api",
-      "project:apps/web",
-      "project:packages/ui",
-    ]);
-    expect(scope.reasons).toContainEqual({
-      projectId: "project:apps/web",
-      reason: "root-context",
-      source: "package.json",
-    });
-    expect(scope.reasons).toContainEqual({
+    expect(scope.changes).toEqual([copied]);
+    expect(scope.affectedProjectIds).toEqual(["project:packages/ui"]);
+    expect(scope.reasons).toEqual([{
       projectId: "project:packages/ui",
       reason: "direct-change",
-      source: "packages/ui/old.ts",
-    });
-    expect(scope.reasons).toContainEqual({
+      source: "packages/ui/copy.ts",
+    }]);
+  });
+
+  it("maps a deleted path by its path text", () => {
+    const scope = planChangedScope(base, [change("apps/api/deleted.ts", "deleted")], [
+      project("apps/api"),
+    ]);
+
+    expect(scope.reasons).toEqual([{
       projectId: "project:apps/api",
       reason: "direct-change",
       source: "apps/api/deleted.ts",
-    });
+    }]);
+  });
+
+  it("treats literal backslashes as filename data, not POSIX separators", () => {
+    const scope = planChangedScope(base, [
+      change("apps\\web/file.ts"),
+      change("folder\\package.json"),
+    ], [
+      project("apps", { packageName: "apps", dependencyNames: [] }),
+      project("packages/ui", { packageName: "ui", dependencyNames: [] }),
+    ]);
+
+    expect(scope.affectedProjectIds).toEqual([]);
+    expect(scope.reasons).toEqual([]);
   });
 
   it("returns a deterministic empty changed scope without mutating inputs", () => {
