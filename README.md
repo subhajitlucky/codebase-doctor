@@ -53,8 +53,8 @@ codebase-doctor audit .
 ```
 
 It combines repository audits and visible coverage for optional internal modules.
-Version `0.1.2` is published. The current source also contains unreleased static
-SQL/RLS migration auditing planned for the next patch release.
+Version `0.1.2` is published. The current source is the verified `0.1.3` release
+candidate; npm remains on `0.1.2` until publication is separately approved.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 

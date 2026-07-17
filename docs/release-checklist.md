@@ -4,9 +4,11 @@ Use this checklist from a clean release-candidate commit. Do not publish or
 create a remote tag without explicit human approval.
 
 Permanent release invariant: **Models build. Codebase Doctor verifies.**
-Codebase Doctor has no target-write or executable-repair capability. A human or
+Codebase Doctor has no direct target-file write API, filesystem-write
+capability, remediation executor, or direct repair authority. A human or
 separately authorized external coding agent performs fixes, and Codebase Doctor
-independently verifies the resulting state.
+independently verifies the resulting state. Separately approved repository-owned
+validation subprocesses remain unsandboxed and may have side effects.
 
 ## Validated locally
 
@@ -16,7 +18,7 @@ independently verifies the resulting state.
 - [x] Read-only scan: Sutra Python repository
 - [x] Target Git status unchanged before and after every scan
 - [x] MIHA `.venv-*` false positive captured as a regression test and corrected
-- [x] npm registry returned `E404` for `codebase-doctor` on 2026-07-15; recheck immediately before publication
+- [x] `codebase-doctor@0.1.2` was published on 2026-07-15; recheck the live package immediately before publication
 
 ## Before publication
 
@@ -24,7 +26,7 @@ independently verifies the resulting state.
   executable-repair capability.
 - [ ] Confirm npm authentication with `npm whoami`.
 - [ ] Confirm npm account two-factor authentication policy.
-- [ ] Recheck live `codebase-doctor` name availability.
+- [ ] Confirm the live npm package is still at the expected prior version.
 - [ ] Confirm `git status --short` is empty.
 - [ ] Run `npm ci`.
 - [ ] Run `npm run ci:full`.
@@ -40,7 +42,7 @@ independently verifies the resulting state.
 
 ## After approved publication
 
-- [ ] Create and push the approved `v0.1.2` tag only after publication authorization.
+- [ ] Create and push the approved `v0.1.3` tag only after publication authorization.
 - [ ] Run the published package's `--version` in a clean temporary directory.
 - [ ] Run a read-only `codebase-doctor audit . --json` smoke test and inspect skipped coverage.
 - [ ] Confirm the npm package page shows the expected README, license, files, and version.

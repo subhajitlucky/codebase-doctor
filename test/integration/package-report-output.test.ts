@@ -127,6 +127,6 @@ describe("package report output", () => {
     });
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
-    expect(result.stdout).toContain("Verified codebase-doctor@0.1.2");
+    expect(result.stdout).toContain("Verified codebase-doctor@0.1.3");
   });
 });

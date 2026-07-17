@@ -160,7 +160,7 @@ void [scope, full, error, comparison, finding, discovery];
       const report = JSON.parse(scanned.stdout);
       expect(report).toMatchObject({
         schemaVersion: "1",
-        tool: { name: "codebase-doctor", version: "0.1.2" },
+        tool: { name: "codebase-doctor", version: "0.1.3" },
       });
       expect(report.doctorRuns).toContainEqual(expect.objectContaining({
         doctorId: "database/rls",

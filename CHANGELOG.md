@@ -4,7 +4,7 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
-Planned for `0.1.3`; the package version remains `0.1.2` until release.
+## [0.1.3] - 2026-07-17
 
 ### Changed
 
