@@ -86,14 +86,152 @@ describe("planChangedScope", () => {
     "pyproject.toml",
   ])("treats the root-context file %s as affecting every project", (path) => {
     const scope = planChangedScope(base, [change(path)], [
-      project("packages/ui"),
-      project("apps/web"),
+      project("packages/ui", { packageName: "ui", dependencyNames: [] }),
+      project("apps/web", { packageName: "web", dependencyNames: [] }),
     ]);
 
     expect(scope.affectedProjectIds).toEqual(["project:apps/web", "project:packages/ui"]);
     expect(scope.reasons).toEqual([
       { projectId: "project:apps/web", reason: "root-context", source: path },
       { projectId: "project:packages/ui", reason: "root-context", source: path },
+    ]);
+    expect(scope.limitations).toEqual([]);
+  });
+
+  it("conservatively expands Node scope when a nested manifest has stale identity", () => {
+    const scope = planChangedScope(base, [change("packages/ui/package.json")], [
+      project("packages/ui", {
+        packageName: "@new/ui",
+        dependencyNames: [],
+      }),
+      project("apps/web", {
+        packageName: "@example/web",
+        dependencyNames: ["@old/ui"],
+      }),
+      {
+        ...project("services/api"),
+        ecosystems: ["python"],
+        languages: ["python"],
+      },
+    ]);
+
+    expect(scope.affectedProjectIds).toEqual([
+      "project:apps/web",
+      "project:packages/ui",
+    ]);
+    expect(scope.reasons).toEqual([
+      {
+        projectId: "project:apps/web",
+        reason: "workspace-dependent",
+        source: "packages/ui/package.json",
+      },
+      {
+        projectId: "project:packages/ui",
+        reason: "direct-change",
+        source: "packages/ui/package.json",
+      },
+    ]);
+    expect(scope.limitations).toEqual([
+      "packages/ui/package.json: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.",
+    ]);
+  });
+
+  it("expands current Node projects for a deleted former package", () => {
+    const projects = [
+      project("apps/api", { packageName: "api", dependencyNames: [] }),
+      project("apps/web", { packageName: "web", dependencyNames: [] }),
+      {
+        ...project("services/python"),
+        ecosystems: ["python"],
+        languages: ["python"],
+      } satisfies DetectedProject,
+    ];
+    const scope = planChangedScope(
+      base,
+      [change("packages/removed/package.json", "deleted")],
+      projects,
+    );
+
+    expect(scope.affectedProjectIds).toEqual(["project:apps/api", "project:apps/web"]);
+    expect(scope.reasons).toEqual([
+      {
+        projectId: "project:apps/api",
+        reason: "workspace-dependent",
+        source: "packages/removed/package.json",
+      },
+      {
+        projectId: "project:apps/web",
+        reason: "workspace-dependent",
+        source: "packages/removed/package.json",
+      },
+    ]);
+    expect(scope.limitations).toEqual([
+      "packages/removed/package.json: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.",
+    ]);
+  });
+
+  it("uses both manifest paths for renames with deterministic topology reasons", () => {
+    const renamed = change(
+      "packages/new/package.json",
+      "renamed",
+      "packages/old/package.json",
+    );
+    const current = project("packages/new", {
+      packageName: "@example/new",
+      dependencyNames: [],
+    });
+    const web = project("apps/web", {
+      packageName: "@example/web",
+      dependencyNames: [],
+    });
+
+    const forward = planChangedScope(base, [renamed], [current, web]);
+    const reverse = planChangedScope(base, [renamed], [web, current]);
+
+    expect(reverse).toEqual(forward);
+    expect(forward.reasons).toEqual([
+      {
+        projectId: "project:apps/web",
+        reason: "workspace-dependent",
+        source: "packages/new/package.json",
+      },
+      {
+        projectId: "project:apps/web",
+        reason: "workspace-dependent",
+        source: "packages/old/package.json",
+      },
+      {
+        projectId: "project:packages/new",
+        reason: "direct-change",
+        source: "packages/new/package.json",
+      },
+    ]);
+    expect(forward.limitations).toEqual([
+      "packages/new/package.json: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.",
+      "packages/old/package.json: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.",
+    ]);
+  });
+
+  it("uses only a copy destination as a manifest topology signal", () => {
+    const scope = planChangedScope(base, [change(
+      "packages/new/package.json",
+      "copied",
+      "packages/source/package.json",
+    )], [
+      project("packages/new", { packageName: "new", dependencyNames: [] }),
+      project("apps/web", { packageName: "web", dependencyNames: [] }),
+    ]);
+
+    expect(scope.reasons).toContainEqual({
+      projectId: "project:apps/web",
+      reason: "workspace-dependent",
+      source: "packages/new/package.json",
+    });
+    expect(scope.reasons).not.toContainEqual(expect.objectContaining({
+      source: "packages/source/package.json",
+    }));
+    expect(scope.limitations).toEqual([
+      "packages/new/package.json: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.",
     ]);
   });
 

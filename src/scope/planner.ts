@@ -75,6 +75,25 @@ function normalizeChanges(changes: readonly ChangedPath[]): ChangedPath[] {
   return [...unique.values()].sort(compareChanges);
 }
 
+function relevantPaths(change: ChangedPath): string[] {
+  return [...new Set([
+    change.path,
+    ...(change.status === "renamed" && change.previousPath !== undefined
+      ? [change.previousPath]
+      : []),
+  ])].sort();
+}
+
+function changedWorkspaceManifestPaths(changes: readonly ChangedPath[]): string[] {
+  const paths = new Set<string>();
+  for (const change of changes) {
+    for (const path of relevantPaths(change)) {
+      if (path.endsWith("/package.json")) paths.add(path);
+    }
+  }
+  return [...paths].sort();
+}
+
 function compareReasons(left: ScopeReason, right: ScopeReason): number {
   return left.projectId.localeCompare(right.projectId) ||
     left.reason.localeCompare(right.reason) || left.source.localeCompare(right.source);
@@ -181,13 +200,7 @@ export function planChangedScope(
   };
 
   for (const change of orderedChanges) {
-    const paths = [...new Set([
-      change.path,
-      ...(change.status === "renamed" && change.previousPath !== undefined
-        ? [change.previousPath]
-        : []),
-    ])].sort();
-    for (const path of paths) {
+    for (const path of relevantPaths(change)) {
       if (isRootContext(path)) {
         for (const project of orderedProjects) {
           addReason({ projectId: project.id, reason: "root-context", source: path });
@@ -198,6 +211,18 @@ export function planChangedScope(
       if (owner !== undefined) {
         addReason({ projectId: owner.id, reason: "direct-change", source: path });
       }
+    }
+  }
+
+  const changedManifestPaths = changedWorkspaceManifestPaths(orderedChanges);
+  for (const project of orderedProjects) {
+    if (!project.ecosystems.includes("node") || affected.has(project.id)) continue;
+    for (const path of changedManifestPaths) {
+      addReason({
+        projectId: project.id,
+        reason: "workspace-dependent",
+        source: path,
+      });
     }
   }
 
@@ -232,7 +257,12 @@ export function planChangedScope(
     changes: orderedChanges,
     affectedProjectIds: [...affected].sort(),
     reasons: [...reasons.values()].sort(compareReasons),
-    limitations: [...graph.limitations],
+    limitations: [...new Set([
+      ...graph.limitations,
+      ...changedManifestPaths.map((path) =>
+        `${path}: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.`,
+      ),
+    ])].sort(),
   };
 }
 
