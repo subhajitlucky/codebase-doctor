@@ -1,12 +1,24 @@
 import { spawnSync } from "node:child_process";
 import { delimiter, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   auditCodebase,
   type AuditCoverage,
+  type AuditBase,
   type AuditRequest,
+  type AuditScope,
+  type BaselineComparisonOptions,
+  type ChangedPath,
+  type ChangeStatus,
   type CoverageStatus,
+  type DiscoveredChanges,
+  type DiscoverChangesOptions,
   type Evidence,
+  discoverGitChanges,
+  fullAuditScope,
+  GitScopeError,
+  planChangedScope,
+  type ScopeReason,
 } from "../../src/index.js";
 
 const repositoryRoot = process.cwd();
@@ -43,6 +55,46 @@ describe("package report output", () => {
     expect(request.includeDatabaseAudit).toBe(true);
     expect(evidence.type).toBe("database");
     expect(coverage.status).toBe("partial");
+  });
+
+  it("exports the changed-audit and baseline comparison contracts", () => {
+    const status: ChangeStatus = "renamed";
+    const change: ChangedPath = {
+      status,
+      path: "packages/app/new.ts",
+      previousPath: "packages/app/old.ts",
+    };
+    const base: AuditBase = {
+      kind: "merge-base",
+      requestedRef: "main",
+      resolvedCommit: "0123456789abcdef",
+    };
+    const reason: ScopeReason = {
+      projectId: "node:packages/app",
+      reason: "direct-change",
+      source: change.path,
+    };
+    const scope: AuditScope = {
+      mode: "changed",
+      base,
+      changes: [change],
+      affectedProjectIds: [reason.projectId],
+      reasons: [reason],
+      limitations: [],
+    };
+    const discovered: DiscoveredChanges = { base, changes: [change] };
+    const discoveryOptions: DiscoverChangesOptions = { root: "/repo", baseRef: "main" };
+    const comparisonOptions: BaselineComparisonOptions = { includeResolved: false };
+    const error: GitScopeError = new GitScopeError("GIT_INVALID_BASE_REF", "invalid base");
+
+    expect(typeof discoverGitChanges).toBe("function");
+    expect(typeof planChangedScope).toBe("function");
+    expect(fullAuditScope().mode).toBe("full");
+    expect(scope.changes).toEqual(discovered.changes);
+    expect(discoveryOptions.baseRef).toBe("main");
+    expect(comparisonOptions.includeResolved).toBe(false);
+    expect(error.code).toBe("GIT_INVALID_BASE_REF");
+    expectTypeOf(discoverGitChanges).parameters.toEqualTypeOf<[DiscoverChangesOptions]>();
   });
 
   it("accepts lifecycle output before npm pack JSON", () => {

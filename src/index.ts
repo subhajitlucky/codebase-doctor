@@ -1,3 +1,9 @@
+import { discoverGitChanges as discoverGitChangesInternal } from "./scope/git.js";
+import type {
+  DiscoveredChanges,
+  DiscoverChangesOptions,
+} from "./scope/git.js";
+
 export { VERSION } from "./version.js";
 
 export {
@@ -24,6 +30,7 @@ export {
 } from "./core/baseline.js";
 export type {
   BaselineReport,
+  BaselineComparisonOptions,
   FindingComparison,
 } from "./core/baseline.js";
 export { auditCodebase, scanCodebase } from "./core/scan.js";
@@ -49,3 +56,21 @@ export {
 } from "./config/config.js";
 export type { CodebaseConfig } from "./config/config.js";
 export type { PlannedCheckRecord } from "./execution/types.js";
+export { GitScopeError } from "./scope/git.js";
+export type {
+  DiscoveredChanges,
+  DiscoverChangesOptions,
+} from "./scope/git.js";
+export function discoverGitChanges(
+  options: DiscoverChangesOptions,
+): Promise<DiscoveredChanges> {
+  return discoverGitChangesInternal(options);
+}
+export { fullAuditScope, planChangedScope } from "./scope/planner.js";
+export type {
+  AuditBase,
+  AuditScope,
+  ChangedPath,
+  ChangeStatus,
+  ScopeReason,
+} from "./scope/types.js";

@@ -46,6 +46,9 @@ describe("independent auditor product boundary", () => {
       /repair-loop coordination/i,
       /AI explanations and repair/i,
       targetWriteCapability,
+      /Codebase Doctor (?:fixes|applies|rewrites|mutates) (?:the )?target/i,
+      /Codebase Doctor can (?:ever )?(?:receive|request|obtain|be granted).*(?:target[- ]write|write authority|repair permission)/i,
+      /grant Codebase Doctor.*(?:target[- ]write|write authority|repair permission)/i,
     ];
 
     for (const { path, text } of await documents(canonicalDocuments)) {

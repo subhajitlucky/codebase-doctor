@@ -64,6 +64,8 @@ SQL/RLS migration auditing planned for the next patch release.
 - Read-only validation command previews.
 - Configurable repository exclusions.
 - Fingerprint-based baseline comparisons.
+- Git-aware changed audits covering staged, unstaged, untracked, and branch
+  changes with explicit scope metadata.
 - SARIF 2.1.0 output for code-scanning integrations.
 - Stable text and JSON schema version `1` reports.
 - Severity thresholds and CI-friendly exit codes.
@@ -92,6 +94,39 @@ Request JSON for an agent or CI system:
 ```bash
 codebase-doctor audit . --json
 ```
+
+After making edits, request a changed audit from `HEAD`:
+
+```bash
+codebase-doctor audit . --changed --json
+```
+
+At a branch review boundary, compare from the merge base with an explicit ref:
+
+```bash
+codebase-doctor audit . --changed --base main --json
+```
+
+`--base` requires a ref value. Without `--base`, changed discovery compares
+against `HEAD` and includes staged, unstaged, and untracked paths. With an
+explicit ref, it includes committed branch changes since the merge base plus
+the current staged, unstaged, and untracked worktree. Git discovery uses only
+fixed, read-only commands. A requested changed audit that cannot establish its
+Git root, revision, merge base, or change list exits `2`.
+
+The report's `auditScope` is `full` for the default command and `changed` for
+`--changed`. Changed scope selects directly affected projects and conservatively
+includes their internal Node workspace dependants. Selected projects still
+receive full-context project diagnostics and affected check plans. Relevant SQL
+changes select complete migration streams, because analyzing a migration file
+alone would not reconstruct final state. For a rename both the new and old path
+can affect project selection; for a copy, only the copied destination is treated
+as changed because the source remains present.
+
+A changed audit says nothing about unaffected repository areas. Zero changed
+findings is not a full clean result. Always inspect `auditScope.limitations`,
+`doctorRuns`, `coverage`, and findings; partial, skipped, failed, or otherwise
+limited coverage qualifies any conclusion.
 
 The audit automatically runs offline static SQL analysis when it discovers a
 supported PostgreSQL migration stream. It requires no credentials, makes no
@@ -123,6 +158,8 @@ Available options:
 
 ```text
 --run-checks          Permit configured validation commands
+--changed             Audit Git changes and their affected scope
+--base <ref>          Compare changed scope from the merge base with this ref
 --json                Emit schema-versioned JSON
 --format <format>     Output text, json, or sarif
 --exclude <glob>      Exclude a repository-relative path glob; repeatable
@@ -179,7 +216,10 @@ codebase-doctor audit . --baseline codebase-doctor-baseline.json --json
 ```
 
 Baseline reports classify fingerprints as new, unchanged, or resolved. When a
-baseline is supplied, `--fail-on` applies only to new findings.
+baseline is supplied, `--fail-on` applies only to new findings. Changed audits
+never report absent baseline findings as resolved because those fingerprints
+may be outside the selected scope. Only a comparable full audit can report
+absent baseline findings as resolved.
 
 Emit SARIF 2.1.0 for code-scanning systems:
 
@@ -211,6 +251,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 
 - Read-only discovery is the default.
 - Codebase Doctor has no target-write capability and never applies remediation.
+- `--changed` grants no check execution, network, database, or write permission.
 - Offline SQL auditing reads only inventoried migration files, applies a file
   size ceiling, and never evaluates or executes SQL.
 - Target commands require `--run-checks`.
@@ -239,18 +280,28 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 - `database/rls/*`
 - `database/sql-rls/*`
 
-Every finding contains a rule ID, doctor ID, severity, confidence, category, explanation, structured evidence, stable fingerprint, and remediation when available. Operational failures remain separate in `doctorRuns`.
+Every finding contains a rule ID, doctor ID, severity, confidence, category,
+explanation, structured evidence, and a stable fingerprint. Applicable findings
+also expose machine-readable `impact`, `remediationConstraints`, and
+`verification` instructions. Codebase Doctor never executes remediation or the
+verification command from a finding. Expected repair means the finding's
+fingerprint is absent on rerun and all applicable coverage completed; absence
+under partial, skipped, failed, or out-of-scope coverage is not resolution.
+Operational failures remain separate in `doctorRuns`.
 
 ## Built for coding agents
 
 Codebase Doctor gives any agent the same stable contract regardless of which
 model is driving it:
 
-1. Run one repository-wide command.
-2. Read compact, schema-versioned evidence.
+1. Prefer `audit . --changed --json` after edits; run a full audit at trust and
+   release boundaries.
+2. Read `auditScope`, `doctorRuns`, `coverage`, and `findings` in the compact,
+   schema-versioned evidence.
 3. Let a human or separately authorized external coding agent fix a specific
    finding.
-4. Run Codebase Doctor again to verify the external change independently.
+4. Rerun the same scope to verify the external change independently. Do not
+   claim a finding resolved outside completed applicable coverage.
 
 The CLI is intentionally model-independent. It can be exposed through a shell,
 repository instructions, an agent skill, CI, hooks, or a future MCP server. A

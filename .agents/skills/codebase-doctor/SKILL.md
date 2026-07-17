@@ -5,80 +5,99 @@ description: Run evidence-backed, model-independent codebase diagnostics with th
 
 # Codebase Doctor
 
-Use the unified CLI as a verification layer after code changes. Treat findings
-as repository or database evidence, not as proof that every defect was found.
+Use Codebase Doctor as an independent verification layer. Prefer a changed
+audit after edits and a full audit at trust or release boundaries.
 
 > **Models build. Codebase Doctor verifies.**
 
-Codebase Doctor never edits, modifies, applies repairs to, or fixes the target.
-Remediation is guidance, not an executable repair. A human or separately
-authorized external coding agent performs the fix; Codebase Doctor only reruns
-the audit and verifies the resulting state.
+Codebase Doctor never edits, modifies, applies repairs to, or fixes the target,
+and it can never receive target-write authority. Remediation and verification
+commands are guidance, not executable repairs. A human or separately authorized
+external coding agent performs the fix; Codebase Doctor reruns independently.
 
 ## Workflow
 
-1. Start with the read-only unified audit:
+1. After edits, run the read-only changed audit:
+
+   ```bash
+   npx codebase-doctor audit . --changed --json
+   ```
+
+   This default compares with `HEAD` and includes staged, unstaged, and
+   untracked paths. For branch review, provide the required ref value:
+
+   ```bash
+   npx codebase-doctor audit . --changed --base main --json
+   ```
+
+   An explicit ref uses its merge base and includes committed branch changes
+   plus staged, unstaged, and untracked worktree changes. Git commands are fixed
+   and read-only. An omitted or invalid base is an operational exit `2`.
+
+2. At a trust, integration, or release boundary, run the full audit:
 
    ```bash
    npx codebase-doctor audit . --json
    ```
 
-2. Review detected projects, `plannedChecks`, findings, `coverage`, and every
-   entry in `doctorRuns`. The audit automatically performs offline PostgreSQL
-   RLS analysis when supported Supabase, Prisma, Drizzle, or generic SQL
-   migrations are inventoried. It reads migration files but never executes SQL.
-   Partial coverage is not a clean result: dynamic SQL, malformed statements,
-   or unsupported relevant DDL may prevent complete reconstruction.
-3. Confirm explicit permission before adding `--run-checks`. Do not use
-   `--run-checks` on an untrusted repository; approved child commands are not
-   filesystem- or network-isolated and may have side effects. This permission is
-   for validation, not repair.
-4. When command execution is approved, run:
+3. Inspect `auditScope`, then `doctorRuns`, then `coverage`, then `findings`.
+   Changed scope includes directly affected projects, conservative internal
+   workspace dependants, full-context project diagnostics, affected check plans,
+   and selected complete SQL migration streams. It does not audit unaffected
+   repository areas. Never treat zero changed findings as a full repository
+   clean result. Read every partial, skipped, failed, and limitation record.
+
+4. Read each finding's evidence and machine-readable `impact`,
+   `remediationConstraints`, and `verification` guidance. Expected repair
+   requires the fingerprint to be absent on rerun and all applicable coverage
+   to be completed. Do not claim a finding resolved outside coverage. A changed
+   baseline comparison never calls absent baseline findings resolved; a
+   comparable full audit can.
+
+5. Ask a human or external coding agent to fix one evidence-backed finding.
+   Then rerun the same scope and compare fingerprints, evidence, coverage, and
+   severity totals. Codebase Doctor does not execute remediation or verification.
+
+6. Request separate permission before adding `--run-checks`:
 
    ```bash
-   npx codebase-doctor audit . --run-checks --json
+   npx codebase-doctor audit . --changed --run-checks --json
    ```
 
-5. Treat static and live results as different evidence. `database/sql-rls`
-   describes expected migration state; `database/rls` describes observed live
-   catalog state. Request separate permission before adding `--with-database`. This performs a
-   live, read-only PostgreSQL catalog audit and requires network access. Supply
-   the connection through `DATABASE_URL` or `SUPABASE_DB_URL`; never print,
-   echo, log, or expose the credential or connection string.
-6. When database access is approved, run without putting the URL in arguments:
+   `--changed` alone grants no command execution, network, database, or write
+   permission. Approved checks are validation, not repair; they are not
+   filesystem- or network-isolated and may have side effects. Do not use
+   `--run-checks` on an untrusted repository.
+
+7. Static `database/sql-rls` coverage runs automatically and offline for
+   supported migration streams. It reports expected migration state, never
+   executes SQL, and may be partial for dynamic, malformed, or unsupported SQL.
+   Partial coverage is not clean. Live `database/rls` reports observed catalog
+   state and requires separate database and network permission:
 
    ```bash
    npx codebase-doctor audit . --with-database --json
    ```
 
-   Use `--database-schema` repeatedly for non-default schemas and
-   `--database-timeout` only to change the catalog statement timeout.
-7. Ask a human or separately authorized external coding agent to fix one
-   evidence-backed finding at a time. After that external change, rerun the
-   exact audit and compare rule IDs, fingerprints, evidence, coverage, and
-   severity totals.
+   Supply credentials through `DATABASE_URL` or `SUPABASE_DB_URL`; never print,
+   echo, log, or expose a credential or connection string. Use
+   `--database-schema` repeatedly for non-default schemas and
+   `--database-timeout` to change the catalog statement timeout. A skipped or
+   failed live doctor is not a clean database audit.
 
-`scan` is the backward-compatible repository-only command. Prefer `audit` for
-new agent workflows so internal audit modules share one report.
-
-Use `--exclude` or `.codebase-doctor.json` to omit intentional fixtures and
-generated projects. Use `--baseline` when only new findings should affect the
-threshold. Use `--format sarif` for SARIF 2.1.0; `--json` remains the schema-1
-JSON shortcut. Use `--timeout` for configured command time limits and
-`--fail-on` only for finding-based process status.
+`scan` is the backward-compatible repository-only command. Use `--exclude` or
+`.codebase-doctor.json` for intentional exclusions, `--baseline` to classify
+fingerprints, `--format sarif` for SARIF 2.1.0, `--timeout` for configured check
+limits, and `--fail-on` only for finding-based process status.
 
 ## Interpret results
 
-- Exit `0`: requested audits completed and no finding met the threshold; inspect
-  partial and skipped coverage separately.
-- Exit `1`: requested audits completed and at least one finding met the
-  threshold.
-- Exit `2`: the CLI could not perform a requested audit because of invalid input
-  or an operational failure. Never treat exit `2` as clean.
+- Exit `0`: requested audits completed and no finding met the threshold. This
+  does not override partial, skipped, limited, or changed-only coverage.
+- Exit `1`: requested audits completed and a finding met the threshold.
+- Exit `2`: invalid input or an operational failure prevented a requested
+  audit. Never treat exit `2` as clean.
 
-A failed database doctor run is not a clean database audit. The live database
-doctor remains skipped without `--with-database`; that skip does not invalidate
-completed offline migration coverage, but it also does not prove deployed state.
-Keep operational failures separate from findings, preserve redacted evidence,
-and request user direction whenever execution, database access, or repository
-trust is unclear.
+Keep operational failures separate from findings and preserve redacted evidence.
+Request user direction whenever repository trust, check execution, or live
+database access is unclear.

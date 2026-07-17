@@ -33,7 +33,9 @@ describe("Codebase Doctor agent skill contract", () => {
     const options = [...new Set(skill.match(/--[a-z][a-z-]*/g) ?? [])].sort();
 
     expect(options).toEqual([
+      "--base",
       "--baseline",
+      "--changed",
       "--database-schema",
       "--database-timeout",
       "--exclude",
@@ -88,6 +90,18 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/human|external coding agent|separately authorized.*agent/is);
     expect(skill).toMatch(/Codebase Doctor (?:never|does not).*(?:edit|modify|apply|repair)/is);
     expect(skill).toMatch(/after.*(?:human|agent).*(?:change|fix).*rerun|rerun.*after.*(?:change|fix)/is);
+  });
+
+  it("teaches honest changed-audit verification", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/prefer.*changed.*after.*edit/is);
+    expect(skill).toMatch(/full audit.*(?:trust|release) boundar/is);
+    expect(skill).toMatch(/auditScope.*doctorRuns.*coverage.*findings/is);
+    expect(skill).toMatch(/never treat.*zero.*changed.*findings.*(?:full|repository).*clean/is);
+    expect(skill).toMatch(/rerun.*same scope/is);
+    expect(skill).toMatch(/do not claim.*resolved.*outside.*coverage/is);
+    expect(skill).toMatch(/fingerprint.*absent.*coverage.*completed/is);
   });
 
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {

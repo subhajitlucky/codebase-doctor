@@ -4,6 +4,8 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+Planned for `0.1.3`; the package version remains `0.1.2` until release.
+
 ### Changed
 
 - Establish the permanent product boundary: **Models build. Codebase Doctor
@@ -13,6 +15,12 @@ All notable changes to Codebase Doctor are documented here.
 - Remove target-write authority from the Doctor capability contract. Validation
   execution and separately approved read-only live access remain distinct from
   repair permission.
+- Add full and Git-aware changed audit scopes. Changed audits select directly
+  affected projects, conservative internal workspace dependants, affected check
+  plans, and complete relevant SQL migration streams while reporting explicit
+  reasons and limitations.
+- Suppress resolved-baseline claims for changed audits; only comparable full
+  audits report absent baseline findings as resolved.
 
 ### Added
 
@@ -24,6 +32,11 @@ All notable changes to Codebase Doctor are documented here.
 - Add optional schema-1 coverage records to text, JSON, and SARIF so completed,
   partial, not-applicable, skipped, and failed audit scope remains explicit.
 - Export the `AuditCoverage` and `CoverageStatus` programmatic types.
+- Export changed-scope discovery, planning, report, and baseline comparison
+  contracts from the package entry point without exporting Git runner injection
+  or execution internals.
+- Add model-facing `impact`, `remediationConstraints`, and `verification`
+  guidance to findings without changing fingerprint identity.
 
 ### Security
 
@@ -34,6 +47,8 @@ All notable changes to Codebase Doctor are documented here.
   per-file size ceiling, and never execute or evaluate migration SQL.
 - Mark dynamic, malformed, or unsupported relevant SQL as partial coverage
   instead of guessing database state.
+- Keep Git discovery fixed and read-only. `--changed` does not grant subprocess,
+  network, database, or target-write permission.
 
 ## [0.1.2] - 2026-07-15
 
