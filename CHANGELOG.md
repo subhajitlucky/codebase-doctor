@@ -16,6 +16,13 @@ All notable changes to Codebase Doctor are documented here.
   local `.env` storage, uses precision-first provider/context detection, withholds
   values from every report and fingerprint, bounds total work and findings, and
   reports incomplete work as partial coverage.
+- Add an automatic, offline, read-only `security/dependencies` Doctor for npm
+  lockfile versions 2 and 3. It reports high-confidence lock presence, drift,
+  insecure transport, mutable Git, integrity, workspace resolution, and
+  competing-lock evidence without invoking a package manager, using the
+  network, exposing raw source values, claiming CVE coverage, or changing the
+  target repository. Unsupported ecosystems and incomplete work remain visible
+  in module and security-domain coverage.
 
 ### Changed
 

@@ -73,7 +73,7 @@ calling a codebase verified or clean.
 | Database | Offline PostgreSQL migration RLS and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
 | Frontend | Framework detection only; repository-owned checks may provide evidence | Built-in React, Next.js, accessibility, SEO, and bundle analysis |
 | Backend and authorization | NestJS detection only; repository-owned checks may provide evidence | Built-in API, authentication, worker, webhook, cron, permission, and rate-limit analysis |
-| Security | Built-in repository-shareable secrets analysis, command-output redaction, and RLS findings; no dependency, permission, or supply-chain analyzer yet | Built-in secrets, dependency, permission, and supply-chain analysis |
+| Security | Built-in repository-shareable secrets analysis, offline npm dependency metadata analysis, command-output redaction, and RLS findings; no permission or current advisory analyzer yet | Built-in secrets, cross-ecosystem dependency, permission, vulnerability, and supply-chain analysis |
 | Infrastructure | Configuration files may be inventoried but have no semantic analyzer | Built-in Docker, CI, hosting, and deployment analysis |
 | Performance | No semantic analyzer | Built-in cache, query, memory, and profiling analysis with explicit runtime permissions |
 | AI systems | No semantic analyzer | Built-in prompt, token, model, and grounding analysis with honest statistical limits |
@@ -81,8 +81,9 @@ calling a codebase verified or clean.
 The north-star entries are planned internal modules, not separately installed
 Doctor products and not shipped behavior.
 
-The built-in secrets analysis described below is current Unreleased source
-behavior and is not part of the already published `0.1.3` package.
+The built-in secrets and dependency analyses described below are current
+Unreleased source behavior and are not part of the already published `0.1.3`
+package.
 
 ## Domain coverage inventory
 
@@ -134,6 +135,8 @@ module details, evidence, limitations, and findings.
   RLS enforcement, and bypass paths.
 - Automatic offline `security/secrets` analysis for repository-shareable text
   files, with bounded work and secret-safe findings.
+- Automatic offline `security/dependencies` analysis for npm lockfile versions
+  2 and 3, with bounded work and source-value-safe findings.
 
 Go, Rust, and Java are detection-only in `0.1.x`; Codebase Doctor does not execute their toolchains yet.
 
@@ -162,6 +165,49 @@ Codebase Doctor does not remove, rotate, revoke, or validate a credential. An
 external authorized human or coding agent must remediate the shareable content,
 rotate or revoke the credential outside Codebase Doctor, and then rerun the same
 audit for independent verification.
+
+## Built-in dependency audit
+
+The combined `audit` command automatically runs the read-only, offline
+`security/dependencies` module. Its first supported ecosystem is npm with
+lockfile versions 2 and 3. Detected pnpm, Yarn, Bun, Python, and other package
+ecosystems remain explicitly unsupported by this module rather than receiving
+guessed findings.
+
+The module never invokes npm, another package manager, a shell, an installer,
+or a lifecycle script. It makes no network request and does not install,
+upgrade, remove, pin, or rewrite dependencies. Full mode analyzes every selected
+npm lock root and covered workspace manifest. Changed mode analyzes affected
+projects together with their governing npm lock root; an unchanged governing
+lockfile may therefore be read as declared scope.
+
+Its precision-first rule families are:
+
+- `security/dependencies/missing-lockfile`
+- `security/dependencies/manifest-lock-drift`
+- `security/dependencies/insecure-source`
+- `security/dependencies/mutable-git-source`
+- `security/dependencies/missing-integrity`
+- `security/dependencies/workspace-registry-resolution`
+- `security/dependencies/competing-npm-lockfiles`
+
+A normal semver range such as `^5.0.0` is not a finding when the supported lock
+metadata agrees. The module makes no CVE or current advisory claim; that would
+require a separately authorized and freshness-aware vulnerability source.
+
+Raw dependency specifications and resolved URLs can contain credentials. They
+are withheld from reports and never enter a fingerprint, evidence record,
+message, limitation, error, text, JSON, or SARIF output. Findings use only safe
+package names, paths, dependency sections, and coarse source classes. Work is
+bounded to 20 MB per lockfile, 100 MB per audit, 100 findings per lock root, and
+1,000 findings per audit. A reached limit, unsupported ecosystem, unreadable or
+invalid lockfile, or out-of-scope changed project remains visible in coverage.
+
+An external authorized human or coding agent must correct dependency metadata
+and rerun the same scope. Codebase Doctor never performs the remediation.
+Inspect module coverage before calling the dependency graph clean or verified;
+zero findings under partial, unsupported, failed, or not-selected coverage are
+not assurance.
 
 ## Usage
 
@@ -346,6 +392,8 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
   direct Doctor target-write authority.
 - Offline SQL auditing reads only inventoried migration files, applies a file
   size ceiling, and never evaluates or executes SQL.
+- Offline dependency auditing reads bounded npm metadata, never invokes npm or
+  another package manager, and never installs or changes dependencies.
 - Target commands require `--run-checks`.
 - Live database access requires the separate `--with-database` permission.
 - Database credentials are read from `DATABASE_URL` or `SUPABASE_DB_URL`, not a
@@ -371,6 +419,8 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 - `checks/command-timeout`
 - `database/rls/*`
 - `database/sql-rls/*`
+- `security/secrets/*`
+- `security/dependencies/*`
 
 Every finding contains a rule ID, doctor ID, severity, confidence, category,
 explanation, structured evidence, and a stable fingerprint. Applicable findings

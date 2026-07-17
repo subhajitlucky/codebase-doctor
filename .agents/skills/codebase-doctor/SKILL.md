@@ -136,6 +136,27 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    outside Codebase Doctor, and then rerun the same audit. Doctor never performs
    those actions.
 
+9. The combined audit also automatically runs the read-only, offline
+   `security/dependencies` module for npm lockfile versions 2 and 3. pnpm, Yarn,
+   Bun, Python, and other ecosystems remain explicit unsupported coverage for
+   this module. It never invokes npm or another package manager, runs a shell or
+   lifecycle script, uses the network, installs packages, or changes dependency
+   metadata.
+
+   Its rules are `missing-lockfile`, `manifest-lock-drift`, `insecure-source`,
+   `mutable-git-source`, `missing-integrity`,
+   `workspace-registry-resolution`, and `competing-npm-lockfiles`. A normal
+   semver range is not a finding when supported lock metadata agrees. This
+   offline module makes no CVE or current advisory claim.
+
+   Raw dependency specifications and resolved URLs are withheld and never enter
+   a fingerprint, finding, evidence record, limitation, error, text, JSON, or
+   SARIF output. Never ask Doctor to reveal a source value. Read completed,
+   partial, unsupported, failed, and not-selected dependency coverage before
+   calling a graph clean. Have an external authorized human or coding agent
+   correct the metadata and rerun the same scope; Doctor never performs that
+   remediation.
+
 `scan` is the backward-compatible repository-only command. Use `--exclude` or
 `.codebase-doctor.json` for intentional exclusions, `--baseline` to classify
 fingerprints, `--format sarif` for SARIF 2.1.0, `--timeout` for configured check

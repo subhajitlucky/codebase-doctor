@@ -236,4 +236,38 @@ describe("independent auditor product boundary", () => {
       expect(text, path).toMatch(/external.*(?:rotate|revoke|remediat).*rerun|(?:rotate|revoke|remediat).*external.*rerun/is);
     }
   });
+
+  it("documents the built-in dependency audit with exact offline claims", async () => {
+    const requiredRules = [
+      "missing-lockfile",
+      "manifest-lock-drift",
+      "insecure-source",
+      "mutable-git-source",
+      "missing-integrity",
+      "workspace-registry-resolution",
+      "competing-npm-lockfiles",
+    ];
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/security\/dependencies/);
+      expect(text, path).toMatch(/npm.*lockfile.*(?:versions? )?2.*3|npm.*v2.*v3/is);
+      expect(text, path).toMatch(/pnpm.*Yarn.*Bun.*unsupported|unsupported.*pnpm.*Yarn.*Bun/is);
+      expect(text, path).toMatch(/read-only/is);
+      expect(text, path).toMatch(/offline/is);
+      expect(text, path).toMatch(/never.*(?:invoke|run|execute).*(?:npm|package manager)|(?:npm|package manager).*(?:not|never).*(?:invoke|run|execute)/is);
+      expect(text, path).toMatch(/no.*(?:CVE|advisory)|(?:CVE|advisory).*(?:not|no|without)/is);
+      expect(text, path).toMatch(/semver.*range.*not.*finding|not.*flag.*(?:normal|ordinary).*range/is);
+      expect(text, path).toMatch(/raw.*(?:specification|source|URL).*(?:withheld|never.*fingerprint)|(?:withheld|never.*fingerprint).*raw.*(?:specification|source|URL)/is);
+      expect(text, path).toMatch(/external.*(?:human|agent).*(?:remediat|correct|change).*rerun.*same.*scope/is);
+      expect(text, path).toMatch(/coverage.*before.*(?:clean|verified)|inspect.*coverage/is);
+      for (const rule of requiredRules) expect(text, `${path}: ${rule}`).toContain(rule);
+    }
+
+    const changelog = await readFile("CHANGELOG.md", "utf8");
+    const unreleased = changelog.slice(
+      changelog.indexOf("## [Unreleased]"),
+      changelog.indexOf("## [0.1.3]"),
+    );
+    expect(unreleased).toMatch(/security\/dependencies/);
+    expect(unreleased).toMatch(/offline.*read-only|read-only.*offline/is);
+  });
 });

@@ -142,6 +142,20 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/external.*(?:rotate|revoke|remediat).*rerun|(?:rotate|revoke|remediat).*external.*rerun/is);
   });
 
+  it("teaches agents the offline dependency-audit boundary", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/security\/dependencies/);
+    expect(skill).toMatch(/npm.*lockfile.*(?:versions? )?2.*3|npm.*v2.*v3/is);
+    expect(skill).toMatch(/pnpm.*Yarn.*Bun.*unsupported|unsupported.*pnpm.*Yarn.*Bun/is);
+    expect(skill).toMatch(/never.*(?:invoke|run|execute).*(?:npm|package manager)/is);
+    expect(skill).toMatch(/no.*(?:CVE|advisory)|(?:CVE|advisory).*(?:not|no|without)/is);
+    expect(skill).toMatch(/semver.*range.*not.*finding|not.*flag.*(?:normal|ordinary).*range/is);
+    expect(skill).toMatch(/raw.*(?:specification|source|URL).*(?:withheld|never.*fingerprint)/is);
+    expect(skill).toMatch(/external.*(?:human|agent).*(?:remediat|correct|change).*rerun.*same.*scope/is);
+    expect(skill).toMatch(/partial|unsupported|not-selected/);
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",

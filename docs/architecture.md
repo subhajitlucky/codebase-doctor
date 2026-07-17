@@ -217,6 +217,53 @@ human or coding agent must remediate repository-shareable content, rotate or
 revoke the credential outside Doctor, and then rerun the same scope for
 independent verification.
 
+## Built-in dependency audit
+
+The combined audit registers `security/dependencies` as a read-only, offline
+Doctor immediately after `security/secrets`. It supports npm lockfile versions
+2 and 3. pnpm, Yarn, Bun, Python, and other dependency ecosystems are detected
+as unsupported coverage until a native parser exists; the Doctor does not guess
+their graph state.
+
+The module never invokes npm or another package manager, never launches a shell,
+installer, or lifecycle script, and never uses the network. It reads only
+inventoried regular `package.json`, `package-lock.json`, and
+`npm-shrinkwrap.json` metadata. Lockfile reads are limited to 20 MB each and
+100 MB per audit; output is limited to 100 findings per lock root and 1,000 per
+audit. Every ceiling or read/parse limitation produces partial coverage.
+
+Full selection groups standalone npm projects and workspace members under their
+governing npm lock root, with nested independent locks analyzed separately.
+`npm-shrinkwrap.json` takes precedence when both npm lock forms exist. Changed
+selection analyzes affected projects with their governing lock root and reports
+unrelated dependency graphs as not-selected.
+
+The implemented high-confidence rule families are:
+
+- `security/dependencies/missing-lockfile`
+- `security/dependencies/manifest-lock-drift`
+- `security/dependencies/insecure-source`
+- `security/dependencies/mutable-git-source`
+- `security/dependencies/missing-integrity`
+- `security/dependencies/workspace-registry-resolution`
+- `security/dependencies/competing-npm-lockfiles`
+
+Exact manifest/lock comparison does not resolve semver. A normal semver range is
+not a finding when the supported lock metadata agrees. The module makes no CVE
+or current advisory claim because it has no current advisory source.
+
+Raw dependency specifications and resolved URLs are analyzer-local, withheld
+from returned metadata, and never enter a fingerprint, finding, evidence,
+limitation, error, or reporter. A private graph-associated equality check lets
+drift analysis compare exact strings without returning or hashing those values.
+
+An external authorized human or coding agent must correct or regenerate the
+dependency metadata and rerun the same scope. Doctor never performs that
+remediation. Consumers must inspect both `security/secrets` and
+`security/dependencies` coverage before calling security clean or verified;
+completed plus partial, unsupported, failed, or not-selected module work is
+conservatively incomplete at the security-domain level.
+
 ## Normalized report contract
 
 The normalizer copies and deterministically sorts projects, plans, doctor runs,
