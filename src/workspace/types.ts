@@ -1,5 +1,6 @@
 import type { AuditScope } from "../scope/types.js";
 import type { RepositoryFileSelection } from "../scope/repository-files.js";
+import type { SourceGraph, SourceImpact } from "../source-graph/types.js";
 
 export interface FileRecord {
   path: string;
@@ -70,4 +71,6 @@ export interface ProjectSnapshot {
   workspaces: readonly WorkspaceRecord[];
   readonly auditScope: AuditScope;
   readonly repositoryFiles?: RepositoryFileSelection;
+  readonly sourceGraph?: SourceGraph;
+  readonly sourceImpact?: SourceImpact;
 }

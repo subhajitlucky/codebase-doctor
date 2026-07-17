@@ -5,6 +5,7 @@ import { classifyScanExit, normalizeScanResult } from "../../../src/core/normali
 import { fullAuditScope } from "../../../src/scope/planner.js";
 import type { AuditScope } from "../../../src/scope/types.js";
 import type { DomainCoverage } from "../../../src/core/domain-coverage.js";
+import type { SourceImpact } from "../../../src/source-graph/types.js";
 
 function finding(severity: Severity, ruleId: string): Finding {
   return {
@@ -32,6 +33,47 @@ function run(doctorId: string, result: DoctorResult): RegisteredDoctorResult {
 }
 
 describe("scan normalization", () => {
+  it("keeps source impact optional under schema version 1", () => {
+    const withoutImpact = normalizeScanResult("/repo", [], fullAuditScope(), []);
+    const impact: SourceImpact = {
+      mode: "changed",
+      status: "completed",
+      graphNodeCount: 2,
+      graphEdgeCount: 1,
+      externalBoundaryCount: 0,
+      dynamicBoundaryCount: 0,
+      changedSourcePaths: ["src/z.ts", "src/a.ts"],
+      impactedFileCount: 1,
+      impactedProjectIds: ["z", "a"],
+      impacts: [{
+        path: "src/consumer.ts",
+        projectId: "a",
+        dependencyPath: ["src/z.ts", "src/consumer.ts"],
+      }],
+      omittedImpactCount: 0,
+      limitations: ["z limitation", "a limitation"],
+    };
+    const withImpact = normalizeScanResult(
+      "/repo",
+      [],
+      fullAuditScope(),
+      [],
+      [],
+      [],
+      impact,
+    );
+
+    expect(withoutImpact.schemaVersion).toBe("1");
+    expect(withoutImpact).not.toHaveProperty("sourceImpact");
+    expect(withImpact.schemaVersion).toBe("1");
+    expect(withImpact.sourceImpact).toMatchObject({
+      changedSourcePaths: ["src/a.ts", "src/z.ts"],
+      impactedProjectIds: ["a", "z"],
+      limitations: ["a limitation", "z limitation"],
+    });
+    expect(withImpact.sourceImpact).not.toBe(impact);
+  });
+
   it("removes exact duplicates and deterministically sorts findings and doctor runs", () => {
     const high = finding("high", "z-rule");
     const info = finding("info", "a-rule");

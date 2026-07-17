@@ -20,7 +20,11 @@ export interface AuditBase {
 
 export interface ScopeReason {
   readonly projectId: string;
-  readonly reason: 'direct-change' | 'workspace-dependent' | 'root-context';
+  readonly reason:
+    | 'direct-change'
+    | 'workspace-dependent'
+    | 'root-context'
+    | 'source-dependent';
   readonly source: string;
 }
 

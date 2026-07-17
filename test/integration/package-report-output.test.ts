@@ -28,6 +28,8 @@ import {
   type GitScopeErrorCode,
   planChangedScope,
   type ScopeReason,
+  type SourceGraphStatus,
+  type SourceImpact,
 } from "../../src/index.js";
 
 const repositoryRoot = process.cwd();
@@ -114,8 +116,27 @@ describe("package report output", () => {
     };
     const reason: ScopeReason = {
       projectId: "node:packages/app",
-      reason: "direct-change",
+      reason: "source-dependent",
       source: change.path,
+    };
+    const graphStatus: SourceGraphStatus = "completed";
+    const sourceImpact: SourceImpact = {
+      mode: "changed",
+      status: graphStatus,
+      graphNodeCount: 2,
+      graphEdgeCount: 1,
+      externalBoundaryCount: 0,
+      dynamicBoundaryCount: 0,
+      changedSourcePaths: [change.path],
+      impactedFileCount: 1,
+      impactedProjectIds: [reason.projectId],
+      impacts: [{
+        path: "packages/app/consumer.ts",
+        projectId: reason.projectId,
+        dependencyPath: [change.path, "packages/app/consumer.ts"],
+      }],
+      omittedImpactCount: 0,
+      limitations: [],
     };
     const scope: AuditScope = {
       mode: "changed",
@@ -154,6 +175,7 @@ describe("package report output", () => {
       readonly DetectedProject[],
     ]>();
     expect(project.id).toBe(reason.projectId);
+    expect(sourceImpact.status).toBe("completed");
   });
 
   it("accepts lifecycle output before npm pack JSON", () => {

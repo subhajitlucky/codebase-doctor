@@ -84,4 +84,9 @@ export type {
   ChangeStatus,
   ScopeReason,
 } from "./scope/types.js";
+export type {
+  SourceGraphStatus,
+  SourceImpact,
+  SourceImpactRecord,
+} from "./source-graph/types.js";
 export type { DetectedProject } from "./workspace/types.js";

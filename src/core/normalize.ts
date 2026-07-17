@@ -16,6 +16,7 @@ import type { DetectedProject } from "../workspace/types.js";
 import type { PlannedCheckRecord } from "../execution/types.js";
 import type { FindingComparison } from "./baseline.js";
 import type { AuditScope, ChangedPath, ScopeReason } from "../scope/types.js";
+import type { SourceImpact, SourceImpactRecord } from "../source-graph/types.js";
 import {
   AUDIT_DOMAINS,
   type DomainCoverage,
@@ -45,6 +46,26 @@ export interface ScanResult {
   summary: FindingSummary;
   coverage?: readonly AuditCoverage[];
   comparison?: FindingComparison;
+  sourceImpact?: SourceImpact;
+}
+
+function normalizeSourceImpact(sourceImpact: SourceImpact): SourceImpact {
+  return {
+    ...sourceImpact,
+    changedSourcePaths: [...new Set(sourceImpact.changedSourcePaths)].sort(),
+    impactedProjectIds: [...new Set(sourceImpact.impactedProjectIds)].sort(),
+    impacts: sourceImpact.impacts
+      .map((impact): SourceImpactRecord => ({
+        ...impact,
+        dependencyPath: [...impact.dependencyPath],
+      }))
+      .sort((left, right) =>
+        left.path.localeCompare(right.path) ||
+        left.dependencyPath.join("\0").localeCompare(right.dependencyPath.join("\0")) ||
+        (left.projectId ?? "").localeCompare(right.projectId ?? "")
+      ),
+    limitations: [...new Set(sourceImpact.limitations)].sort(),
+  };
 }
 
 function exactFindingKey(finding: Finding): string {
@@ -80,6 +101,7 @@ export function normalizeScanResult(
   registeredResults: readonly RegisteredDoctorResult[],
   plannedChecks: readonly PlannedCheckRecord[] = [],
   domainCoverage: readonly DomainCoverage[] = [],
+  sourceImpact?: SourceImpact,
 ): ScanResult {
   const findings = uniqueFindings(registeredResults.flatMap(({ result }) => result.findings));
   const doctorRuns = registeredResults
@@ -151,6 +173,7 @@ export function normalizeScanResult(
     findings,
     summary: summarizeFindings(findings),
     ...(coverage.length === 0 ? {} : { coverage }),
+    ...(sourceImpact === undefined ? {} : { sourceImpact: normalizeSourceImpact(sourceImpact) }),
   };
 }
 
