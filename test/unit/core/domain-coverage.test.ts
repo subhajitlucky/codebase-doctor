@@ -304,6 +304,107 @@ describe("domain coverage planning", () => {
   });
 
   it.each([
+    ["completed", "completed", true],
+    ["partial", "partial", false],
+    ["unsupported", "partial", false],
+    ["not-selected", "partial", false],
+  ] as const)(
+    "aggregates completed secrets with %s dependency coverage conservatively",
+    (dependencyStatus, expectedStatus, coverageComplete) => {
+      const registeredResults: RegisteredDoctorResult[] = [
+        result("project"),
+        {
+          doctorId: "security/secrets",
+          result: {
+            status: "completed",
+            findings: [],
+            durationMs: 1,
+            coverage: [{
+              moduleId: "security/secrets",
+              status: "completed",
+              scope: "full",
+              filesExamined: 2,
+              statementsExamined: 10,
+              statementsRecognized: 0,
+              limitations: [],
+            }],
+          },
+        },
+        {
+          doctorId: "security/dependencies",
+          result: {
+            status: "completed",
+            findings: [],
+            durationMs: 1,
+            coverage: [{
+              moduleId: "security/dependencies",
+              status: dependencyStatus,
+              scope: dependencyStatus === "not-selected" ? "changed" : "full:root",
+              filesExamined: dependencyStatus === "completed" ? 2 : 0,
+              statementsExamined: 0,
+              statementsRecognized: 0,
+              limitations: dependencyStatus === "completed"
+                ? []
+                : [`Dependency coverage is ${dependencyStatus}.`],
+            }],
+          },
+        },
+      ];
+      const coverage = planDomainCoverage({
+        snapshot: snapshot(),
+        registeredResults,
+        plans: [],
+        includeDatabaseAudit: false,
+      });
+
+      expect(coverage.find(({ domain }) => domain === "security")).toMatchObject({
+        applicability: "detected",
+        status: expectedStatus,
+        coverageComplete,
+        modules: [
+          { moduleId: "security/dependencies", status: dependencyStatus },
+          { moduleId: "security/secrets", status: "completed" },
+        ],
+      });
+    },
+  );
+
+  it("keeps a failed dependency Doctor dominant over completed secrets coverage", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [result("project"), result("security/dependencies", "failed"), {
+        doctorId: "security/secrets",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "security/secrets",
+            status: "completed",
+            scope: "full",
+            filesExamined: 1,
+            statementsExamined: 1,
+            statementsRecognized: 0,
+            limitations: [],
+          }],
+        },
+      }],
+      plans: [],
+      includeDatabaseAudit: false,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "security")).toMatchObject({
+      applicability: "detected",
+      status: "failed",
+      coverageComplete: false,
+      modules: [
+        { moduleId: "security/dependencies", status: "failed" },
+        { moduleId: "security/secrets", status: "completed" },
+      ],
+    });
+  });
+
+  it.each([
     ["partial", "partial", "detected", false],
     ["failed", "failed", "detected", false],
     ["not-applicable", "not-applicable", "not-detected", true],

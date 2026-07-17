@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -200,10 +200,16 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
         applicability: "detected",
         status: "partial",
         coverageComplete: false,
-        modules: [expect.objectContaining({
-          moduleId: "security/secrets",
-          status: "partial",
-        })],
+        modules: [
+          expect.objectContaining({
+            moduleId: "security/dependencies",
+            status: "not-applicable",
+          }),
+          expect.objectContaining({
+            moduleId: "security/secrets",
+            status: "partial",
+          }),
+        ],
       }));
 
       const unsafe = run(binary, [
@@ -264,6 +270,115 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
         domain: "security",
         status: "completed",
         coverageComplete: true,
+      }));
+
+      const dependencyRepository = join(temporaryRoot, "dependency-repository");
+      await mkdir(dependencyRepository);
+      const cleanManifest = JSON.stringify({
+        name: "packed-dependency-fixture",
+        private: true,
+        packageManager: "npm@11.0.0",
+        dependencies: { alpha: "^1.0.0" },
+      }, null, 2);
+      const cleanLock = JSON.stringify({
+        name: "packed-dependency-fixture",
+        lockfileVersion: 3,
+        packages: {
+          "": { dependencies: { alpha: "^1.0.0" } },
+          "node_modules/alpha": {
+            version: "1.0.0",
+            resolved: "https://packages.example.invalid/alpha.tgz",
+            integrity: "sha512-QUJDREVGRw==",
+          },
+        },
+      }, null, 2);
+      await writeFile(join(dependencyRepository, "package.json"), cleanManifest);
+      await writeFile(join(dependencyRepository, "package-lock.json"), cleanLock);
+
+      const packedCleanDependencies = run(binary, [
+        "audit", dependencyRepository, "--json", "--fail-on", "none",
+      ], temporaryRoot);
+      expect(packedCleanDependencies.status, packedCleanDependencies.stderr).toBe(0);
+      const cleanDependencyReport = JSON.parse(packedCleanDependencies.stdout);
+      expect(cleanDependencyReport.findings.filter(({ doctorId }: { doctorId: string }) =>
+        doctorId === "security/dependencies"
+      )).toEqual([]);
+      expect(cleanDependencyReport.coverage).toContainEqual(expect.objectContaining({
+        moduleId: "security/dependencies",
+        status: "completed",
+        scope: "full:.",
+      }));
+      expect(await readFile(join(dependencyRepository, "package.json"), "utf8"))
+        .toBe(cleanManifest);
+      expect(await readFile(join(dependencyRepository, "package-lock.json"), "utf8"))
+        .toBe(cleanLock);
+
+      const dependencyCredential = generatedToken("source-");
+      const insecureSource =
+        `http://user:${dependencyCredential}@packages.example.invalid/alpha.tgz?token=${dependencyCredential}`;
+      const unsafeManifest = JSON.stringify({
+        name: "packed-dependency-fixture",
+        private: true,
+        packageManager: "npm@11.0.0",
+        dependencies: { alpha: insecureSource },
+      }, null, 2);
+      const unsafeLock = JSON.stringify({
+        name: "packed-dependency-fixture",
+        lockfileVersion: 3,
+        packages: {
+          "": { dependencies: { alpha: "^2.0.0" } },
+          "node_modules/alpha": {
+            version: "1.0.0",
+            resolved: insecureSource,
+          },
+          "node_modules/beta": {
+            version: "2.0.0",
+            resolved: "https://packages.example.invalid/beta.tgz",
+          },
+        },
+      }, null, 2);
+      await writeFile(join(dependencyRepository, "package.json"), unsafeManifest);
+      await writeFile(join(dependencyRepository, "package-lock.json"), unsafeLock);
+
+      const packedUnsafeDependencies = run(binary, [
+        "audit", dependencyRepository, "--json", "--fail-on", "none",
+      ], temporaryRoot);
+      expect(packedUnsafeDependencies.status, packedUnsafeDependencies.stderr).toBe(0);
+      expect(packedUnsafeDependencies.stdout).not.toContain(dependencyCredential);
+      expect(packedUnsafeDependencies.stderr).not.toContain(dependencyCredential);
+      const unsafeDependencyReport = JSON.parse(packedUnsafeDependencies.stdout);
+      expect(unsafeDependencyReport.findings
+        .filter(({ doctorId }: { doctorId: string }) => doctorId === "security/dependencies")
+        .map(({ ruleId }: { ruleId: string }) => ruleId))
+        .toEqual(expect.arrayContaining([
+          "security/dependencies/manifest-lock-drift",
+          "security/dependencies/insecure-source",
+          "security/dependencies/missing-integrity",
+        ]));
+      expect(await readFile(join(dependencyRepository, "package.json"), "utf8"))
+        .toBe(unsafeManifest);
+      expect(await readFile(join(dependencyRepository, "package-lock.json"), "utf8"))
+        .toBe(unsafeLock);
+
+      const unsupportedRepository = join(temporaryRoot, "unsupported-dependency-repository");
+      await mkdir(unsupportedRepository);
+      await writeFile(join(unsupportedRepository, "package.json"), JSON.stringify({
+        name: "packed-pnpm-fixture",
+        packageManager: "pnpm@10.0.0",
+        dependencies: { alpha: "^1.0.0" },
+      }));
+      await writeFile(join(unsupportedRepository, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+      const packedUnsupportedDependencies = run(binary, [
+        "audit", unsupportedRepository, "--json", "--fail-on", "none",
+      ], temporaryRoot);
+      expect(packedUnsupportedDependencies.status, packedUnsupportedDependencies.stderr).toBe(0);
+      const unsupportedDependencyReport = JSON.parse(packedUnsupportedDependencies.stdout);
+      expect(unsupportedDependencyReport.findings.filter(({ doctorId }: { doctorId: string }) =>
+        doctorId === "security/dependencies"
+      )).toEqual([]);
+      expect(unsupportedDependencyReport.coverage).toContainEqual(expect.objectContaining({
+        moduleId: "security/dependencies",
+        status: "unsupported",
       }));
 
       await writeFile(join(gitRepository, "tracked.txt"), "changed\n");

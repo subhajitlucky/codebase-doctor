@@ -51,6 +51,7 @@ describe("package report output", () => {
       detail: "RLS is disabled.",
     };
     const status: CoverageStatus = "partial";
+    const unsupportedStatus: CoverageStatus = "unsupported";
     const coverage: AuditCoverage = {
       moduleId: "database/sql-rls",
       status,
@@ -66,6 +67,7 @@ describe("package report output", () => {
     expect(request.includeSecurityAudit).toBe(true);
     expect(evidence.type).toBe("database");
     expect(coverage.status).toBe("partial");
+    expect(unsupportedStatus).toBe("unsupported");
   });
 
   it("exports the complete domain coverage contract", () => {

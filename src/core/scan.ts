@@ -7,6 +7,7 @@ import { projectDoctor } from "../doctors/project/doctor.js";
 import { createRlsDoctor } from "../audits/database/rls/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
+import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
@@ -87,6 +88,7 @@ const defaultDependencies: ScanDependencies = {
     ];
     if (request.includeSecurityAudit === true) {
       doctors.push(createSecretsDoctor());
+      doctors.push(createDependenciesDoctor());
     }
     if (request.includeDatabaseAudit === true) {
       doctors.push(createSqlRlsDoctor());

@@ -26,6 +26,8 @@ export type CoverageStatus =
   | "completed"
   | "partial"
   | "not-applicable"
+  | "unsupported"
+  | "not-selected"
   | "skipped"
   | "failed";
 

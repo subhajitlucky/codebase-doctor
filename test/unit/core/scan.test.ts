@@ -295,9 +295,19 @@ describe("scan orchestration", () => {
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/rls");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/sql-rls");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/secrets");
+    expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/dependencies");
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "security/secrets",
       status: "completed",
+    }));
+    expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "security/dependencies",
+      status: "completed",
+    }));
+    expect(audited.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/dependencies",
+      status: "partial",
+      limitations: ["package.json: valid package manifest is unavailable."],
     }));
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "database/sql-rls",

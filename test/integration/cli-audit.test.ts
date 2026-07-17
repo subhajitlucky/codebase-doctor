@@ -29,6 +29,33 @@ function generatedToken(prefix: string, length = 32): string {
   return value;
 }
 
+function npmGraphFiles(
+  spec = "^1.0.0",
+  resolved = "https://packages.example.invalid/alpha.tgz",
+  integrity: string | undefined = "sha512-QUJDREVGRw==",
+): Record<string, string> {
+  return {
+    "package.json": JSON.stringify({
+      name: "dependency-fixture",
+      private: true,
+      packageManager: "npm@11.0.0",
+      dependencies: { alpha: spec },
+    }, null, 2),
+    "package-lock.json": JSON.stringify({
+      name: "dependency-fixture",
+      lockfileVersion: 3,
+      packages: {
+        "": { dependencies: { alpha: spec } },
+        "node_modules/alpha": {
+          version: "1.0.0",
+          resolved,
+          ...(integrity === undefined ? {} : { integrity }),
+        },
+      },
+    }, null, 2),
+  };
+}
+
 function isolatedGitEnvironment(root: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
@@ -101,10 +128,16 @@ describe("audit CLI", () => {
       applicability: "detected",
       status: "completed",
       coverageComplete: true,
-      modules: [expect.objectContaining({
-        moduleId: "security/secrets",
-        status: "completed",
-      })],
+      modules: [
+        expect.objectContaining({
+          moduleId: "security/dependencies",
+          status: "not-applicable",
+        }),
+        expect.objectContaining({
+          moduleId: "security/secrets",
+          status: "completed",
+        }),
+      ],
     }));
     expect(result.stdout).not.toContain(trackedSecret);
     expect(result.stdout).not.toContain(ignoredSecret);
@@ -173,6 +206,126 @@ describe("audit CLI", () => {
         coverageComplete: true,
       }),
     );
+  });
+
+  it("accepts a consistent npm v3 graph with completed dependency coverage", async () => {
+    const { root } = await createRepository(npmGraphFiles());
+    const before = await captureGitRepositorySnapshot(root);
+
+    const result = cli(["audit", root, "--json", "--fail-on", "none"], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
+      doctorId === "security/dependencies"
+    )).toEqual([]);
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/dependencies",
+      status: "completed",
+      scope: "full:.",
+    }));
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+  });
+
+  it("reports dependency drift, insecure transport, and missing integrity consistently", async () => {
+    const seed = generatedToken("source-");
+    const insecureSource = `http://user:${seed}@packages.example.invalid/alpha.tgz?token=${seed}`;
+    const files = npmGraphFiles("^1.0.0", insecureSource);
+    const lock = JSON.parse(files["package-lock.json"]!);
+    lock.packages[""].dependencies.alpha = "^2.0.0";
+    lock.packages["node_modules/beta"] = {
+      version: "2.0.0",
+      resolved: "https://packages.example.invalid/beta.tgz",
+    };
+    files["package-lock.json"] = JSON.stringify(lock, null, 2);
+    const { root } = await createRepository(files);
+    const before = await captureGitRepositorySnapshot(root);
+
+    const json = cli(["audit", root, "--json", "--fail-on", "high"], root);
+    const text = cli(["audit", root, "--format", "text", "--fail-on", "none"], root);
+    const sarif = cli(["audit", root, "--format", "sarif", "--fail-on", "none"], root);
+    const report = JSON.parse(json.stdout);
+    const sarifReport = JSON.parse(sarif.stdout);
+    const dependencyRules = report.findings
+      .filter(({ doctorId }: { doctorId: string }) => doctorId === "security/dependencies")
+      .map(({ ruleId }: { ruleId: string }) => ruleId);
+
+    expect(json.status).toBe(1);
+    expect(text.status).toBe(0);
+    expect(sarif.status).toBe(0);
+    expect(dependencyRules).toEqual(expect.arrayContaining([
+      "security/dependencies/manifest-lock-drift",
+      "security/dependencies/insecure-source",
+      "security/dependencies/missing-integrity",
+    ]));
+    expect(text.stdout).toContain("security/dependencies");
+    expect(sarifReport.runs[0].results).toContainEqual(expect.objectContaining({
+      ruleId: "security/dependencies/insecure-source",
+    }));
+    expect(sarifReport.runs[0].properties.domainCoverage).toContainEqual(
+      expect.objectContaining({ domain: "security", status: "completed" }),
+    );
+    for (const output of [json.stdout, json.stderr, text.stdout, text.stderr, sarif.stdout, sarif.stderr]) {
+      expect(output).not.toContain(seed);
+    }
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+  });
+
+  it("audits the governing npm graph for an affected changed project", async () => {
+    const { root } = await createRepository(npmGraphFiles());
+    const seed = generatedToken("changed-source-");
+    const insecureSource = `http://user:${seed}@packages.example.invalid/alpha.tgz`;
+    const changedManifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    changedManifest.dependencies.alpha = insecureSource;
+    await writeProjectFile(root, "package.json", JSON.stringify(changedManifest, null, 2));
+
+    const result = cli([
+      "audit", root, "--changed", "--json", "--fail-on", "none",
+    ], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.findings).toContainEqual(expect.objectContaining({
+      doctorId: "security/dependencies",
+      ruleId: "security/dependencies/insecure-source",
+      location: { path: "package.json" },
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/dependencies",
+      status: "completed",
+      scope: "changed:.",
+    }));
+    expect(result.stdout).not.toContain(seed);
+  });
+
+  it("reports unsupported package managers as coverage, not findings", async () => {
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        name: "pnpm-fixture",
+        private: true,
+        packageManager: "pnpm@10.0.0",
+        dependencies: { alpha: "^1.0.0" },
+      }),
+      "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    });
+
+    const result = cli(["audit", root, "--json", "--fail-on", "none"], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
+      doctorId === "security/dependencies"
+    )).toEqual([]);
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/dependencies",
+      status: "unsupported",
+      limitations: ["root: node:pnpm dependency metadata is not supported."],
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "security",
+      status: "partial",
+      coverageComplete: false,
+    }));
   });
 
   it("reports staged, unstaged, and untracked changes from HEAD without mutating the repository", async () => {
