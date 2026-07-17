@@ -179,9 +179,68 @@ describe("text reporter", () => {
     expect(report).toContain("renamed: src/new.ts (previous: src/old.ts)");
     expect(report).toContain("Scope reason: root — direct-change from package.json");
     expect(report).toContain("Scope limitation: Unchanged files were not independently re-audited.");
-    expect(report).toContain("No findings in the selected changed scope; review Audit coverage.");
+    expect(report).toContain(
+      "No findings in the selected changed scope; review the selected scope, Doctor runs, and Audit coverage.",
+    );
     expect(report).not.toContain("Clean scan");
     expect(report.indexOf("Audit scope")).toBeLessThan(report.indexOf("Projects"));
+  });
+
+  it("does not reference an Audit coverage section when changed scope has no module coverage", () => {
+    const changed: ScanResult = {
+      ...result(),
+      auditScope: {
+        mode: "changed",
+        base: { kind: "head", requestedRef: null, resolvedCommit: "1234567890abcdef" },
+        changes: [],
+        affectedProjectIds: [],
+        reasons: [],
+        limitations: ["Only selected changes were audited."],
+      },
+      findings: [],
+      summary: { total: 0, counts: { info: 0, low: 0, medium: 0, high: 0, critical: 0 }, highestSeverity: null },
+    };
+
+    const report = renderTextReport(changed);
+    expect(report).toContain(
+      "No findings in the selected changed scope; review the selected scope and Doctor runs.",
+    );
+    expect(report).not.toContain("Audit coverage");
+  });
+
+  it("caps changed paths and scope reasons deterministically without hiding limitations", () => {
+    const changes = Array.from({ length: 23 }, (_, index) => ({
+      status: "modified" as const,
+      path: `src/${String(index + 1).padStart(2, "0")}.ts`,
+    }));
+    const reasons = Array.from({ length: 22 }, (_, index) => ({
+      projectId: `project-${String(index + 1).padStart(2, "0")}`,
+      reason: "direct-change" as const,
+      source: `src/${String(index + 1).padStart(2, "0")}.ts`,
+    }));
+    const changed: ScanResult = {
+      ...result(),
+      auditScope: {
+        mode: "changed",
+        base: { kind: "head", requestedRef: null, resolvedCommit: "1234567890abcdef" },
+        changes,
+        affectedProjectIds: reasons.map(({ projectId }) => projectId),
+        reasons,
+        limitations: ["This limitation must remain visible."],
+      },
+    };
+
+    const report = renderTextReport(changed);
+    expect(renderTextReport(changed)).toBe(report);
+    expect(report).toContain("modified: src/01.ts");
+    expect(report).toContain("modified: src/20.ts");
+    expect(report).not.toContain("modified: src/21.ts");
+    expect(report).toContain("3 additional changed paths omitted.");
+    expect(report).toContain("Scope reason: project-20 — direct-change from src/20.ts");
+    expect(report).not.toContain("Scope reason: project-21");
+    expect(report).toContain("2 additional scope reasons omitted.");
+    expect(report).toContain("Scope limitation: This limitation must remain visible.");
+    expect(report.indexOf("src/01.ts")).toBeLessThan(report.indexOf("src/20.ts"));
   });
 
   it("renders partial audit coverage separately from findings", () => {

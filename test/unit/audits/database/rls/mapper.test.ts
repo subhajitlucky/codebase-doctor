@@ -122,11 +122,11 @@ describe("mapRlsReport", () => {
       impact: expect.any(String),
       remediationConstraints: expect.arrayContaining([
         expect.stringContaining("Application writes"),
-        expect.stringContaining("separately authorized database access"),
+        expect.stringContaining("separately authorized access"),
       ]),
       verification: {
-        command: "codebase-doctor audit . --with-database --format json",
-        expected: expect.stringMatching(/fingerprint.*absent.*coverage.*completed/i),
+        command: "codebase-doctor audit . --database-schema public --with-database --json",
+        expected: expect.stringMatching(/fingerprint.*absent.*coverage.*completed.*public/i),
       },
     });
   });
@@ -179,7 +179,8 @@ describe("mapRlsReport", () => {
       finding.remediationConstraints !== undefined &&
       finding.remediationConstraints.length > 0 &&
       finding.remediationConstraints.every((constraint) => constraint.trim().length > 0) &&
-      finding.verification?.command === "codebase-doctor audit . --with-database --format json" &&
+      finding.verification?.command ===
+        "codebase-doctor audit . --database-schema public --with-database --json" &&
       /fingerprint.*absent.*coverage.*completed/i.test(finding.verification.expected)
     )).toBe(true);
 
@@ -202,5 +203,32 @@ describe("mapRlsReport", () => {
       .toMatch(/bypass/i);
     expect(byRule.get("database/rls/rls-bypass-role")?.remediationConstraints?.join(" "))
       .toMatch(/role membership|BYPASSRLS/i);
+    expect(byRule.get("database/rls/rls-enabled-no-policies")?.impact).toBe(
+      "RLS default-denies non-owner access when no policies exist; any required non-owner workflow may fail.",
+    );
+    expect(byRule.get("database/rls/rls-enabled-no-policies")?.remediationConstraints?.join(" "))
+      .toContain("add a policy only for a confirmed required non-owner workflow");
+  });
+
+  it("re-verifies the complete audited schema set for table and schema-less findings", () => {
+    const report = reportWithEveryRule();
+    const mapped = mapRlsReport({
+      ...report,
+      schemas: ["private", "tenant $(touch nope)", "public"],
+    });
+    const expectedCommand =
+      "codebase-doctor audit . --database-schema private --database-schema 'tenant $(touch nope)' " +
+      "--database-schema public --with-database --json";
+
+    for (const ruleId of ["database/rls/public-unconditional-write", "database/rls/rls-bypass-role"]) {
+      const finding = mapped.find((candidate) => candidate.ruleId === ruleId);
+      expect(finding?.verification?.command).toBe(expectedCommand);
+      expect(finding?.verification?.expected).toContain("private, tenant $(touch nope), public");
+      expect(finding?.remediationConstraints?.join(" ")).toMatch(
+        /separately authorized.*same audited schema set.*private, tenant \$\(touch nope\), public/i,
+      );
+    }
+    expect(expectedCommand).not.toContain("--database-schema tenant $(touch nope)");
+    expect(expectedCommand).not.toMatch(/postgres|password|credential/i);
   });
 });

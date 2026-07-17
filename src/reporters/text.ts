@@ -14,6 +14,7 @@ const SEVERITY_COLORS: Record<Severity, number> = {
   high: 31,
   critical: 35,
 };
+const MAX_SCOPE_LIST_ITEMS = 20;
 
 function severityLabel(
   severity: Severity,
@@ -65,14 +66,24 @@ function auditScopeLines(result: ScanResult): string[] {
   lines.push(
     `Changes: ${auditScope.changes.length}; affected projects: ${auditScope.affectedProjectIds.length}`,
   );
-  for (const change of auditScope.changes) {
+  for (const change of auditScope.changes.slice(0, MAX_SCOPE_LIST_ITEMS)) {
     lines.push(
       `  ${change.status}: ${change.path}` +
       (change.previousPath === undefined ? "" : ` (previous: ${change.previousPath})`),
     );
   }
-  for (const reason of auditScope.reasons) {
+  if (auditScope.changes.length > MAX_SCOPE_LIST_ITEMS) {
+    lines.push(
+      `  ${auditScope.changes.length - MAX_SCOPE_LIST_ITEMS} additional changed paths omitted.`,
+    );
+  }
+  for (const reason of auditScope.reasons.slice(0, MAX_SCOPE_LIST_ITEMS)) {
     lines.push(`Scope reason: ${reason.projectId} — ${reason.reason} from ${reason.source}`);
+  }
+  if (auditScope.reasons.length > MAX_SCOPE_LIST_ITEMS) {
+    lines.push(
+      `${auditScope.reasons.length - MAX_SCOPE_LIST_ITEMS} additional scope reasons omitted.`,
+    );
   }
   for (const limitation of auditScope.limitations) {
     lines.push(`Scope limitation: ${limitation}`);
@@ -151,9 +162,10 @@ export function renderTextReport(
 
   lines.push("", "Findings");
   if (result.findings.length === 0) {
-    lines.push(result.auditScope.mode === "changed"
-      ? "No findings in the selected changed scope; review Audit coverage."
-      : "Clean scan: no findings.");
+    const changedEmptyMessage = result.coverage === undefined
+      ? "No findings in the selected changed scope; review the selected scope and Doctor runs."
+      : "No findings in the selected changed scope; review the selected scope, Doctor runs, and Audit coverage.";
+    lines.push(result.auditScope.mode === "changed" ? changedEmptyMessage : "Clean scan: no findings.");
   } else {
     for (const finding of result.findings) {
       lines.push(`${severityLabel(finding.severity, colorEnabled)} ${finding.title} (${finding.ruleId})`);

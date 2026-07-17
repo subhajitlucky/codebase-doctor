@@ -164,7 +164,11 @@ describe("Project Doctor rules", () => {
       ruleId: "repository/no-visible-tests",
       severity: "info",
       confidence: "medium",
+      remediation: expect.stringMatching(/recognized test path|common test naming/i),
+      remediationConstraints: [expect.stringMatching(/recognized test path|common test naming/i)],
     });
+    expect(missing[0]?.remediation).not.toMatch(/document|non-standard/i);
+    expect(missing[0]?.remediationConstraints?.join(" ")).not.toMatch(/document|non-standard/i);
     expectGuidance(missing[0]);
     expect(visible).toEqual([]);
   });

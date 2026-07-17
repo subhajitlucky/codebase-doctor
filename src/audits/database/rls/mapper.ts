@@ -12,8 +12,6 @@ import type {
 } from "./types.js";
 
 const DOCTOR_ID = "database/rls";
-const LIVE_DATABASE_PERMISSION =
-  "Live re-verification requires separately authorized database access; the command conveys no credentials.";
 
 interface LiveGuidance {
   readonly impact: string;
@@ -40,9 +38,9 @@ const LIVE_GUIDANCE = {
     ],
   },
   "rls-enabled-no-policies": {
-    impact: "Required non-owner operations are denied because enabled RLS has no policies to authorize them.",
+    impact: "RLS default-denies non-owner access when no policies exist; any required non-owner workflow may fail.",
     remediationConstraints: [
-      "Each required application operation must have an explicit least-privilege policy; unspecified access remains denied.",
+      "Preserve default-deny; add a policy only for a confirmed required non-owner workflow, and keep it least-privilege.",
     ],
   },
   "force-rls-disabled": {
@@ -103,9 +101,42 @@ function remediation(
   return `${recommendation}\n\nSuggested SQL:\n${suggestedSql.join("\n")}`;
 }
 
+function quoteCommandArgument(value: string): string {
+  return /^[a-zA-Z0-9_./:@%+=,-]+$/.test(value)
+    ? value
+    : `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function displayVerificationCommand(args: readonly string[]): string {
+  return ["codebase-doctor", ...args].map(quoteCommandArgument).join(" ");
+}
+
+function liveVerification(schemas: readonly string[]): NonNullable<Finding["verification"]> {
+  const schemaArgs = schemas.flatMap((schema) => ["--database-schema", schema]);
+  const schemaSet = schemas.join(", ");
+  return {
+    command: displayVerificationCommand([
+      "audit",
+      ".",
+      ...schemaArgs,
+      "--with-database",
+      "--json",
+    ]),
+    expected:
+      `This fingerprint is absent and applicable live database audit coverage is completed ` +
+      `for the same schema set: ${schemaSet}.`,
+  };
+}
+
+function livePermissionConstraint(schemas: readonly string[]): string {
+  return "Live verification requires separately authorized access to the same audited schema set: " +
+    `${schemas.join(", ")}; the command conveys no credentials.`;
+}
+
 function mappedFinding(
   finding: RlsFinding | SchemaFinding,
   table: string | undefined,
+  schemas: readonly string[],
 ): Finding {
   const schema = finding.schema ?? "<database>";
   const ruleId = `${DOCTOR_ID}/${finding.id}`;
@@ -129,13 +160,10 @@ function mappedFinding(
     impact: guidance.impact,
     remediationConstraints: [
       ...guidance.remediationConstraints,
-      LIVE_DATABASE_PERMISSION,
+      livePermissionConstraint(schemas),
     ],
     remediation: remediation(finding.recommendation, finding.suggestedSql),
-    verification: {
-      command: "codebase-doctor audit . --with-database --format json",
-      expected: "This fingerprint is absent and applicable live database audit coverage is completed.",
-    },
+    verification: liveVerification(schemas),
     fingerprint: createFingerprint({
       doctorId: DOCTOR_ID,
       ruleId,
@@ -146,9 +174,9 @@ function mappedFinding(
 
 export function mapRlsReport(report: AuditReport): Finding[] {
   return sortFindings([
-    ...report.schemaFindings.map((finding) => mappedFinding(finding, undefined)),
+    ...report.schemaFindings.map((finding) => mappedFinding(finding, undefined, report.schemas)),
     ...report.tables.flatMap((table) =>
-      table.findings.map((finding) => mappedFinding(finding, table.table))
+      table.findings.map((finding) => mappedFinding(finding, table.table, report.schemas))
     ),
   ]);
 }

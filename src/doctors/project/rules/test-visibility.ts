@@ -31,8 +31,10 @@ export function findTestVisibility(snapshot: ProjectSnapshot): Finding[] {
       detail: `Inspected ${snapshot.files.length} inventory records without finding a common test path.`,
     }],
     impact: "Automated validation may be absent or undiscoverable to maintainers and tooling.",
-    remediationConstraints: ["Keep tests discoverable by repository tooling or document their authoritative location."],
-    remediation: "Add automated tests or document the repository's non-standard test location.",
+    remediationConstraints: [
+      "Add at least one test file in a recognized test path or with a common test filename pattern.",
+    ],
+    remediation: "Add automated tests in a recognized test path or using a common test naming pattern.",
     verification: {
       command: "codebase-doctor audit . --format json",
       expected: "This fingerprint is absent and applicable repository audit coverage is completed.",
