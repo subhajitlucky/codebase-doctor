@@ -115,18 +115,25 @@ fixed, read-only commands. A requested changed audit that cannot establish its
 Git root, revision, merge base, or change list exits `2`.
 
 The report's `auditScope` is `full` for the default command and `changed` for
-`--changed`. Changed scope selects directly affected projects and conservatively
-includes their internal Node workspace dependants. Selected projects still
-receive full-context project diagnostics and affected check plans. Relevant SQL
-changes select complete migration streams, because analyzing a migration file
-alone would not reconstruct final state. For a rename both the new and old path
-can affect project selection; for a copy, only the copied destination is treated
-as changed because the source remains present.
+`--changed`. Changed mode is mixed-scope, not a universal file filter. Scope
+planning selects directly affected projects and conservative internal Node
+workspace dependants, but each doctor applies that selection according to its
+contract. Project Doctor structural rules run with the full repository snapshot
+and may report findings outside changed paths or projects for manifests,
+lockfiles, workspaces, and test visibility. Configured validation command plans
+are built from the full project topology and then filtered to
+`affectedProjectIds`. Static SQL selects affected migration streams and replays
+full current history for every selected stream; partial or skipped coverage
+records topology limitations. Live database remains a full observed schema-set
+audit only with separately requested `--with-database` access.
 
-A changed audit says nothing about unaffected repository areas. Zero changed
-findings is not a full clean result. Always inspect `auditScope.limitations`,
-`doctorRuns`, `coverage`, and findings; partial, skipped, failed, or otherwise
-limited coverage qualifies any conclusion.
+Unaffected source behavior and domain checks are not broadly covered in changed
+mode, while full-context structural doctors may still inspect unaffected areas.
+Zero changed findings is not a full clean result. Inspect `auditScope`,
+`doctorRuns`, `coverage`, and findings to understand each doctor's actual scope,
+including partial, skipped, failed, and limitation records. For a rename both
+the new and old path can affect selection; for a copy, only the destination is
+treated as changed because the source remains present.
 
 The audit automatically runs offline static SQL analysis when it discovers a
 supported PostgreSQL migration stream. It requires no credentials, makes no
@@ -316,11 +323,12 @@ The npm package includes the provider-neutral skill at:
 ```
 
 Copy that directory into a compatible agent's skill directory, or let an agent
-load it from the installed package. The workflow starts with
-`codebase-doctor audit . --json`, treats partial and skipped coverage explicitly,
-uses automatic offline migration analysis, requests separate permission for
-`--run-checks` and live `--with-database` access, asks a human or external agent
-to fix one evidence-backed finding at a time, and reruns the exact audit.
+load it from the installed package. After edits, the workflow prefers
+`codebase-doctor audit . --changed --json`; it uses a full audit at an initial
+trust or release boundary. It treats mixed scope, partial, and skipped coverage
+explicitly, requests separate permission for `--run-checks` and live
+`--with-database` access, asks a human or external agent to fix one
+evidence-backed finding at a time, and reruns the same scope.
 
 ## Development
 

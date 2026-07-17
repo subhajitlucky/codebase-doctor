@@ -56,6 +56,27 @@ describe("independent auditor product boundary", () => {
     }
   });
 
+  it("documents changed audits as mixed-scope per doctor", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/changed mode.*mixed[- ]scope|mixed[- ]scope.*changed mode/is);
+      expect(text, path).toMatch(
+        /Project Doctor.*full repository snapshot.*(?:manifests|lockfiles|workspaces|test visibility)/is,
+      );
+      expect(text, path).toMatch(
+        /(?:configured validation|check).*plans?.*(?:filtered|restricted).*affectedProjectIds/is,
+      );
+      expect(text, path).toMatch(
+        /static SQL.*affected migration streams?.*full current\s+history/is,
+      );
+      expect(text, path).toMatch(
+        /live database.*full observed schema[- ]set\s+audit.*--with-database/is,
+      );
+      expect(text, path).not.toMatch(
+        /does not audit unaffected repository areas|says nothing about unaffected repository areas/i,
+      );
+    }
+  });
+
   it("keeps historical plans inside the same permanent boundary", async () => {
     const forbidden = [
       /repair-loop coordination/i,

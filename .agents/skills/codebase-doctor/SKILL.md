@@ -41,11 +41,20 @@ external coding agent performs the fix; Codebase Doctor reruns independently.
    ```
 
 3. Inspect `auditScope`, then `doctorRuns`, then `coverage`, then `findings`.
-   Changed scope includes directly affected projects, conservative internal
-   workspace dependants, full-context project diagnostics, affected check plans,
-   and selected complete SQL migration streams. It does not audit unaffected
-   repository areas. Never treat zero changed findings as a full repository
-   clean result. Read every partial, skipped, failed, and limitation record.
+   Changed mode is mixed-scope, not a universal file filter. Project Doctor
+   structural rules run with the full repository snapshot and may report
+   findings outside changed paths or projects for manifests, lockfiles,
+   workspaces, and test visibility. Configured validation command plans are
+   built from the full topology and then filtered to `affectedProjectIds`.
+   Static SQL selects affected migration streams and replays full current
+   history for every selected stream, with partial or skipped topology
+   limitations. Live database remains a full observed schema-set audit only
+   when separately requested with `--with-database`.
+
+   Unaffected source behavior and domain checks are not broadly covered, while
+   full-context structural doctors may inspect unaffected areas. Never treat
+   zero changed findings as a full repository clean result. Read every partial,
+   skipped, failed, and limitation record to understand each doctor's scope.
 
 4. Read each finding's evidence and machine-readable `impact`,
    `remediationConstraints`, and `verification` guidance. Expected repair

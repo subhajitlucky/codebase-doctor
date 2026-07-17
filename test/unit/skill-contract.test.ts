@@ -94,10 +94,18 @@ describe("Codebase Doctor agent skill contract", () => {
 
   it("teaches honest changed-audit verification", async () => {
     const skill = await readFile(skillPath, "utf8");
+    const changedAudit = skill.indexOf("npx codebase-doctor audit . --changed --json");
+    const fullAudit = skill.indexOf("npx codebase-doctor audit . --json");
 
     expect(skill).toMatch(/prefer.*changed.*after.*edit/is);
     expect(skill).toMatch(/full audit.*(?:trust|release) boundar/is);
+    expect(changedAudit).toBeGreaterThan(-1);
+    expect(fullAudit).toBeGreaterThan(changedAudit);
     expect(skill).toMatch(/auditScope.*doctorRuns.*coverage.*findings/is);
+    expect(skill).toMatch(/changed mode.*mixed[- ]scope|mixed[- ]scope.*changed mode/is);
+    expect(skill).toMatch(/Project Doctor.*full repository snapshot/is);
+    expect(skill).toMatch(/plans?.*filtered.*affectedProjectIds/is);
+    expect(skill).toMatch(/SQL.*affected migration streams?.*full current\s+history/is);
     expect(skill).toMatch(/never treat.*zero.*changed.*findings.*(?:full|repository).*clean/is);
     expect(skill).toMatch(/rerun.*same scope/is);
     expect(skill).toMatch(/do not claim.*resolved.*outside.*coverage/is);

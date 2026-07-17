@@ -105,24 +105,28 @@ Missing dependency metadata, unnamed Node projects, and duplicate internal
 package names become limitations instead of guesses. This is a package-level
 dependency graph, not a source import graph.
 
-The Project Doctor receives the complete snapshot but emits diagnostics only
-for affected projects in changed mode, preserving the full context needed for
-manifest, lockfile, workspace, and test-visibility rules. The Check Doctor plans
-configured validation only for affected projects. `--changed` does not enable
-those checks; execution still requires `--run-checks`.
+Changed mode is mixed-scope, not a universal file filter. Project Doctor
+structural rules run with the full repository snapshot and may report findings
+outside changed paths or projects for manifests, lockfiles, workspaces, and test
+visibility. Configured validation command plans are created from the full
+project topology and then filtered to `affectedProjectIds`. `--changed` does not
+enable those checks; execution still requires `--run-checks`.
 
-The offline SQL doctor selects complete migration streams when a stream has a
-relevant changed path. Stream-wide replay is necessary to reconstruct final
+Static SQL selects affected migration streams and replays full current history
+for every selected stream. Stream-wide replay is necessary to reconstruct final
 state. Deleted SQL paths and paths missing from the current snapshot use
 conservative historical-name or generic schema fallback when possible and
-surface limitations when exact selection cannot be proven. Dynamic SQL,
-malformed statements, unsupported relevant DDL, and schema uncertainty produce
-partial coverage, not clean claims.
+surface partial or skipped topology limitations when exact selection cannot be
+proven. Dynamic SQL, malformed statements, unsupported relevant DDL, and schema
+uncertainty produce partial coverage, not clean claims. Live database remains a
+full observed schema-set audit only when separately requested with
+`--with-database`; changed paths do not narrow its configured schema set.
 
-A changed audit does not examine every unaffected project or stream. Zero
-changed findings is not a full clean result. Consumers must read
-`auditScope.limitations`, `doctorRuns`, and `coverage` before interpreting
-`findings`.
+Unaffected source behavior and domain checks are not broadly covered in changed
+mode, although full-context structural doctors may inspect unaffected areas.
+Zero changed findings is not a full clean result. Consumers must read
+`auditScope`, `doctorRuns`, `coverage`, and `findings` to determine each doctor's
+actual scope.
 
 ## Doctors and capabilities
 
