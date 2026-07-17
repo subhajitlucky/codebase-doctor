@@ -52,11 +52,16 @@ export interface SqlStreamIdentity {
   readonly root: string;
 }
 
+function isSqlInput(path: string): boolean {
+  return path.toLowerCase().endsWith(".sql");
+}
+
 /** Maps a repository path to one of the SQL stream roots supported by static auditing. */
 export function identifySqlStream(
   snapshot: Pick<ProjectSnapshot, "projects">,
   path: string,
 ): SqlStreamIdentity | undefined {
+  if (!isSqlInput(path)) return undefined;
   const projectList = projects(snapshot);
   const owner = ownerOf(path, projectList);
   const relativePath = relativeToProject(path, owner.root);
@@ -81,7 +86,10 @@ export function identifySqlStream(
 }
 
 function pathIsInStream(path: string, stream: SqlMigrationStream): boolean {
-  return path === stream.root || path.startsWith(`${stream.root}/`);
+  if (!isSqlInput(path)) return false;
+  return stream.root.toLowerCase().endsWith(".sql")
+    ? path === stream.root
+    : path.startsWith(`${stream.root}/`);
 }
 
 /** Selects current streams affected by an audit scope without mutating either input. */

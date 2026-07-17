@@ -145,6 +145,37 @@ describe("discoverSqlStreams", () => {
     }])).map(({ root }) => root)).toEqual(["supabase/migrations"]);
   });
 
+  it("requires SQL suffixes for current, rename-old, and copy-destination paths", () => {
+    const streams = discoverSqlStreams(snapshot([
+      "db/migrations/001.sql",
+      "supabase/migrations/001.sql",
+    ]));
+
+    expect(selectSqlStreams(streams, changedAuditScope([
+      { status: "modified", path: "supabase/migrations/README.md" },
+      {
+        status: "renamed",
+        previousPath: "db/migrations/README.md",
+        path: "docs/migrations.md",
+      },
+      {
+        status: "copied",
+        previousPath: "db/migrations/001.sql",
+        path: "supabase/migrations/README.md",
+      },
+    ]))).toEqual([]);
+    expect(selectSqlStreams(streams, changedAuditScope([{
+      status: "renamed",
+      previousPath: "db/migrations/001.SQL",
+      path: "docs/001.txt",
+    }])).map(({ root }) => root)).toEqual(["db/migrations"]);
+    expect(selectSqlStreams(streams, changedAuditScope([{
+      status: "copied",
+      previousPath: "db/migrations/README.md",
+      path: "supabase/migrations/002.SQL",
+    }])).map(({ root }) => root)).toEqual(["supabase/migrations"]);
+  });
+
   it("matches stream roots on slash segment boundaries and preserves literal backslashes", () => {
     const streams = discoverSqlStreams(snapshot([
       "migrations/001.sql",
@@ -170,6 +201,13 @@ describe("discoverSqlStreams", () => {
       projectId: "project-1",
       root: "packages/app/schema.sql",
     });
+    expect(identifySqlStream(value, "packages/app/database/migrations/001.SQL")).toEqual({
+      id: "project-1:database/migrations",
+      projectId: "project-1",
+      root: "packages/app/database/migrations",
+    });
+    expect(identifySqlStream(value, "packages/app/database/migrations/README.md"))
+      .toBeUndefined();
     expect(identifySqlStream(value, "packages/app/sql/one.sql")).toBeUndefined();
     expect(identifySqlStream(value, "packages/app\\migrations/one.sql")).toBeUndefined();
   });

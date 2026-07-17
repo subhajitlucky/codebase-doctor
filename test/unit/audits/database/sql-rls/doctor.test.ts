@@ -307,6 +307,28 @@ describe("static SQL RLS doctor", () => {
     });
   });
 
+  it("does not replay a migration stream for a changed non-SQL file inside its root", async () => {
+    const reader = vi.fn();
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([{ path: "supabase/migrations/001.sql" }], changedAuditScope([
+        { status: "modified", path: "supabase/migrations/README.md" },
+      ])),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).not.toHaveBeenCalled();
+    expect(entry?.result).toMatchObject({
+      status: "completed",
+      findings: [],
+      coverage: [expect.objectContaining({
+        scope: "changed:supported-sql-migration-streams",
+        status: "skipped",
+        limitations: [expect.stringMatching(/no changed supported SQL migration stream was selected/i)],
+      })],
+    });
+  });
+
   it("selects an existing schema.sql fallback in changed mode", async () => {
     const reader = vi.fn(async () => "create table public.docs (id uuid);");
     const [entry] = await runDoctors(
