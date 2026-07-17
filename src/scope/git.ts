@@ -49,7 +49,7 @@ function normalizeRepositoryPath(value: string): string {
   const withPosixSeparators = value.replaceAll('\\', '/');
   if (
     withPosixSeparators.startsWith('/')
-    || /^[A-Za-z]:\//u.test(withPosixSeparators)
+    || /^[A-Za-z]:/u.test(withPosixSeparators)
   ) {
     throw new Error(`Git path must be repository-relative: ${JSON.stringify(value)}`);
   }
@@ -161,6 +161,9 @@ function normalizeChange(change: ChangedPath): ChangedPath {
       path,
       previousPath: normalizeRepositoryPath(change.previousPath),
     };
+  }
+  if (change.previousPath !== undefined) {
+    throw new Error(`${change.status} changes must not include a previous path.`);
   }
 
   return { status: change.status, path };

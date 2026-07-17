@@ -78,6 +78,9 @@ describe('parseNameStatus', () => {
   it.each([
     'M\0/absolute.ts\0',
     'A\0C:\\absolute.ts\0',
+    'M\0C:outside.ts\0',
+    'A\0C:../outside.ts\0',
+    'D\0C:\0',
     'D\0../outside.ts\0',
     'M\0directory\\..\\..\\outside.ts\0',
     'R100\0../old.ts\0new.ts\0',
@@ -174,5 +177,11 @@ describe('mergeChangedPaths', () => {
     )).toEqual([
       { status: 'renamed', path: 'current.ts', previousPath: 'a-old.ts' },
     ]);
+  });
+
+  it('rejects previousPath metadata for statuses that do not use it', () => {
+    expect(() => mergeChangedPaths([
+      { status: 'modified', path: 'current.ts', previousPath: 'old.ts' },
+    ])).toThrow(/previous path/i);
   });
 });
