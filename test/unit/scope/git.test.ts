@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  discoverGitChanges,
+  GitScopeError,
   mergeChangedPaths,
   parseNameStatus,
   parseUntracked,
@@ -183,5 +185,38 @@ describe('mergeChangedPaths', () => {
     expect(() => mergeChangedPaths([
       { status: 'modified', path: 'current.ts', previousPath: 'old.ts' },
     ])).toThrow(/previous path/i);
+  });
+});
+
+describe('discoverGitChanges runner contract', () => {
+  it('rejects a blank base ref before invoking Git', async () => {
+    const calls: readonly string[][] = [];
+    const runner = {
+      run: async (_root: string, args: readonly string[]) => {
+        (calls as string[][]).push([...args]);
+        return '';
+      },
+    };
+
+    await expect(discoverGitChanges({ root: '.', baseRef: '  ' }, runner))
+      .rejects.toMatchObject({ code: 'GIT_INVALID_BASE_REF' });
+    expect(calls).toEqual([]);
+  });
+
+  it('maps runner failures to a stable error without leaking sensitive output', async () => {
+    const secret = 'https://user:token@example.invalid/repository.git';
+    const runner = {
+      run: async () => {
+        throw new Error(`fatal: could not read ${secret}\nENV_SECRET=hunter2`);
+      },
+    };
+
+    const failure = await discoverGitChanges({ root: '.', baseRef: 'missing' }, runner)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(GitScopeError);
+    expect(failure).toMatchObject({ code: 'GIT_NOT_REPOSITORY' });
+    expect(String(failure)).not.toContain(secret);
+    expect(String(failure)).not.toContain('hunter2');
   });
 });
