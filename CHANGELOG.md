@@ -11,6 +11,11 @@ All notable changes to Codebase Doctor are documented here.
   limitations, and conservative `coverageComplete` semantics across text, JSON,
   SARIF, and the public package contract. Complete coverage describes declared
   audit execution; it is not proof that code is bug-free or correct.
+- Add an automatic, read-only, offline `security/secrets` Doctor for
+  repository-shareable files. It distinguishes tracked credentials from ignored
+  local `.env` storage, uses precision-first provider/context detection, withholds
+  values from every report and fingerprint, bounds total work and findings, and
+  reports incomplete work as partial coverage.
 
 ### Changed
 

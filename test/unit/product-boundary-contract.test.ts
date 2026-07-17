@@ -194,7 +194,8 @@ describe("independent auditor product boundary", () => {
     ]);
 
     expect(readme).toMatch(/## Current coverage versus north star/i);
-    expect(readme).toMatch(/\|\s*Domain\s*\|\s*Current 0\.1\.3 coverage\s*\|\s*North star\s*\|/i);
+    expect(readme).toMatch(/\|\s*Domain\s*\|\s*Current source coverage\s*\|\s*North star\s*\|/i);
+    expect(readme).toMatch(/secrets analysis.*Unreleased.*not part.*published `?0\.1\.3`?/is);
 
     for (const [path, text] of [
       ["README.md", readme],
@@ -217,6 +218,22 @@ describe("independent auditor product boundary", () => {
       expect(text, path).toMatch(
         /coverageComplete.*does not mean.*(?:bug[- ]free|no bugs|correct)|(?:bug[- ]free|no bugs|correct).*coverageComplete/is,
       );
+    }
+  });
+
+  it("documents the built-in secrets audit without treating local env storage as a leak", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/security\/secrets/);
+      expect(text, path).toMatch(/ignored.*\.env.*(?:normal|not.*finding|not.*scan)/is);
+      expect(text, path).toMatch(/tracked|repository-shareable/is);
+      expect(text, path).toMatch(/credential|secret/is);
+      expect(text, path).toMatch(/value.*withheld|withhold.*value/is);
+      expect(text, path).toMatch(/never.*fingerprint|fingerprint.*never/is);
+      expect(text, path).toMatch(/read-only/is);
+      expect(text, path).toMatch(/offline/is);
+      expect(text, path).toMatch(/precision-first/is);
+      expect(text, path).toMatch(/not exhaustive|non-exhaustive/is);
+      expect(text, path).toMatch(/external.*(?:rotate|revoke|remediat).*rerun|(?:rotate|revoke|remediat).*external.*rerun/is);
     }
   });
 });

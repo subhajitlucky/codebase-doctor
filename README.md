@@ -66,20 +66,23 @@ implemented modules. It does not mean complete analyzer coverage for every
 language, framework, or domain. Inspect `doctorRuns` and `coverage` before
 calling a codebase verified or clean.
 
-| Domain | Current 0.1.3 coverage | North star |
+| Domain | Current source coverage | North star |
 | --- | --- | --- |
 | Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, and visible-test diagnostics | Cross-language dependency and behavioral topology |
 | Configured validation | JavaScript/TypeScript and Python command planning; execution only with `--run-checks` | Sandboxed validation across supported ecosystems |
 | Database | Offline PostgreSQL migration RLS and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
 | Frontend | Framework detection only; repository-owned checks may provide evidence | Built-in React, Next.js, accessibility, SEO, and bundle analysis |
 | Backend and authorization | NestJS detection only; repository-owned checks may provide evidence | Built-in API, authentication, worker, webhook, cron, permission, and rate-limit analysis |
-| Security | Command-output redaction and RLS security findings; no general repository security analyzer | Built-in secrets, dependency, permission, and supply-chain analysis |
+| Security | Built-in repository-shareable secrets analysis, command-output redaction, and RLS findings; no dependency, permission, or supply-chain analyzer yet | Built-in secrets, dependency, permission, and supply-chain analysis |
 | Infrastructure | Configuration files may be inventoried but have no semantic analyzer | Built-in Docker, CI, hosting, and deployment analysis |
 | Performance | No semantic analyzer | Built-in cache, query, memory, and profiling analysis with explicit runtime permissions |
 | AI systems | No semantic analyzer | Built-in prompt, token, model, and grounding analysis with honest statistical limits |
 
 The north-star entries are planned internal modules, not separately installed
 Doctor products and not shipped behavior.
+
+The built-in secrets analysis described below is current Unreleased source
+behavior and is not part of the already published `0.1.3` package.
 
 ## Domain coverage inventory
 
@@ -129,8 +132,36 @@ module details, evidence, limitations, and findings.
 - Explicit, independent permission for database network access.
 - Read-only catalog inspection for policies, privileges, roles, memberships,
   RLS enforcement, and bypass paths.
+- Automatic offline `security/secrets` analysis for repository-shareable text
+  files, with bounded work and secret-safe findings.
 
 Go, Rust, and Java are detection-only in `0.1.x`; Codebase Doctor does not execute their toolchains yet.
+
+## Built-in secrets audit
+
+The combined `audit` command automatically runs the read-only, offline
+`security/secrets` module. It is precision-first and not exhaustive: it detects
+private-key material, documented provider-token shapes, paired AWS credentials,
+credential-bearing URLs, and high-confidence sensitive assignments without a
+generic file-wide entropy rule.
+
+A Git-ignored local `.env` file is normal runtime storage and is not a finding.
+A tracked `.env`, `.env.example`, source file, or other repository-shareable file
+containing a real credential is a finding. Full audits use a fixed read-only Git
+file listing; changed audits inspect only current changed files. If Git metadata
+is unavailable, conservative local-environment fallback rules apply and coverage
+is partial.
+
+The matched value is withheld from every finding and never enters a fingerprint,
+message, evidence record, error, text report, JSON report, or SARIF report. The
+module scans at most 1 MB per file and 100 MB per audit, emits at most 100
+findings per file and 1,000 per audit, and reports partial coverage whenever a
+limit or read failure prevents complete selected work.
+
+Codebase Doctor does not remove, rotate, revoke, or validate a credential. An
+external authorized human or coding agent must remediate the shareable content,
+rotate or revoke the credential outside Codebase Doctor, and then rerun the same
+audit for independent verification.
 
 ## Usage
 

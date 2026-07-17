@@ -121,6 +121,21 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    `--database-timeout` to change the catalog statement timeout. A skipped or
    failed live doctor is not a clean database audit.
 
+8. The combined audit automatically runs the read-only, offline
+   `security/secrets` module. It is precision-first and not exhaustive. A
+   Git-ignored local `.env` file is normal and is not a finding; a tracked
+   `.env`, template, source file, or other repository-shareable file containing
+   a real credential is a finding. Changed mode scans only current changed
+   files.
+
+   The matched value is withheld and never enters a fingerprint, message,
+   evidence record, error, text, JSON, or SARIF output. Never ask Doctor to show
+   or validate it. Treat partial, failed, or not-selected secrets coverage as an
+   unresolved verification gap. Have an external authorized human or coding
+   agent remediate the shareable content, rotate or revoke the credential
+   outside Codebase Doctor, and then rerun the same audit. Doctor never performs
+   those actions.
+
 `scan` is the backward-compatible repository-only command. Use `--exclude` or
 `.codebase-doctor.json` for intentional exclusions, `--baseline` to classify
 fingerprints, `--format sarif` for SARIF 2.1.0, `--timeout` for configured check

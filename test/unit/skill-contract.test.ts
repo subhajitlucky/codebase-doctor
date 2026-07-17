@@ -130,6 +130,18 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/unsupported|unknown|not-selected/is);
   });
 
+  it("teaches agents to handle secret findings without exposing or fixing values", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/security\/secrets/);
+    expect(skill).toMatch(/ignored.*\.env.*(?:normal|not.*finding|not.*scan)/is);
+    expect(skill).toMatch(/tracked|repository-shareable/is);
+    expect(skill).toMatch(/value.*withheld|withhold.*value/is);
+    expect(skill).toMatch(/never.*fingerprint|fingerprint.*never/is);
+    expect(skill).toMatch(/precision-first.*not exhaustive|not exhaustive.*precision-first/is);
+    expect(skill).toMatch(/external.*(?:rotate|revoke|remediat).*rerun|(?:rotate|revoke|remediat).*external.*rerun/is);
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",

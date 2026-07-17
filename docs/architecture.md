@@ -187,6 +187,36 @@ a new logical issue. A repair is supported only when the fingerprint is absent
 and all applicable coverage completed. Absence during partial, skipped, failed,
 limited, or out-of-scope work is not resolution.
 
+## Built-in secrets audit
+
+The combined audit registers `security/secrets` as a read-only, offline Doctor.
+The detector is precision-first and not exhaustive. It recognizes bounded
+private-key, documented provider-token, paired AWS credential, credential-URL,
+and contextual sensitive-assignment evidence without executing an external
+scanner, using the network, or applying generic file-wide entropy.
+
+Full scope is the intersection of bounded inventory and a fixed read-only Git
+listing of tracked plus non-ignored files. A Git-ignored local `.env` file is
+normal and is not a finding. A tracked `.env` or other repository-shareable file
+can produce a finding. Changed scope reads only current added, modified, renamed,
+copied, and untracked selected paths. Deleted, missing, unreadable, oversized,
+or budget-truncated work becomes a limitation and partial coverage.
+
+The raw matched value exists only as a temporary analyzer-local candidate. The
+returned match contract has no value field. The value is withheld from findings
+and never enters a fingerprint, digest, evidence record, message, limitation,
+error, or reporter. Fingerprints use only rule, detector, safe assignment-name,
+and location identity.
+
+The module limits each file to 1 MB, total selected content to 100 MB, findings
+per file to 100, and findings per audit to 1,000. Reaching a ceiling is visible
+partial coverage rather than silent truncation or an unbounded model report.
+
+Codebase Doctor never removes or rotates credentials. An external authorized
+human or coding agent must remediate repository-shareable content, rotate or
+revoke the credential outside Doctor, and then rerun the same scope for
+independent verification.
+
 ## Normalized report contract
 
 The normalizer copies and deterministically sorts projects, plans, doctor runs,
