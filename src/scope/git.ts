@@ -98,15 +98,14 @@ function normalizeRepositoryPath(value: string): string {
     throw new Error('Git path must not be empty or contain NUL bytes.');
   }
 
-  const withPosixSeparators = value.replaceAll('\\', '/');
   if (
-    withPosixSeparators.startsWith('/')
-    || /^[A-Za-z]:/u.test(withPosixSeparators)
+    value.startsWith('/')
+    || /^[A-Za-z]:/u.test(value)
   ) {
     throw new Error(`Git path must be repository-relative: ${JSON.stringify(value)}`);
   }
 
-  const normalized = posix.normalize(withPosixSeparators);
+  const normalized = posix.normalize(value);
   if (
     normalized === '.'
     || normalized === '..'
@@ -285,10 +284,7 @@ function parseCommit(output: string): string {
   return commit;
 }
 
-function stripGitLineEnding(output: string): string {
-  if (output.endsWith('\r\n')) {
-    return output.slice(0, -2);
-  }
+function stripGitTerminalNewline(output: string): string {
   if (output.endsWith('\n')) {
     return output.slice(0, -1);
   }
@@ -317,7 +313,7 @@ export async function discoverGitChanges(
 
   let repositoryRoot: string;
   try {
-    repositoryRoot = await realpath(stripGitLineEnding(reportedRoot));
+    repositoryRoot = await realpath(stripGitTerminalNewline(reportedRoot));
   } catch {
     throw new GitScopeError('GIT_INVALID_OUTPUT', 'Git returned an invalid repository root.');
   }

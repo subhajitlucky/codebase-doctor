@@ -29,7 +29,7 @@ describe('parseNameStatus', () => {
       { status: 'modified', path: 'changed-type.ts' },
       {
         status: 'copied',
-        path: 'copied/location.ts',
+        path: 'copied\\location.ts',
         previousPath: 'source.ts',
       },
       {
@@ -39,7 +39,7 @@ describe('parseNameStatus', () => {
       {
         status: 'renamed',
         path: 'renamed/location.ts',
-        previousPath: 'old/location.ts',
+        previousPath: 'old\\location.ts',
       },
       { status: 'added', path: 'source file.ts' },
       { status: 'modified', path: 'zeta/file.ts' },
@@ -86,7 +86,6 @@ describe('parseNameStatus', () => {
     'A\0C:../outside.ts\0',
     'D\0C:\0',
     'D\0../outside.ts\0',
-    'M\0directory\\..\\..\\outside.ts\0',
     'R100\0../old.ts\0new.ts\0',
     'C100\0old.ts\0/absolute.ts\0',
   ])('rejects unsafe paths in %s', (output) => {
@@ -99,10 +98,10 @@ describe('parseNameStatus', () => {
 });
 
 describe('parseUntracked', () => {
-  it('parses NUL-delimited paths, normalizes separators, and sorts them', () => {
+  it('parses NUL-delimited paths, preserves backslashes, and sorts them', () => {
     expect(parseUntracked('z file.ts\0nested\\file.ts\0a.ts\0')).toEqual([
       { status: 'untracked', path: 'a.ts' },
-      { status: 'untracked', path: 'nested/file.ts' },
+      { status: 'untracked', path: 'nested\\file.ts' },
       { status: 'untracked', path: 'z file.ts' },
     ]);
   });
@@ -112,7 +111,6 @@ describe('parseUntracked', () => {
     '\0',
     '/absolute.ts\0',
     'C:\\absolute.ts\0',
-    '..\\outside.ts\0',
   ])('rejects malformed or unsafe output in %s', (output) => {
     expect(() => parseUntracked(output)).toThrow(/path|NUL/i);
   });
@@ -162,11 +160,11 @@ describe('mergeChangedPaths', () => {
     expect(reverse).toEqual(forward);
   });
 
-  it('normalizes and validates paths supplied by callers', () => {
+  it('preserves literal backslashes and validates paths supplied by callers', () => {
     expect(mergeChangedPaths([
       { status: 'modified', path: 'nested\\file.ts' },
     ])).toEqual([
-      { status: 'modified', path: 'nested/file.ts' },
+      { status: 'modified', path: 'nested\\file.ts' },
     ]);
 
     expect(() => mergeChangedPaths([

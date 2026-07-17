@@ -47,6 +47,22 @@ describe('discoverGitChanges', () => {
     });
   });
 
+  it('keeps slash and literal-backslash filenames distinct end-to-end', async () => {
+    const { root } = await createRepository({
+      'a/b': 'slash path\n',
+      'a\\b': 'backslash path\n',
+    });
+    await writeProjectFile(root, 'a/b', 'changed slash path\n');
+    await writeProjectFile(root, 'a\\b', 'changed backslash path\n');
+
+    const result = await discoverGitChanges({ root });
+
+    expect(result.changes).toEqual([
+      { status: 'modified', path: 'a/b' },
+      { status: 'modified', path: 'a\\b' },
+    ]);
+  });
+
   it('discovers untracked files and tracked deletions', async () => {
     const { root } = await createRepository({ 'removed.txt': 'remove me\n' });
     await rm(join(root, 'removed.txt'));
@@ -114,10 +130,13 @@ describe('discoverGitChanges', () => {
     ]);
   });
 
-  it('preserves trailing whitespace in the canonical repository root', async () => {
+  it.each([
+    ['space', ' '],
+    ['carriage return', '\r'],
+  ])('preserves a trailing %s in the canonical repository root', async (_name, suffix) => {
     const parent = await createTempProject('codebase-doctor-space-root-');
     temporaryRoots.push(parent);
-    const root = join(parent, 'repository ');
+    const root = join(parent, `repository${suffix}`);
     await mkdir(root);
     await initializeGitRepository(root);
     const initialCommit = await commitInitialContent(root);
