@@ -2,6 +2,20 @@ export type Severity = "info" | "low" | "medium" | "high" | "critical";
 
 export type HighestSeverity = Severity | "none";
 
+export type RlsFindingId =
+  | "reachable-truncate"
+  | "rls-disabled-exposed"
+  | "rls-disabled"
+  | "rls-enabled-no-policies"
+  | "force-rls-disabled"
+  | "multiple-permissive-policies"
+  | "public-unconditional-read"
+  | "public-unconditional-write"
+  | "write-policy-missing-check"
+  | "public-permissive-policy"
+  | "broad-default-table-privilege"
+  | "rls-bypass-role";
+
 export type PolicyCommand = "ALL" | "SELECT" | "INSERT" | "UPDATE" | "DELETE";
 
 export type RelationPrivilege =
@@ -85,7 +99,7 @@ export interface CatalogSnapshot {
 }
 
 export interface Finding {
-  id: string;
+  id: RlsFindingId;
   severity: Severity;
   schema: string;
   table: string;
@@ -96,7 +110,7 @@ export interface Finding {
 }
 
 export interface SchemaFinding {
-  id: string;
+  id: RlsFindingId;
   severity: Severity;
   schema: string | null;
   title: string;

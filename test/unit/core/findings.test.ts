@@ -6,6 +6,44 @@ import {
   sortFindings,
 } from "../../../src/core/findings.js";
 
+function assertFindingMutabilityContract(value: Finding): void {
+  value.ruleId = "legacy/rule";
+  value.doctorId = "legacy-doctor";
+  value.severity = "low";
+  value.confidence = "medium";
+  value.category = "legacy";
+  value.title = "Legacy title";
+  value.message = "Legacy message";
+  value.location = { path: "legacy.ts", line: 2, column: 3 };
+  value.location.path = "moved.ts";
+  value.location.line = 4;
+  value.location.column = 5;
+  value.evidence = [];
+  value.remediation = "Legacy remediation";
+  value.fingerprint = "legacy-fingerprint";
+
+  // @ts-expect-error guidance is an immutable model-facing contract
+  value.impact = "Changed impact";
+  // @ts-expect-error the constraints collection is immutable
+  value.remediationConstraints = ["Changed constraint"];
+  // @ts-expect-error verification guidance is immutable
+  value.verification = { command: "changed", expected: "changed" };
+  if (value.remediationConstraints !== undefined) {
+    // @ts-expect-error individual constraints are immutable
+    value.remediationConstraints[0] = "Changed constraint";
+    // @ts-expect-error constraints cannot be appended
+    value.remediationConstraints.push("Changed constraint");
+  }
+  if (value.verification !== undefined) {
+    // @ts-expect-error verification command is immutable
+    value.verification.command = "changed";
+    // @ts-expect-error verification expectation is immutable
+    value.verification.expected = "changed";
+  }
+}
+
+void assertFindingMutabilityContract;
+
 function finding(
   overrides: Partial<Pick<Finding, "doctorId" | "ruleId" | "severity">> & {
     path?: string;

@@ -19,23 +19,23 @@ export type Evidence =
   | { type: "observation"; detail: string };
 
 export interface Finding {
-  readonly ruleId: string;
-  readonly doctorId: string;
-  readonly severity: Severity;
-  readonly confidence: Confidence;
-  readonly category: string;
-  readonly title: string;
-  readonly message: string;
-  readonly location?: { readonly path: string; readonly line?: number; readonly column?: number };
-  readonly evidence: readonly Evidence[];
+  ruleId: string;
+  doctorId: string;
+  severity: Severity;
+  confidence: Confidence;
+  category: string;
+  title: string;
+  message: string;
+  location?: { path: string; line?: number; column?: number };
+  evidence: readonly Evidence[];
   readonly impact?: string;
   readonly remediationConstraints?: readonly string[];
-  readonly remediation?: string;
+  remediation?: string;
   readonly verification?: {
     readonly command: string;
     readonly expected: string;
   };
-  readonly fingerprint: string;
+  fingerprint: string;
 }
 
 export interface FingerprintInput {
