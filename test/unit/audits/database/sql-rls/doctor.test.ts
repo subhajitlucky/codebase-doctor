@@ -242,6 +242,79 @@ describe("static SQL RLS doctor", () => {
     });
   });
 
+  it("reports partial coverage for a deleted root schema fallback", async () => {
+    const reader = vi.fn();
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([], changedAuditScope([{
+        status: "deleted",
+        path: "schema.sql",
+      }])),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).not.toHaveBeenCalled();
+    expect(entry?.result.coverage).toEqual([expect.objectContaining({
+      scope: "root:schema.sql",
+      status: "partial",
+      filesExamined: 0,
+      statementsExamined: 0,
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/prior schema fallback state.*cannot be reconstructed/i),
+        expect.stringMatching(/cannot prove whether.*active.*suppressed/i),
+      ]),
+    })]);
+  });
+
+  it("infers partial schema fallback coverage when its entire nested project vanished", async () => {
+    const reader = vi.fn();
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([], changedAuditScope([{
+        status: "deleted",
+        path: "packages/app/schema.sql",
+      }]), ["."]),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(reader).not.toHaveBeenCalled();
+    expect(entry?.result.coverage).toEqual([expect.objectContaining({
+      scope: "project:packages/app:schema.sql",
+      status: "partial",
+      filesExamined: 0,
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/prior schema fallback state.*cannot be reconstructed/i),
+        expect.stringMatching(/former project root.*inferred.*absent/i),
+      ]),
+    })]);
+  });
+
+  it("reports vanished former schema fallback coverage after rename-out", async () => {
+    const reader = vi.fn(async () => "create table public.docs (id uuid);");
+    const [entry] = await runDoctors(
+      [createSqlRlsDoctor({ readSqlFile: reader })],
+      snapshot([{ path: "supabase/migrations/001.sql" }], changedAuditScope([{
+        status: "renamed",
+        previousPath: "packages/app/schema.sql",
+        path: "supabase/migrations/001.sql",
+      }]), ["."]),
+      { runChecks: false, withDatabase: false },
+    );
+
+    expect(entry?.result.coverage).toContainEqual(expect.objectContaining({
+      scope: "project:packages/app:schema.sql",
+      status: "partial",
+      filesExamined: 0,
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/prior schema fallback state.*cannot be reconstructed/i),
+      ]),
+    }));
+    expect(entry?.result.coverage).toContainEqual(expect.objectContaining({
+      scope: "root:supabase/migrations",
+      status: "completed",
+    }));
+  });
+
   it("infers partial coverage when an entire nested project migration stream was removed", async () => {
     const reader = vi.fn();
     const [entry] = await runDoctors(

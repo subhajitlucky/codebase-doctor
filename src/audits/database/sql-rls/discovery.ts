@@ -51,6 +51,7 @@ export interface SqlStreamIdentity {
   readonly projectId: string;
   readonly root: string;
   readonly inferredProject?: true;
+  readonly formerSchema?: true;
 }
 
 function isSqlInput(path: string): boolean {
@@ -63,6 +64,7 @@ export function identifySqlStream(
   path: string,
   currentStreams: readonly SqlMigrationStream[] = discoverSqlStreams(snapshot),
   allowInferredProject = true,
+  allowFormerSchema = false,
 ): SqlStreamIdentity | undefined {
   if (!isSqlInput(path)) return undefined;
   const current = currentStreams.find((stream) => pathIsInStream(path, stream));
@@ -84,24 +86,37 @@ export function identifySqlStream(
     };
   }
 
-  // schema.sql is supported only when discovery made it the active project fallback.
-  if (path === projectPath(owner.root, "schema.sql")) return undefined;
-  if (!allowInferredProject) return undefined;
+  if (allowInferredProject) {
+    const rootsBySpecificity = [...MIGRATION_ROOTS].sort((left, right) =>
+      right.split("/").length - left.split("/").length || left.localeCompare(right)
+    );
+    for (const relativeRoot of rootsBySpecificity) {
+      const marker = `/${relativeRoot}/`;
+      const markerIndex = path.lastIndexOf(marker);
+      if (markerIndex <= 0) continue;
+      const inferredRoot = path.slice(0, markerIndex);
+      const projectId = `project:${inferredRoot}`;
+      return {
+        id: `${projectId}:${relativeRoot}`,
+        projectId,
+        root: `${inferredRoot}/${relativeRoot}`,
+        inferredProject: true,
+      };
+    }
+  }
 
-  const rootsBySpecificity = [...MIGRATION_ROOTS].sort((left, right) =>
-    right.split("/").length - left.split("/").length || left.localeCompare(right)
-  );
-  for (const relativeRoot of rootsBySpecificity) {
-    const marker = `/${relativeRoot}/`;
-    const markerIndex = path.indexOf(marker);
-    if (markerIndex <= 0) continue;
-    const inferredRoot = path.slice(0, markerIndex);
-    const projectId = `project:${inferredRoot}`;
+  // schema.sql is active only when discovery selected it, except when historical
+  // deleted/rename-old evidence explicitly requests an honest former identity.
+  if (allowFormerSchema && (path === "schema.sql" || path.endsWith("/schema.sql"))) {
+    const inferredRoot = path === "schema.sql" ? "." : path.slice(0, -"/schema.sql".length);
+    const projectIsCurrent = inferredRoot === owner.root;
+    const projectId = projectIsCurrent ? owner.id : `project:${inferredRoot}`;
     return {
-      id: `${projectId}:${relativeRoot}`,
+      id: `${projectId}:schema.sql`,
       projectId,
-      root: `${inferredRoot}/${relativeRoot}`,
-      inferredProject: true,
+      root: path,
+      formerSchema: true,
+      ...(projectIsCurrent ? {} : { inferredProject: true }),
     };
   }
   return undefined;

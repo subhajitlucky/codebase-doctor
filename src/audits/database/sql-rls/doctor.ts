@@ -66,10 +66,17 @@ function changedStreamIdentities(
       change.path,
       currentStreams,
       change.status === "deleted",
+      change.status === "deleted",
     );
     if (current !== undefined) identities.set(current.id, current);
     if (change.status === "renamed" && change.previousPath !== undefined) {
-      const previous = identifySqlStream(snapshot, change.previousPath, currentStreams, true);
+      const previous = identifySqlStream(
+        snapshot,
+        change.previousPath,
+        currentStreams,
+        true,
+        true,
+      );
       if (previous !== undefined) identities.set(previous.id, previous);
     }
   }
@@ -84,13 +91,19 @@ function streamsMissingHistoricalContent(
   if (snapshot.auditScope.mode === "full") return streamIds;
   for (const change of snapshot.auditScope.changes) {
     if (change.status === "deleted") {
-      const identity = identifySqlStream(snapshot, change.path, currentStreams, true);
+      const identity = identifySqlStream(snapshot, change.path, currentStreams, true, true);
       if (identity !== undefined) streamIds.add(identity.id);
       continue;
     }
     if (change.status !== "renamed" || change.previousPath === undefined) continue;
-    const previous = identifySqlStream(snapshot, change.previousPath, currentStreams, true);
-    const current = identifySqlStream(snapshot, change.path, currentStreams, false);
+    const previous = identifySqlStream(
+      snapshot,
+      change.previousPath,
+      currentStreams,
+      true,
+      true,
+    );
+    const current = identifySqlStream(snapshot, change.path, currentStreams, false, false);
     if (previous !== undefined && previous.id !== current?.id) streamIds.add(previous.id);
   }
   return streamIds;
@@ -140,7 +153,9 @@ export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
         discoveredStreams,
       );
       const historicallyAffectedProjects = new Set(affectedIdentities
-        .filter(({ id }) => missingHistoricalContent.has(id))
+        .filter(({ id, formerSchema }) =>
+          formerSchema !== true && missingHistoricalContent.has(id)
+        )
         .map(({ projectId }) => projectId));
       const activatedSchemaStreams = discoveredStreams.filter((stream) =>
         stream.root.toLowerCase().endsWith("schema.sql") &&
@@ -253,9 +268,16 @@ export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
       for (const identity of missingIdentities) {
         const historical = missingHistoricalContent.has(identity.id);
         const limitations = [
-          historical
+          identity.formerSchema === true
+            ? "Prior schema fallback state cannot be reconstructed because schema.sql is absent from current discovery."
+            : historical
             ? "Historical state for this deleted or renamed-out SQL migration stream cannot be reconstructed from the current worktree."
             : "No current files were discovered for this affected SQL migration stream; its state cannot be reconstructed from the current worktree.",
+          ...(identity.formerSchema === true
+            ? [
+              "Current evidence cannot prove whether the former schema.sql was active as the fallback or suppressed by migration streams.",
+            ]
+            : []),
           ...(identity.inferredProject === true
             ? [
               `Former project root "${identity.projectId.slice("project:".length)}" was inferred from the supported migration path because that project is absent from the current snapshot.`,

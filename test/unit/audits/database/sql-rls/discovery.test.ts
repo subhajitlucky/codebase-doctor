@@ -229,6 +229,20 @@ describe("discoverSqlStreams", () => {
     });
   });
 
+  it("uses the deepest repeated supported-root marker for former ownership", () => {
+    const value = snapshot([], ["."]);
+
+    expect(identifySqlStream(
+      value,
+      "packages/migrations/archive/migrations/001.sql",
+    )).toEqual({
+      id: "project:packages/migrations/archive:migrations",
+      projectId: "project:packages/migrations/archive",
+      root: "packages/migrations/archive/migrations",
+      inferredProject: true,
+    });
+  });
+
   it("does not identify schema.sql when current migration topology suppresses the fallback", () => {
     const value = snapshot([
       "packages/app/schema.sql",
