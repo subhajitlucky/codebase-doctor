@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   mergeChangedPaths,
   parseNameStatus,
   parseUntracked,
 } from '../../../src/scope/git.js';
 import type { ChangedPath } from '../../../src/scope/types.js';
+
+it('returns mutable arrays from the public Git parsing contract', () => {
+  expectTypeOf(parseNameStatus('')).toEqualTypeOf<ChangedPath[]>();
+  expectTypeOf(parseUntracked('')).toEqualTypeOf<ChangedPath[]>();
+  expectTypeOf(mergeChangedPaths()).toEqualTypeOf<ChangedPath[]>();
+});
 
 describe('parseNameStatus', () => {
   it('parses every supported status and sorts normalized paths deterministically', () => {

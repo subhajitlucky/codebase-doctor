@@ -92,7 +92,7 @@ function parseScoredStatus(status: string): 'renamed' | 'copied' | null {
   return match[1] === 'R' ? 'renamed' : 'copied';
 }
 
-export function parseNameStatus(output: string): readonly ChangedPath[] {
+export function parseNameStatus(output: string): ChangedPath[] {
   const tokens = tokenizeNulOutput(output);
   const changes: ChangedPath[] = [];
 
@@ -137,7 +137,7 @@ export function parseNameStatus(output: string): readonly ChangedPath[] {
   return changes.sort(compareChanges);
 }
 
-export function parseUntracked(output: string): readonly ChangedPath[] {
+export function parseUntracked(output: string): ChangedPath[] {
   return tokenizeNulOutput(output)
     .map((path): ChangedPath => ({
       status: 'untracked',
@@ -176,7 +176,7 @@ function chooseChange(left: ChangedPath, right: ChangedPath): ChangedPath {
 
 export function mergeChangedPaths(
   ...views: readonly (readonly ChangedPath[])[]
-): readonly ChangedPath[] {
+): ChangedPath[] {
   const merged = new Map<string, ChangedPath>();
 
   for (const view of views) {
