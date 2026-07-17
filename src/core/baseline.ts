@@ -15,6 +15,10 @@ export interface FindingComparison {
   newSummary: FindingSummary;
 }
 
+export interface BaselineComparisonOptions {
+  readonly includeResolved?: boolean;
+}
+
 export class BaselineError extends Error {
   constructor(message: string) {
     super(message);
@@ -65,6 +69,7 @@ export async function loadBaseline(path: string): Promise<BaselineReport> {
 export function compareFindingBaseline(
   current: readonly Finding[],
   baseline: readonly Finding[],
+  options: BaselineComparisonOptions = {},
 ): FindingComparison {
   const currentFingerprints = new Set(current.map(({ fingerprint }) => fingerprint));
   const baselineFingerprints = new Set(baseline.map(({ fingerprint }) => fingerprint));
@@ -74,9 +79,11 @@ export function compareFindingBaseline(
     unchanged: [...currentFingerprints].filter((fingerprint) =>
       baselineFingerprints.has(fingerprint),
     ).sort(),
-    resolved: [...baselineFingerprints].filter((fingerprint) =>
-      !currentFingerprints.has(fingerprint),
-    ).sort(),
+    resolved: options.includeResolved === false
+      ? []
+      : [...baselineFingerprints].filter((fingerprint) =>
+          !currentFingerprints.has(fingerprint),
+        ).sort(),
     newSummary: summarizeFindings(newFindings),
   };
 }
@@ -84,6 +91,10 @@ export function compareFindingBaseline(
 export function withBaselineComparison(
   result: ScanResult,
   baseline: readonly Finding[],
+  options: BaselineComparisonOptions = {},
 ): ScanResult {
-  return { ...result, comparison: compareFindingBaseline(result.findings, baseline) };
+  return {
+    ...result,
+    comparison: compareFindingBaseline(result.findings, baseline, options),
+  };
 }

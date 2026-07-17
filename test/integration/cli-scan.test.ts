@@ -65,6 +65,22 @@ describe("scan CLI", () => {
     });
   });
 
+  it("rejects an omitted --base operand through the controlled error path", async () => {
+    const root = await createTempProject("codebase-doctor-cli-scan-base-");
+    temporaryRoots.push(root);
+    await initializeGitRepository(root);
+    await commitInitialContent(root);
+
+    const result = cli([
+      "scan", root, "--changed", "--base", "--json", "--fail-on", "none",
+    ], repositoryRoot, root);
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/^codebase-doctor: .*--base.*(?:value|reference|empty)/im);
+    expect(result.stderr).not.toMatch(/^error:/im);
+  });
+
   it("does not run static or live database audit modules", () => {
     const result = cli(["scan", fixture("sql-rls/unsafe"), "--json"]);
     const report = JSON.parse(result.stdout);

@@ -158,7 +158,7 @@ describe("audit CLI", () => {
     ["empty", ""],
     ["whitespace", "  "],
     ["missing", "does-not-exist"],
-  ])("rejects an %s changed base safely", async (_label, base) => {
+  ])("rejects a %s changed base safely", async (_label, base) => {
     const { root } = await createRepository();
 
     const result = cli([
@@ -167,7 +167,26 @@ describe("audit CLI", () => {
 
     expect(result.status).toBe(2);
     expect(() => JSON.parse(result.stdout)).toThrow();
-    expect(result.stderr).toMatch(/^codebase-doctor: .*base|git base/im);
+    expect(result.stderr).toMatch(/^codebase-doctor: (?:.*base|git base)/im);
+  });
+
+  it.each([
+    ["at the end of the command", []],
+    ["before another option", ["--json", "--fail-on", "none"]],
+  ])("rejects an omitted --base operand %s through the controlled error path", async (
+    _position,
+    trailingOptions,
+  ) => {
+    const { root } = await createRepository();
+
+    const result = cli([
+      "audit", root, "--changed", "--base", ...trailingOptions,
+    ], root);
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/^codebase-doctor: .*--base.*(?:value|reference|empty)/im);
+    expect(result.stderr).not.toMatch(/^error:/im);
   });
 
   it("rejects changed mode outside Git", async () => {
@@ -215,7 +234,7 @@ describe("audit CLI", () => {
     expect(existsSync(join(root, "executed"))).toBe(false);
   });
 
-  it("compares only findings produced by changed scope against a baseline", async () => {
+  it("does not call an out-of-scope baseline finding resolved", async () => {
     const { root } = await createRepository({
       "supabase/migrations/001_unsafe.sql": [
         "create table public.accounts(id bigint primary key);",
@@ -245,8 +264,57 @@ describe("audit CLI", () => {
     expect(report.findings).not.toContainEqual(expect.objectContaining({
       ruleId: "database/sql-rls/rls-disabled-exposed",
     }));
-    expect(report.comparison.resolved).toContain(unsafeFinding.fingerprint);
+    expect(report.comparison.resolved).not.toContain(unsafeFinding.fingerprint);
+    expect(report.comparison.resolved).toEqual([]);
     expect(report.comparison.newSummary.counts.high).toBe(0);
+  });
+
+  it("classifies in-scope findings and applies the threshold only to new findings", async () => {
+    const migrationPath = "supabase/migrations/001_unsafe.sql";
+    const initialMigration = [
+      "create table public.accounts(id bigint primary key);",
+      "grant select on public.accounts to anon;",
+    ].join("\n");
+    const { root } = await createRepository({ [migrationPath]: initialMigration });
+    const baselineResult = cli([
+      "audit", root, "--json", "--fail-on", "none",
+    ], root);
+    const baselinePath = join(root, "baseline.json");
+    writeFileSync(baselinePath, baselineResult.stdout);
+    await runGitFixtureCommand(root, ["add", "--", "baseline.json"]);
+    await runGitFixtureCommand(root, ["commit", "--quiet", "--message", "add baseline"]);
+    await writeProjectFile(root, migrationPath, `${initialMigration}\n-- reviewed\n`);
+
+    const unchanged = cli([
+      "audit", root, "--changed", "--baseline", baselinePath, "--json",
+    ], root);
+    const unchangedReport = JSON.parse(unchanged.stdout);
+    const knownHigh = unchangedReport.findings.find(({ ruleId }: { ruleId: string }) =>
+      ruleId === "database/sql-rls/rls-disabled-exposed"
+    );
+
+    expect(knownHigh).toBeDefined();
+    expect(unchanged.status).toBe(0);
+    expect(unchangedReport.comparison.unchanged).toContain(knownHigh.fingerprint);
+    expect(unchangedReport.comparison.new).not.toContain(knownHigh.fingerprint);
+
+    await writeProjectFile(root, "supabase/migrations/002_new_unsafe.sql", [
+      "create table public.profiles(id bigint primary key);",
+      "grant select on public.profiles to anon;",
+    ].join("\n"));
+    const withNewFinding = cli([
+      "audit", root, "--changed", "--baseline", baselinePath, "--json",
+    ], root);
+    const newReport = JSON.parse(withNewFinding.stdout);
+    const newHigh = newReport.findings.find((finding: { fingerprint: string; severity: string }) =>
+      finding.severity === "high" && finding.fingerprint !== knownHigh.fingerprint
+    );
+
+    expect(newHigh).toBeDefined();
+    expect(withNewFinding.status).toBe(1);
+    expect(newReport.comparison.new).toContain(newHigh.fingerprint);
+    expect(newReport.comparison.unchanged).toContain(knownHigh.fingerprint);
+    expect(newReport.comparison.newSummary.counts.high).toBeGreaterThan(0);
   });
 
   it.each([

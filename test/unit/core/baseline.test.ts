@@ -50,6 +50,22 @@ describe("baseline comparison", () => {
     });
   });
 
+  it("can conservatively omit resolved classifications for a partial scope", () => {
+    const comparison = compareFindingBaseline(
+      [finding("same"), finding("new-high")],
+      [finding("out-of-scope"), finding("same")],
+      { includeResolved: false },
+    );
+
+    expect(comparison.new).toEqual(["new-high"]);
+    expect(comparison.unchanged).toEqual(["same"]);
+    expect(comparison.resolved).toEqual([]);
+    expect(comparison.newSummary).toMatchObject({
+      total: 1,
+      highestSeverity: "high",
+    });
+  });
+
   it("loads a schema-1 Codebase Doctor report", async () => {
     const root = await createTempProject();
     roots.push(root);

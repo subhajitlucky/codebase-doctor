@@ -22,7 +22,7 @@ const THRESHOLDS = new Set<FindingThreshold>([
 export interface RepositoryCommandOptions {
   runChecks: boolean;
   changed: boolean;
-  base?: string;
+  base?: string | true;
   json: boolean;
   format?: string;
   exclude: string[];
@@ -75,8 +75,12 @@ async function executeScan(
     if (options.base !== undefined && options.changed !== true) {
       throw new Error("The --base option requires --changed.");
     }
-    if (options.changed && options.base !== undefined && options.base.trim().length === 0) {
-      throw new Error("The --base option must not be empty.");
+    if (
+      options.changed &&
+      options.base !== undefined &&
+      (typeof options.base !== "string" || options.base.trim().length === 0)
+    ) {
+      throw new Error("The --base option requires a non-empty reference.");
     }
     const timeoutMs = parseTimeout(options.timeout);
     const failOn = parseThreshold(options.failOn);
@@ -95,12 +99,14 @@ async function executeScan(
       exclude,
       ...requestOptions(),
       changed: options.changed,
-      ...(options.base === undefined ? {} : { baseRef: options.base }),
+      ...(typeof options.base === "string" ? { baseRef: options.base } : {}),
     } as const;
     const scanned = await scanCodebase(request);
     const result = baseline === undefined
       ? scanned
-      : withBaselineComparison(scanned, baseline.findings);
+      : withBaselineComparison(scanned, baseline.findings, {
+          includeResolved: scanned.auditScope.mode === "full",
+        });
     const report = format === "json"
       ? renderJsonReport(result)
       : format === "sarif" ? renderSarifReport(result) : renderTextReport(result, {
@@ -129,7 +135,7 @@ export function configureRepositoryCommand<Options extends RepositoryCommandOpti
       "audit staged, unstaged, untracked, and branch changes",
       false,
     )
-    .option("--base <ref>", "compare changed scope from the merge base with this ref")
+    .option("--base [ref]", "compare changed scope from the merge base with this ref")
     .option("--json", "emit machine-readable JSON", false)
     .option("--format <format>", "output format: text, json, or sarif")
     .option("--exclude <glob>", "exclude a repository-relative path glob", collect, [])
