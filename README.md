@@ -8,10 +8,16 @@ human or model can inspect and act on.
 
 > **Models build. Codebase Doctor verifies.**
 
-Codebase Doctor never edits, modifies, applies repairs to, or otherwise fixes
-the target. Remediation is guidance, not an executable repair. A human or
-separately authorized external coding agent makes changes; Codebase Doctor then
-reruns independently to verify the resulting state.
+Codebase Doctor exposes no direct target-file write API, has no direct
+filesystem-write capability, and includes no remediation executor. It can never
+be granted direct target-write or remediation authority. Remediation is
+guidance, not an executable repair. A human or separately authorized external
+coding agent makes changes; Codebase Doctor then reruns independently to verify
+the resulting state.
+
+Separately authorized `--run-checks` launches repository-owned validation
+subprocesses. They are not filesystem- or network-isolated and may have side
+effects. That permission is validation execution, not Doctor repair authority.
 
 ## One doctor for the whole codebase
 
@@ -107,12 +113,13 @@ At a branch review boundary, compare from the merge base with an explicit ref:
 codebase-doctor audit . --changed --base main --json
 ```
 
-`--base` requires a ref value. Without `--base`, changed discovery compares
-against `HEAD` and includes staged, unstaged, and untracked paths. With an
-explicit ref, it includes committed branch changes since the merge base plus
-the current staged, unstaged, and untracked worktree. Git discovery uses only
-fixed, read-only commands. A requested changed audit that cannot establish its
-Git root, revision, merge base, or change list exits `2`.
+`--base` is optional as a changed-audit mode: without it, discovery compares
+against `HEAD` and includes staged, unstaged, and untracked paths. When
+`--base` is present it requires a ref operand; a missing operand or invalid ref
+exits `2`. An explicit ref includes committed branch changes since the merge
+base plus the current staged, unstaged, and untracked worktree. Git discovery
+uses only fixed, read-only commands. A requested changed audit that cannot
+establish its Git root, revision, merge base, or change list also exits `2`.
 
 The report's `auditScope` is `full` for the default command and `changed` for
 `--changed`. Changed mode is mixed-scope, not a universal file filter. Scope
@@ -152,7 +159,7 @@ select install, format, fix, migration, or deployment commands. Existing target
 commands are not currently filesystem- or network-sandboxed and may have side
 effects, so review the displayed plan and never run checks for an untrusted
 repository. The long-term execution direction is a read-only mount or
-disposable copy, not target-write authority for Codebase Doctor.
+disposable copy, not direct target-write authority for Codebase Doctor.
 
 Explicitly permit the live, read-only PostgreSQL RLS audit. Keep the connection
 string in the environment rather than command-line arguments:
@@ -257,8 +264,10 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 ## Safety model
 
 - Read-only discovery is the default.
-- Codebase Doctor has no target-write capability and never applies remediation.
-- `--changed` grants no check execution, network, database, or write permission.
+- Codebase Doctor has no direct target-file write API, direct filesystem-write
+  capability, remediation executor, or direct target-write/remediation authority.
+- `--changed` grants no check execution, network, or database permission and no
+  direct Doctor target-write authority.
 - Offline SQL auditing reads only inventoried migration files, applies a file
   size ceiling, and never evaluates or executes SQL.
 - Target commands require `--run-checks`.
@@ -344,7 +353,6 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 
 ## Roadmap
 
-- Release the unified `audit` command and internal RLS module on npm.
 - Compare completed static migration state with observed live catalog state for
   deployment drift.
 - Expand built-in frontend, backend, security, infrastructure, performance, and

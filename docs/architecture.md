@@ -8,11 +8,16 @@ explicitly permitted live PostgreSQL audit behind one normalized report.
 
 > **Models build. Codebase Doctor verifies.**
 
-Codebase Doctor never edits, modifies, applies repairs to, or fixes the target,
-and it can never receive target-write authority. A human or separately
+Codebase Doctor exposes no direct target-file write API, has no direct
+filesystem-write capability, and includes no remediation executor. It can never
+be granted direct target-write or remediation authority. A human or separately
 authorized external coding agent changes the target. Remediation and
 verification are guidance; Doctor independently reports evidence after the
 external change.
+
+Separately authorized `--run-checks` launches repository-owned validation
+subprocesses. They are not filesystem- or network-isolated and may have side
+effects. That permission is validation execution, not Doctor repair authority.
 
 The implemented safety principles are deterministic output, bounded read-only
 discovery, evidence-backed findings, explicit capabilities, visible partial
@@ -84,7 +89,8 @@ does not accept arbitrary commands and is not part of the public injection API.
 Invalid repositories, roots, revisions, merge bases, command results, or output
 are requested-scope operational failures and produce exit `2`. Commander may
 render the option as `--base [ref]` so a missing operand reaches the controlled
-error path, but the CLI contract requires a nonempty ref value.
+error path. The mode is optional, but a present `--base` requires a nonempty ref
+value; a missing operand or invalid ref produces exit `2`.
 
 Changes are deterministic and repository-relative. Rename entries contain the
 new path plus `previousPath`; both locations participate in project selection.
@@ -135,8 +141,10 @@ actual scope.
 ## Doctors and capabilities
 
 The implemented Doctor capability vocabulary is read-only filesystem access,
-validation process execution, and network access. There is no target-write
-capability.
+validation process execution, and network access. It contains no direct
+filesystem-write capability and exposes no direct target-file write API or
+remediation executor; direct target-write or remediation authority can never be
+granted to Doctor.
 
 - Project Doctor performs built-in structural repository diagnostics.
 - Check Doctor previews configured JavaScript/TypeScript and Python validation

@@ -10,34 +10,43 @@ audit after edits and a full audit at trust or release boundaries.
 
 > **Models build. Codebase Doctor verifies.**
 
-Codebase Doctor never edits, modifies, applies repairs to, or fixes the target,
-and it can never receive target-write authority. Remediation and verification
-commands are guidance, not executable repairs. A human or separately authorized
-external coding agent performs the fix; Codebase Doctor reruns independently.
+Codebase Doctor exposes no direct target-file write API, has no direct
+filesystem-write capability, and includes no remediation executor. It can never
+be granted direct target-write or remediation authority. Remediation and
+verification commands are guidance, not executable repairs. A human or
+separately authorized external coding agent performs the fix; Codebase Doctor
+reruns independently.
+
+Use a trusted, already-installed `codebase-doctor` binary, or the explicit local
+`./node_modules/.bin/codebase-doctor` binary. Package acquisition or package
+update is a separate, pinned, user-authorized step that may use the network and
+perform cache writes. Do not use an on-demand package runner as the audit step.
 
 ## Workflow
 
-1. After edits, run the read-only changed audit:
+1. After edits, run the default changed audit with the trusted installed binary:
 
    ```bash
-   npx codebase-doctor audit . --changed --json
+   codebase-doctor audit . --changed --json
    ```
 
    This default compares with `HEAD` and includes staged, unstaged, and
    untracked paths. For branch review, provide the required ref value:
 
    ```bash
-   npx codebase-doctor audit . --changed --base main --json
+   codebase-doctor audit . --changed --base main --json
    ```
 
-   An explicit ref uses its merge base and includes committed branch changes
-   plus staged, unstaged, and untracked worktree changes. Git commands are fixed
-   and read-only. An omitted or invalid base is an operational exit `2`.
+   `--base` is optional as a changed-audit mode. If `--base` is present, a
+   missing operand or invalid ref is an operational exit `2`. An explicit ref
+   uses its merge base and includes committed branch changes plus staged,
+   unstaged, and untracked worktree changes. Git commands are fixed and
+   read-only.
 
 2. At a trust, integration, or release boundary, run the full audit:
 
    ```bash
-   npx codebase-doctor audit . --json
+   codebase-doctor audit . --json
    ```
 
 3. Inspect `auditScope`, then `doctorRuns`, then `coverage`, then `findings`.
@@ -70,12 +79,14 @@ external coding agent performs the fix; Codebase Doctor reruns independently.
 6. Request separate permission before adding `--run-checks`:
 
    ```bash
-   npx codebase-doctor audit . --changed --run-checks --json
+   codebase-doctor audit . --changed --run-checks --json
    ```
 
-   `--changed` alone grants no command execution, network, database, or write
-   permission. Approved checks are validation, not repair; they are not
-   filesystem- or network-isolated and may have side effects. Do not use
+   `--changed` alone grants no command execution, network, or database
+   permission and no direct Doctor target-write authority. Separately authorized
+   `--run-checks` launches repository-owned validation subprocesses. They are
+   not filesystem- or network-isolated and may have side effects. That
+   permission is validation execution, not Doctor repair authority. Do not use
    `--run-checks` on an untrusted repository.
 
 7. Static `database/sql-rls` coverage runs automatically and offline for
@@ -85,7 +96,7 @@ external coding agent performs the fix; Codebase Doctor reruns independently.
    state and requires separate database and network permission:
 
    ```bash
-   npx codebase-doctor audit . --with-database --json
+   codebase-doctor audit . --with-database --json
    ```
 
    Supply credentials through `DATABASE_URL` or `SUPABASE_DB_URL`; never print,

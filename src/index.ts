@@ -60,6 +60,7 @@ export { GitScopeError } from "./scope/git.js";
 export type {
   DiscoveredChanges,
   DiscoverChangesOptions,
+  GitScopeErrorCode,
 } from "./scope/git.js";
 export function discoverGitChanges(
   options: DiscoverChangesOptions,
@@ -74,3 +75,4 @@ export type {
   ChangeStatus,
   ScopeReason,
 } from "./scope/types.js";
+export type { DetectedProject } from "./workspace/types.js";

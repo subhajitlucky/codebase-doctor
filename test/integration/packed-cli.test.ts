@@ -65,6 +65,90 @@ describe("release package", () => {
       expect(packedReadme).toContain("audit . --changed --base main --json");
       expect(packedArchitecture).toMatch(/fixed read-only Git discovery/i);
       expect(packedSkill).toMatch(/Prefer a changed\s+audit after edits/i);
+      expect(packedSkill).not.toMatch(/\bnpx\s+codebase-doctor\b/i);
+      expect(packedSkill).toMatch(/package acquisition.*pinned.*user-authorized/is);
+
+      const runtimeConsumerPath = join(temporaryRoot, "consumer.mjs");
+      await writeFile(runtimeConsumerPath, [
+        'import { GitScopeError, fullAuditScope, planChangedScope } from "codebase-doctor";',
+        'const project = { id: "node:app", root: ".", ecosystems: ["node"],',
+        '  languages: ["typescript"], frameworks: [], manifestPaths: ["package.json"],',
+        '  executionSupport: "supported" };',
+        'const base = { kind: "head", requestedRef: null, resolvedCommit: "abc123" };',
+        'const changed = planChangedScope(base, [], [project]);',
+        'const error = new GitScopeError("GIT_INVALID_BASE_REF", "invalid");',
+        'console.log(JSON.stringify({ full: fullAuditScope().mode, changed: changed.mode, code: error.code }));',
+      ].join("\n"));
+      const runtimeConsumer = run(process.execPath, [runtimeConsumerPath], temporaryRoot);
+      expect(runtimeConsumer.status, runtimeConsumer.stderr).toBe(0);
+      expect(JSON.parse(runtimeConsumer.stdout)).toEqual({
+        full: "full",
+        changed: "changed",
+        code: "GIT_INVALID_BASE_REF",
+      });
+
+      const typeConsumerPath = join(temporaryRoot, "consumer.ts");
+      await writeFile(typeConsumerPath, `
+import {
+  type AuditBase,
+  type AuditScope,
+  type BaselineComparisonOptions,
+  type ChangedPath,
+  type DetectedProject,
+  type DiscoverChangesOptions,
+  type DiscoveredChanges,
+  type Finding,
+  GitScopeError,
+  type GitScopeErrorCode,
+  discoverGitChanges,
+  fullAuditScope,
+  planChangedScope,
+} from "codebase-doctor";
+
+const project: DetectedProject = {
+  id: "node:app", root: ".", ecosystems: ["node"], languages: ["typescript"],
+  frameworks: [], manifestPaths: ["package.json"], executionSupport: "supported",
+};
+const base: AuditBase = { kind: "head", requestedRef: null, resolvedCommit: "abc123" };
+const changes: readonly ChangedPath[] = [{ status: "modified", path: "src/index.ts" }];
+const scope: AuditScope = planChangedScope(base, changes, [project]);
+const full: AuditScope = fullAuditScope();
+const code: GitScopeErrorCode = "GIT_INVALID_BASE_REF";
+const error: GitScopeError = new GitScopeError(code, "invalid");
+const comparison: BaselineComparisonOptions = { includeResolved: false };
+const finding: Finding = {
+  ruleId: "example/rule", doctorId: "example", severity: "low", confidence: "high",
+  category: "example", title: "Example", message: "Example", evidence: [],
+  impact: "Machine-readable impact.", remediationConstraints: ["Preserve behavior."],
+  verification: { command: "codebase-doctor audit . --json", expected: "Fingerprint absent with completed coverage." },
+  fingerprint: "fingerprint",
+};
+const discovery: (options: DiscoverChangesOptions) => Promise<DiscoveredChanges> = discoverGitChanges;
+void [scope, full, error, comparison, finding, discovery];
+`);
+      const typeScript = resolve(
+        repositoryRoot,
+        "node_modules",
+        ".bin",
+        process.platform === "win32" ? "tsc.cmd" : "tsc",
+      );
+      const typeConsumer = run(typeScript, [
+        "--noEmit",
+        "--strict",
+        "--exactOptionalPropertyTypes",
+        "--target",
+        "ES2022",
+        "--module",
+        "NodeNext",
+        "--moduleResolution",
+        "NodeNext",
+        "--typeRoots",
+        resolve(repositoryRoot, "node_modules", "@types"),
+        "--types",
+        "node",
+        typeConsumerPath,
+      ], temporaryRoot);
+      expect(typeConsumer.status, typeConsumer.stderr || typeConsumer.stdout).toBe(0);
 
       const scanned = run(binary, [
         "audit",

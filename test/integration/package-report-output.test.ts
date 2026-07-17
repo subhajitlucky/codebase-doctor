@@ -13,10 +13,12 @@ import {
   type CoverageStatus,
   type DiscoveredChanges,
   type DiscoverChangesOptions,
+  type DetectedProject,
   type Evidence,
   discoverGitChanges,
   fullAuditScope,
   GitScopeError,
+  type GitScopeErrorCode,
   planChangedScope,
   type ScopeReason,
 } from "../../src/index.js";
@@ -85,7 +87,17 @@ describe("package report output", () => {
     const discovered: DiscoveredChanges = { base, changes: [change] };
     const discoveryOptions: DiscoverChangesOptions = { root: "/repo", baseRef: "main" };
     const comparisonOptions: BaselineComparisonOptions = { includeResolved: false };
-    const error: GitScopeError = new GitScopeError("GIT_INVALID_BASE_REF", "invalid base");
+    const errorCode: GitScopeErrorCode = "GIT_INVALID_BASE_REF";
+    const error: GitScopeError = new GitScopeError(errorCode, "invalid base");
+    const project: DetectedProject = {
+      id: "node:packages/app",
+      root: "packages/app",
+      ecosystems: ["node"],
+      languages: ["typescript"],
+      frameworks: [],
+      manifestPaths: ["packages/app/package.json"],
+      executionSupport: "supported",
+    };
 
     expect(typeof discoverGitChanges).toBe("function");
     expect(typeof planChangedScope).toBe("function");
@@ -95,6 +107,12 @@ describe("package report output", () => {
     expect(comparisonOptions.includeResolved).toBe(false);
     expect(error.code).toBe("GIT_INVALID_BASE_REF");
     expectTypeOf(discoverGitChanges).parameters.toEqualTypeOf<[DiscoverChangesOptions]>();
+    expectTypeOf(planChangedScope).parameters.toEqualTypeOf<[
+      AuditBase,
+      readonly ChangedPath[],
+      readonly DetectedProject[],
+    ]>();
+    expect(project.id).toBe(reason.projectId);
   });
 
   it("accepts lifecycle output before npm pack JSON", () => {

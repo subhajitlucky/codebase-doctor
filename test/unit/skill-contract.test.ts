@@ -16,9 +16,9 @@ describe("Codebase Doctor agent skill contract", () => {
     ]);
   });
 
-  it("places unified read-only auditing before explicitly permitted capabilities", async () => {
+  it("uses an already-installed binary before explicitly permitted capabilities", async () => {
     const skill = await readFile(skillPath, "utf8");
-    const readOnly = skill.indexOf("npx codebase-doctor audit . --json");
+    const readOnly = skill.indexOf("codebase-doctor audit . --json");
     const execution = skill.indexOf("--run-checks");
     const database = skill.indexOf("--with-database");
 
@@ -26,6 +26,11 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(execution).toBeGreaterThan(readOnly);
     expect(database).toBeGreaterThan(readOnly);
     expect(skill).toMatch(/confirm|permission|approval/i);
+    expect(skill).not.toMatch(/\bnpx\s+codebase-doctor\b/i);
+    expect(skill).toMatch(/trusted.*already-installed|already-installed.*trusted/is);
+    expect(skill).toMatch(/package acquisition|package update/is);
+    expect(skill).toMatch(/pinned.*user-authorized|user-authorized.*pinned/is);
+    expect(skill).toMatch(/network.*cache writes|cache writes.*network/is);
   });
 
   it("references only implemented options and explains every exit code", async () => {
@@ -94,8 +99,8 @@ describe("Codebase Doctor agent skill contract", () => {
 
   it("teaches honest changed-audit verification", async () => {
     const skill = await readFile(skillPath, "utf8");
-    const changedAudit = skill.indexOf("npx codebase-doctor audit . --changed --json");
-    const fullAudit = skill.indexOf("npx codebase-doctor audit . --json");
+    const changedAudit = skill.indexOf("codebase-doctor audit . --changed --json");
+    const fullAudit = skill.indexOf("codebase-doctor audit . --json");
 
     expect(skill).toMatch(/prefer.*changed.*after.*edit/is);
     expect(skill).toMatch(/full audit.*(?:trust|release) boundar/is);
@@ -110,6 +115,8 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/rerun.*same scope/is);
     expect(skill).toMatch(/do not claim.*resolved.*outside.*coverage/is);
     expect(skill).toMatch(/fingerprint.*absent.*coverage.*completed/is);
+    expect(skill).toMatch(/--base.*optional.*mode|optional.*--base.*mode/is);
+    expect(skill).toMatch(/--base.*present.*missing operand.*invalid ref.*exit `?2`?/is);
   });
 
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {

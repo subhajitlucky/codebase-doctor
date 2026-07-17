@@ -12,9 +12,9 @@ Planned for `0.1.3`; the package version remains `0.1.2` until release.
   verifies.** A human or separately authorized external coding agent performs
   changes; Codebase Doctor supplies remediation guidance and independently
   verifies the result.
-- Remove target-write authority from the Doctor capability contract. Validation
-  execution and separately approved read-only live access remain distinct from
-  repair permission.
+- Remove direct filesystem-write and remediation authority from the Doctor
+  capability contract. Separately approved repository-owned validation
+  subprocesses remain non-isolated and distinct from Doctor repair authority.
 - Add full and Git-aware changed audit scopes. Changed audits select directly
   affected projects, conservative internal workspace dependants, affected check
   plans, and complete relevant SQL migration streams while reporting explicit
@@ -33,22 +33,25 @@ Planned for `0.1.3`; the package version remains `0.1.2` until release.
   partial, not-applicable, skipped, and failed audit scope remains explicit.
 - Export the `AuditCoverage` and `CoverageStatus` programmatic types.
 - Export changed-scope discovery, planning, report, and baseline comparison
-  contracts from the package entry point without exporting Git runner injection
-  or execution internals.
+  contracts, including `DetectedProject` and `GitScopeErrorCode`, from the
+  package entry point without exporting Git runner injection or execution
+  internals.
 - Add model-facing `impact`, `remediationConstraints`, and `verification`
   guidance to findings without changing fingerprint identity.
 
 ### Security
 
-- Guarantee that Codebase Doctor has no target-write or executable-remediation
-  capability. Approved repository validation commands remain explicitly
+- Guarantee that Codebase Doctor has no direct target-file write API, direct
+  filesystem-write capability, remediation executor, or direct repair authority.
+  Approved repository-owned validation subprocesses remain explicitly
   permissioned and documented as unsandboxed in the current release line.
 - Read only SQL paths admitted by bounded repository inventory, enforce a
   per-file size ceiling, and never execute or evaluate migration SQL.
 - Mark dynamic, malformed, or unsupported relevant SQL as partial coverage
   instead of guessing database state.
 - Keep Git discovery fixed and read-only. `--changed` does not grant subprocess,
-  network, database, or target-write permission.
+  network, or database permission and never grants direct Doctor target-write
+  authority.
 
 ## [0.1.2] - 2026-07-15
 

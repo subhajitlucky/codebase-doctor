@@ -34,7 +34,7 @@ describe("independent auditor product boundary", () => {
     for (const { path, text } of await documents(canonicalDocuments)) {
       expect(text, path).toMatch(/Models build\. Codebase Doctor verifies\./i);
       expect(text, path).toMatch(/human|external coding agent|separately authorized.*agent/is);
-      expect(text, path).toMatch(/Codebase Doctor (?:never|does not).*(?:edit|modify|apply|repair)/is);
+      expect(text, path).toMatch(/no direct target-file write API/is);
       expect(text, path).toMatch(/remediation.*guidance|guidance.*remediation/is);
     }
   });
@@ -54,6 +54,38 @@ describe("independent auditor product boundary", () => {
     for (const { path, text } of await documents(canonicalDocuments)) {
       for (const pattern of forbidden) expect(text, `${path}: ${pattern}`).not.toMatch(pattern);
     }
+  });
+
+  it("distinguishes direct repair authority from permitted repository checks", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/no direct target-file write API/is);
+      expect(text, path).toMatch(/no direct\s+filesystem-write capability/is);
+      expect(text, path).toMatch(/no remediation executor/is);
+      expect(text, path).toMatch(
+        /never.*granted direct target-write or remediation authority/is,
+      );
+      expect(text, path).toMatch(
+        /--run-checks.*repository-owned validation\s+subprocesses.*not.*filesystem.*network.*isolated.*side\s+effects/is,
+      );
+      expect(text, path).toMatch(/validation execution.*not.*Doctor repair authority/is);
+    }
+
+    const [readme, changelog] = await Promise.all([
+      readFile("README.md", "utf8"),
+      readFile("CHANGELOG.md", "utf8"),
+    ]);
+    for (const text of [readme, changelog]) {
+      expect(text).not.toMatch(/(?:has|contains|guarantee.*has) no target-write capability/i);
+      expect(text).not.toMatch(/There is no target-write capability/i);
+    }
+  });
+
+  it("keeps delivered audit and live RLS behavior out of the roadmap", async () => {
+    const readme = await readFile("README.md", "utf8");
+    const roadmap = readme.slice(readme.indexOf("## Roadmap"));
+
+    expect(roadmap).not.toMatch(/Release the unified `audit` command/i);
+    expect(roadmap).not.toMatch(/internal RLS module/i);
   });
 
   it("documents changed audits as mixed-scope per doctor", async () => {
