@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ScanResult } from "../../../src/core/normalize.js";
 import { renderJsonReport } from "../../../src/reporters/json.js";
+import { fullAuditScope } from "../../../src/scope/planner.js";
 
 function result(): ScanResult {
   return {
     schemaVersion: "1",
     tool: { name: "codebase-doctor", version: "0.1.0" },
     repository: { root: "/repo" },
+    auditScope: fullAuditScope(),
     projects: [],
     plannedChecks: [],
     doctorRuns: [{

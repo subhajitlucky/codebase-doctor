@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createCheckDoctor } from "../../../src/doctors/checks/doctor.js";
 import type { CommandPlan, CommandRunResult } from "../../../src/execution/types.js";
+import { fullAuditScope } from "../../../src/scope/planner.js";
 import type { DetectedProject, ProjectSnapshot } from "../../../src/workspace/types.js";
 
 function project(ecosystem: string): DetectedProject {
@@ -30,6 +31,7 @@ function nodeSnapshot(scripts: Record<string, string> = { test: "vitest" }): Pro
     }],
     projects: [project("node")],
     workspaces: [],
+    auditScope: fullAuditScope(),
   };
 }
 

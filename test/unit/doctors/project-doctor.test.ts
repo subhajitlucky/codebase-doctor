@@ -4,6 +4,7 @@ import { findConflictingLockfiles } from "../../../src/doctors/project/rules/con
 import { findInvalidManifests } from "../../../src/doctors/project/rules/invalid-manifest.js";
 import { findMissingWorkspaces } from "../../../src/doctors/project/rules/missing-workspace.js";
 import { findTestVisibility } from "../../../src/doctors/project/rules/test-visibility.js";
+import { fullAuditScope } from "../../../src/scope/planner.js";
 import type {
   DetectedProject,
   FileRecord,
@@ -35,6 +36,7 @@ function snapshot(overrides: Partial<ProjectSnapshot> = {}): ProjectSnapshot {
     manifests: [{ kind: "package-json", path: "package.json", status: "valid", data: {} }],
     projects: [project()],
     workspaces: [],
+    auditScope: fullAuditScope(),
     ...overrides,
   };
 }

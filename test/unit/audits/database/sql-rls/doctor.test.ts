@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSqlRlsDoctor } from "../../../../../src/audits/database/sql-rls/doctor.js";
 import { runDoctors } from "../../../../../src/core/registry.js";
+import { fullAuditScope } from "../../../../../src/scope/planner.js";
 import type { ProjectSnapshot } from "../../../../../src/workspace/types.js";
 
 function snapshot(files: Array<{ path: string; size?: number }>): ProjectSnapshot {
@@ -10,6 +11,7 @@ function snapshot(files: Array<{ path: string; size?: number }>): ProjectSnapsho
     manifests: [],
     projects: [],
     workspaces: [],
+    auditScope: fullAuditScope(),
   };
 }
 

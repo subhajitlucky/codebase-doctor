@@ -1,3 +1,5 @@
+import type { AuditScope } from "../scope/types.js";
+
 export interface FileRecord {
   path: string;
   kind: "file" | "symlink";
@@ -65,4 +67,5 @@ export interface ProjectSnapshot {
   manifests: readonly ManifestRecord[];
   projects: readonly DetectedProject[];
   workspaces: readonly WorkspaceRecord[];
+  readonly auditScope: AuditScope;
 }

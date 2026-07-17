@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Doctor, DoctorResult } from "../../../src/core/doctor.js";
+import type { Doctor, DoctorContext, DoctorResult } from "../../../src/core/doctor.js";
 import { createFingerprint, type Finding } from "../../../src/core/findings.js";
 import { scanCodebase, type ScanDependencies, type ScanRequest } from "../../../src/core/scan.js";
 import type { FileInventory, ProjectDetection } from "../../../src/workspace/types.js";
@@ -40,7 +40,7 @@ function finding(): Finding {
 function doctor(
   id: string,
   capabilities: Doctor["capabilities"],
-  diagnose: () => Promise<DoctorResult>,
+  diagnose: Doctor["diagnose"],
 ): Doctor {
   return {
     id,
@@ -70,6 +70,10 @@ function dependencies(doctors: readonly Doctor[]): ScanDependencies {
     inventoryWorkspace: vi.fn(async () => inventory),
     loadManifests: vi.fn(async () => []),
     detectWorkspaceProjects: vi.fn(async () => detection),
+    discoverChanges: vi.fn(async () => ({
+      base: { kind: "head" as const, requestedRef: null, resolvedCommit: "a".repeat(40) },
+      changes: [],
+    })),
     createDoctors: () => doctors,
   };
 }
@@ -88,6 +92,94 @@ describe("scan orchestration", () => {
     expect(deps.inventoryWorkspace).toHaveBeenCalledOnce();
     expect(diagnose).toHaveBeenCalledOnce();
     expect(result.findings).toHaveLength(1);
+    expect(result.auditScope).toEqual({
+      mode: "full",
+      base: null,
+      changes: [],
+      affectedProjectIds: [],
+      reasons: [],
+      limitations: [],
+    });
+  });
+
+  it("discovers changed scope once after project detection and exposes it to every doctor", async () => {
+    const events: string[] = [];
+    const changed = dependencies([]);
+    changed.inventoryWorkspace = vi.fn(async () => {
+      events.push("inventory");
+      return inventory;
+    });
+    changed.loadManifests = vi.fn(async () => {
+      events.push("manifests");
+      return [];
+    });
+    changed.detectWorkspaceProjects = vi.fn(async () => {
+      events.push("projects");
+      return detection;
+    });
+    changed.discoverChanges = vi.fn(async () => {
+      events.push("changes");
+      return {
+        base: {
+          kind: "merge-base" as const,
+          requestedRef: "origin/main",
+          resolvedCommit: "b".repeat(40),
+        },
+        changes: [{ status: "modified" as const, path: "src/index.ts" }],
+      };
+    });
+    const seen: DoctorContext[] = [];
+    const makeDoctor = (id: string): Doctor => doctor(id, ["filesystem:read"], async (context) => {
+      seen.push(context);
+      return { status: "completed", findings: [], durationMs: 1 };
+    });
+    changed.createDoctors = () => [makeDoctor("project"), makeDoctor("full-context")];
+
+    const result = await scanCodebase(request(false, {
+      changed: true,
+      baseRef: "origin/main",
+    }), changed);
+
+    expect(events).toEqual(["inventory", "manifests", "projects", "changes"]);
+    expect(changed.discoverChanges).toHaveBeenCalledOnce();
+    expect(changed.discoverChanges).toHaveBeenCalledWith({
+      root: "/repo",
+      baseRef: "origin/main",
+    });
+    expect(seen).toHaveLength(2);
+    expect(seen.every(({ snapshot }) => snapshot.auditScope === seen[0]?.snapshot.auditScope)).toBe(true);
+    expect(seen[0]?.snapshot.projects).toEqual(detection.projects);
+    expect(result.auditScope).toMatchObject({
+      mode: "changed",
+      affectedProjectIds: ["root"],
+    });
+  });
+
+  it("omits baseRef from discovery when it was not requested", async () => {
+    const deps = dependencies([]);
+
+    await scanCodebase(request(false, { changed: true }), deps);
+
+    expect(deps.discoverChanges).toHaveBeenCalledWith({ root: "/repo" });
+  });
+
+  it("rejects baseRef unless changed mode is enabled before doing discovery", async () => {
+    const deps = dependencies([]);
+
+    await expect(scanCodebase(request(false, { baseRef: "main" }), deps))
+      .rejects.toThrow("baseRef can only be used when changed is true");
+    expect(deps.inventoryWorkspace).not.toHaveBeenCalled();
+    expect(deps.discoverChanges).not.toHaveBeenCalled();
+  });
+
+  it("propagates change discovery failures", async () => {
+    const deps = dependencies([]);
+    deps.discoverChanges = vi.fn(async () => {
+      throw new Error("git discovery failed");
+    });
+
+    await expect(scanCodebase(request(false, { changed: true }), deps))
+      .rejects.toThrow("git discovery failed");
   });
 
   it("skips Check Doctor by default and enables it with runChecks", async () => {

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { planJavaScriptChecks } from "../../../src/doctors/checks/javascript.js";
 import { planPythonChecks } from "../../../src/doctors/checks/python.js";
 import { planChecks } from "../../../src/doctors/checks/planner.js";
+import { fullAuditScope } from "../../../src/scope/planner.js";
+import type { AuditScope } from "../../../src/scope/types.js";
 import type {
   DetectedProject,
   FileRecord,
@@ -39,10 +41,10 @@ function pythonProject(root = "."): DetectedProject {
   };
 }
 
-function packageManifest(scripts: Record<string, string>): ManifestRecord {
+function packageManifest(scripts: Record<string, string>, path = "package.json"): ManifestRecord {
   return {
     kind: "package-json",
-    path: "package.json",
+    path,
     status: "valid",
     data: { scripts },
   };
@@ -55,6 +57,7 @@ function snapshot(overrides: Partial<ProjectSnapshot>): ProjectSnapshot {
     manifests: [],
     projects: [],
     workspaces: [],
+    auditScope: fullAuditScope(),
     ...overrides,
   };
 }
@@ -178,5 +181,87 @@ describe("combined check planning", () => {
       "project:services/api:python:pytest",
     ]);
     expect(Object.isFrozen(plans)).toBe(true);
+  });
+
+  it("keeps full mode planning unchanged", () => {
+    const plans = planChecks(snapshot({
+      auditScope: fullAuditScope(),
+      projects: [pythonProject("services/api"), nodeProject("npm")],
+      manifests: [packageManifest({ test: "vitest" })],
+      files: [file("services/api/pytest.ini")],
+    }), 10_000);
+
+    expect(plans.map(({ id }) => id)).toEqual([
+      "root:javascript:test",
+      "project:services/api:python:pytest",
+    ]);
+  });
+
+  it("plans only affected projects while retaining full repository context", () => {
+    const app: DetectedProject = {
+      ...nodeProject("npm"),
+      id: "project:apps/app",
+      root: "apps/app",
+      manifestPaths: ["apps/app/package.json"],
+    };
+    const unrelated: DetectedProject = {
+      ...nodeProject("npm"),
+      id: "project:apps/unrelated",
+      root: "apps/unrelated",
+      manifestPaths: ["apps/unrelated/package.json"],
+    };
+    const scope: AuditScope = {
+      mode: "changed",
+      base: { kind: "head", requestedRef: null, resolvedCommit: "a".repeat(40) },
+      changes: [{ status: "modified", path: "packages/lib/index.ts" }],
+      affectedProjectIds: ["project:apps/app", "project:services/api"],
+      reasons: [
+        { projectId: "project:apps/app", reason: "workspace-dependent", source: "lib -> app" },
+        { projectId: "project:services/api", reason: "direct-change", source: "services/api/api.py" },
+      ],
+      limitations: [],
+    };
+    const original = snapshot({
+      auditScope: scope,
+      projects: [unrelated, pythonProject("services/api"), app],
+      manifests: [
+        packageManifest({ test: "vitest" }, "apps/app/package.json"),
+        packageManifest({ test: "vitest" }, "apps/unrelated/package.json"),
+      ],
+      files: [file("services/api/pytest.ini"), file("apps/unrelated/source.py")],
+    });
+
+    const plans = planChecks(original, 10_000);
+
+    expect(plans.map(({ id }) => id)).toEqual([
+      "project:apps/app:javascript:test",
+      "project:services/api:python:pytest",
+    ]);
+    expect(original.projects).toHaveLength(3);
+    expect(original.manifests).toHaveLength(2);
+    expect(original.files).toHaveLength(2);
+
+    const reversed = planChecks({
+      ...original,
+      auditScope: { ...scope, affectedProjectIds: [...scope.affectedProjectIds].reverse() },
+    }, 10_000);
+    expect(reversed).toEqual(plans);
+  });
+
+  it("plans no configured checks for an empty changed scope", () => {
+    const plans = planChecks(snapshot({
+      auditScope: {
+        mode: "changed",
+        base: { kind: "head", requestedRef: null, resolvedCommit: "a".repeat(40) },
+        changes: [],
+        affectedProjectIds: [],
+        reasons: [],
+        limitations: [],
+      },
+      projects: [nodeProject("npm")],
+      manifests: [packageManifest({ test: "vitest" })],
+    }), 10_000);
+
+    expect(plans).toEqual([]);
   });
 });

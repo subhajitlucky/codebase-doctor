@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { discoverSqlStreams } from "../../../../../src/audits/database/sql-rls/discovery.js";
+import { fullAuditScope } from "../../../../../src/scope/planner.js";
 import type { ProjectSnapshot } from "../../../../../src/workspace/types.js";
 
 function snapshot(paths: readonly string[], projectRoots: readonly string[] = ["."]): ProjectSnapshot {
@@ -17,6 +18,7 @@ function snapshot(paths: readonly string[], projectRoots: readonly string[] = ["
       executionSupport: "supported",
     })),
     workspaces: [],
+    auditScope: fullAuditScope(),
   };
 }
 

@@ -12,6 +12,12 @@ import { detectProjects } from "../workspace/project-detector.js";
 import type { CommandPlan } from "../execution/types.js";
 import { displayCommand } from "../execution/command-plan.js";
 import { planChecks } from "../doctors/checks/planner.js";
+import {
+  discoverGitChanges,
+  type DiscoverChangesOptions,
+  type DiscoveredChanges,
+} from "../scope/git.js";
+import { fullAuditScope, planChangedScope } from "../scope/planner.js";
 import type {
   FileInventory,
   FileInventoryOptions,
@@ -31,6 +37,8 @@ export interface ScanRequest {
   withDatabase?: boolean;
   databaseSchemas?: readonly string[];
   databaseTimeoutMs?: number;
+  changed?: boolean;
+  baseRef?: string;
 }
 
 export interface AuditRequest extends ScanRequest {
@@ -44,6 +52,7 @@ export interface ScanDependencies {
     inventory: FileInventory,
     manifests: readonly ManifestRecord[],
   ): Promise<ProjectDetection>;
+  discoverChanges(options: DiscoverChangesOptions): Promise<DiscoveredChanges>;
   createDoctors(
     request: ScanRequest,
     hooks: ScanHooks,
@@ -59,6 +68,7 @@ const defaultDependencies: ScanDependencies = {
   inventoryWorkspace: inventoryFiles,
   loadManifests: loadPackageManifests,
   detectWorkspaceProjects: detectProjects,
+  discoverChanges: discoverGitChanges,
   createDoctors: (request, hooks, plans) => {
     const doctors: Doctor[] = [
       projectDoctor,
@@ -84,18 +94,30 @@ export async function scanCodebase(
   overrides: Partial<ScanDependencies> = {},
   hooks: ScanHooks = {},
 ): Promise<ScanResult> {
+  if (request.baseRef !== undefined && request.changed !== true) {
+    throw new Error("baseRef can only be used when changed is true.");
+  }
   const dependencies: ScanDependencies = { ...defaultDependencies, ...overrides };
   const inventory = await dependencies.inventoryWorkspace(request.root, {
     exclude: request.exclude ?? [],
   });
   const manifests = await dependencies.loadManifests(inventory);
   const detection = await dependencies.detectWorkspaceProjects(inventory, manifests);
+  let auditScope = fullAuditScope();
+  if (request.changed === true) {
+    const { base, changes } = await dependencies.discoverChanges({
+      root: inventory.root,
+      ...(request.baseRef === undefined ? {} : { baseRef: request.baseRef }),
+    });
+    auditScope = planChangedScope(base, changes, detection.projects);
+  }
   const snapshot: ProjectSnapshot = {
     root: inventory.root,
     files: inventory.files,
     manifests,
     projects: detection.projects,
     workspaces: detection.workspaces,
+    auditScope,
   };
   const plans = planChecks(snapshot, request.timeoutMs);
   const results = await runDoctors(
@@ -110,6 +132,7 @@ export async function scanCodebase(
   return normalizeScanResult(
     inventory.root,
     detection.projects,
+    auditScope,
     results,
     plans.map((plan) => ({
       planId: plan.id,

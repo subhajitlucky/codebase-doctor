@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildAllowedCapabilities } from "../../../src/core/capabilities.js";
 import type { Doctor, DoctorContext, DoctorResult } from "../../../src/core/doctor.js";
 import { runDoctors } from "../../../src/core/registry.js";
+import { fullAuditScope } from "../../../src/scope/planner.js";
 import type { ProjectSnapshot } from "../../../src/workspace/types.js";
 
 const snapshot: ProjectSnapshot = {
@@ -10,6 +11,7 @@ const snapshot: ProjectSnapshot = {
   manifests: [],
   projects: [],
   workspaces: [],
+  auditScope: fullAuditScope(),
 };
 
 function completed(): DoctorResult {

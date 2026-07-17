@@ -15,6 +15,7 @@ import { VERSION } from "../version.js";
 import type { DetectedProject } from "../workspace/types.js";
 import type { PlannedCheckRecord } from "../execution/types.js";
 import type { FindingComparison } from "./baseline.js";
+import type { AuditScope, ChangedPath, ScopeReason } from "../scope/types.js";
 
 export interface DoctorRunRecord {
   doctorId: string;
@@ -31,6 +32,7 @@ export interface ScanResult {
   tool: { name: "codebase-doctor"; version: string };
   repository: { root: string };
   projects: readonly DetectedProject[];
+  auditScope: AuditScope;
   plannedChecks: readonly PlannedCheckRecord[];
   doctorRuns: readonly DoctorRunRecord[];
   findings: readonly Finding[];
@@ -68,6 +70,7 @@ function doctorRun(entry: RegisteredDoctorResult): DoctorRunRecord {
 export function normalizeScanResult(
   root: string,
   projects: readonly DetectedProject[],
+  auditScope: AuditScope,
   registeredResults: readonly RegisteredDoctorResult[],
   plannedChecks: readonly PlannedCheckRecord[] = [],
 ): ScanResult {
@@ -82,11 +85,32 @@ export function normalizeScanResult(
       const moduleOrder = left.moduleId.localeCompare(right.moduleId);
       return moduleOrder !== 0 ? moduleOrder : left.scope.localeCompare(right.scope);
     });
+  const normalizedAuditScope: AuditScope = {
+    mode: auditScope.mode,
+    base: auditScope.base === null ? null : { ...auditScope.base },
+    changes: auditScope.changes
+      .map((change): ChangedPath => ({ ...change }))
+      .sort((left, right) =>
+        left.path.localeCompare(right.path) ||
+        (left.previousPath ?? "").localeCompare(right.previousPath ?? "") ||
+        left.status.localeCompare(right.status),
+      ),
+    affectedProjectIds: [...auditScope.affectedProjectIds].sort(),
+    reasons: auditScope.reasons
+      .map((reason): ScopeReason => ({ ...reason }))
+      .sort((left, right) =>
+        left.projectId.localeCompare(right.projectId) ||
+        left.reason.localeCompare(right.reason) ||
+        left.source.localeCompare(right.source),
+      ),
+    limitations: [...auditScope.limitations].sort(),
+  };
 
   return {
     schemaVersion: "1",
     tool: { name: "codebase-doctor", version: VERSION },
     repository: { root },
+    auditScope: normalizedAuditScope,
     projects: [...projects].sort((left, right) =>
       left.root < right.root ? -1 : left.root > right.root ? 1 : 0,
     ),

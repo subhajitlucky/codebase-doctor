@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DoctorResult, RegisteredDoctorResult } from "../../../src/core/doctor.js";
 import { createFingerprint, type Finding, type Severity } from "../../../src/core/findings.js";
 import { classifyScanExit, normalizeScanResult } from "../../../src/core/normalize.js";
+import { fullAuditScope } from "../../../src/scope/planner.js";
+import type { AuditScope } from "../../../src/scope/types.js";
 
 function finding(severity: Severity, ruleId: string): Finding {
   return {
@@ -32,11 +34,11 @@ describe("scan normalization", () => {
   it("removes exact duplicates and deterministically sorts findings and doctor runs", () => {
     const high = finding("high", "z-rule");
     const info = finding("info", "a-rule");
-    const first = normalizeScanResult("/repo", [], [
+    const first = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("z-doctor", { status: "completed", findings: [info], durationMs: 2 }),
       run("a-doctor", { status: "completed", findings: [high, high], durationMs: 1 }),
     ]);
-    const second = normalizeScanResult("/repo", [], [
+    const second = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("a-doctor", { status: "completed", findings: [high], durationMs: 1 }),
       run("z-doctor", { status: "completed", findings: [info], durationMs: 2 }),
     ]);
@@ -52,7 +54,7 @@ describe("scan normalization", () => {
   });
 
   it("keeps operational failures separate from successful findings", () => {
-    const result = normalizeScanResult("/repo", [], [
+    const result = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("broken", {
         status: "failed",
         findings: [],
@@ -75,7 +77,7 @@ describe("scan normalization", () => {
   });
 
   it("preserves and deterministically sorts audit coverage", () => {
-    const result = normalizeScanResult("/repo", [], [
+    const result = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("database/sql-rls", {
         status: "completed",
         findings: [],
@@ -109,15 +111,49 @@ describe("scan normalization", () => {
     ]);
   });
 
+  it("copies and deterministically sorts audit scope without mutating the caller", () => {
+    const scope: AuditScope = {
+      mode: "changed",
+      base: { kind: "merge-base", requestedRef: "main", resolvedCommit: "a".repeat(40) },
+      changes: [
+        { status: "modified", path: "z.ts" },
+        { status: "added", path: "a.ts" },
+      ],
+      affectedProjectIds: ["z", "a"],
+      reasons: [
+        { projectId: "z", reason: "direct-change", source: "z.ts" },
+        { projectId: "a", reason: "direct-change", source: "a.ts" },
+      ],
+      limitations: ["z limitation", "a limitation"],
+    };
+
+    const result = normalizeScanResult("/repo", [], scope, []);
+
+    expect(result.auditScope).toEqual({
+      ...scope,
+      changes: [scope.changes[1], scope.changes[0]],
+      affectedProjectIds: ["a", "z"],
+      reasons: [scope.reasons[1], scope.reasons[0]],
+      limitations: ["a limitation", "z limitation"],
+    });
+    expect(result.auditScope).not.toBe(scope);
+    expect(result.auditScope.base).not.toBe(scope.base);
+    expect(result.auditScope.changes[0]).not.toBe(scope.changes[1]);
+    expect(scope.affectedProjectIds).toEqual(["z", "a"]);
+
+    (scope.changes as Array<{ status: "modified"; path: string }>)[0]!.path = "mutated.ts";
+    expect(result.auditScope.changes.map(({ path }) => path)).toEqual(["a.ts", "z.ts"]);
+  });
+
   it("maps thresholds and operational failure to stable exit classifications", () => {
-    const healthy = normalizeScanResult("/repo", [], [
+    const healthy = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("doctor", {
         status: "completed",
         findings: [finding("high", "failure")],
         durationMs: 1,
       }),
     ]);
-    const operational = normalizeScanResult("/repo", [], [
+    const operational = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("doctor", {
         status: "failed",
         findings: [],

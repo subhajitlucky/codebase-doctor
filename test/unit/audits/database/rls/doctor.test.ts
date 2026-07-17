@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createRlsDoctor } from "../../../../../src/audits/database/rls/doctor.js";
 import type { CatalogSnapshot } from "../../../../../src/audits/database/rls/types.js";
 import { runDoctors } from "../../../../../src/core/registry.js";
+import { fullAuditScope } from "../../../../../src/scope/planner.js";
 import type { ProjectSnapshot } from "../../../../../src/workspace/types.js";
 
 const snapshot: ProjectSnapshot = {
@@ -10,6 +11,7 @@ const snapshot: ProjectSnapshot = {
   manifests: [],
   projects: [],
   workspaces: [],
+  auditScope: fullAuditScope(),
 };
 
 function catalog(): CatalogSnapshot {
