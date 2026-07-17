@@ -66,6 +66,22 @@ describe("release package", () => {
         process.platform === "win32" ? "codebase-doctor.cmd" : "codebase-doctor",
       );
       const installedPackage = join(temporaryRoot, "node_modules", "codebase-doctor");
+      const installedManifest = JSON.parse(
+        await readFile(join(installedPackage, "package.json"), "utf8"),
+      );
+      expect(installedManifest.dependencies).toMatchObject({
+        "@babel/parser": "8.0.4",
+        "jsonc-parser": "3.3.1",
+      });
+      for (const parserPackage of ["@babel/parser", "jsonc-parser"]) {
+        const parserManifest = join(
+          temporaryRoot,
+          "node_modules",
+          ...parserPackage.split("/"),
+          "package.json",
+        );
+        expect(JSON.parse(await readFile(parserManifest, "utf8")).name).toBe(parserPackage);
+      }
       const [packedReadme, packedArchitecture, packedSkill] = await Promise.all([
         readFile(join(installedPackage, "README.md"), "utf8"),
         readFile(join(installedPackage, "docs", "architecture.md"), "utf8"),

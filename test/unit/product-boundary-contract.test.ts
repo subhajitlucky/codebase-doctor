@@ -39,6 +39,15 @@ async function documents(paths: readonly string[]) {
 }
 
 describe("independent auditor product boundary", () => {
+  it("pins non-executing source graph parsers exactly", async () => {
+    const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+      dependencies?: Record<string, string>;
+    };
+
+    expect(manifest.dependencies?.["@babel/parser"]).toBe("8.0.4");
+    expect(manifest.dependencies?.["jsonc-parser"]).toBe("3.3.1");
+  });
+
   it("states the permanent builder and verifier separation", async () => {
     for (const { path, text } of await documents(canonicalDocuments)) {
       expect(text, path).toMatch(/Models build\. Codebase Doctor verifies\./i);
