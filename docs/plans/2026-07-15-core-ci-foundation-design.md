@@ -2,10 +2,10 @@
 
 ## Purpose
 
-Codebase Doctor will remain a small, deterministic diagnostic orchestrator. This
-milestone strengthens the core contract that future frontend, backend, database,
-security, infrastructure, performance, and AI doctor packages will use. It does
-not add those specialized doctor packs yet.
+Codebase Doctor will remain a deterministic diagnostic orchestrator. This
+milestone strengthens the shared contract that future built-in frontend,
+backend, database, security, infrastructure, performance, and AI audit modules
+will use. It does not add that broader domain coverage yet.
 
 The milestone adds four connected capabilities:
 
@@ -19,21 +19,21 @@ The milestone adds four connected capabilities:
 The project follows a core-first extension model:
 
 ```text
-Specialized doctor packages and external tools
+Codebase Doctor built-in audit modules
                     |
                     v
-Codebase Doctor core
-discovery -> planning -> execution -> normalization -> comparison
+shared core: discovery -> planning -> execution -> normalization -> comparison
                     |
                     v
-Text, JSON, SARIF, CI, and coding agents
+one Codebase Doctor report: text, JSON, SARIF, CI, and coding agents
 ```
 
 The core owns stable scan, finding, evidence, execution, comparison, and reporter
-contracts. Specialized analysis should live in curated packages such as a future
-`@codebase-doctor/security` package or in external adapters. Runtime-dependent
-analysis, including profiling and hallucination evaluation, remains optional and
-must declare the capabilities it needs.
+contracts. Domain-specific analysis lives inside Codebase Doctor as built-in
+modules behind the same public CLI and report. Runtime-dependent internal
+analysis, including profiling and hallucination evaluation, remains optional,
+must declare the capabilities it needs, and must report incomplete coverage
+honestly.
 
 ## Compatibility
 
@@ -192,8 +192,8 @@ Implementation follows red-green-refactor in this order:
 ## Deferred Work
 
 - GitHub Action packaging and pull-request annotations.
-- Full doctor plugin SDK and lifecycle hooks.
-- Specialized frontend, backend, database, security, infrastructure,
-  performance, and AI doctor packs.
+- A stable internal audit-module lifecycle beyond the initial Doctor contract.
+- Broader built-in frontend, backend, database, security, infrastructure,
+  performance, and AI audit coverage.
 - Network sandboxing for approved child processes.
 - Automatic baseline file creation or mutation.

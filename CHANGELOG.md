@@ -4,6 +4,21 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Align current and historical product documentation around one unified auditor
+  with built-in domain modules, and remove executable direction for the rejected
+  external-Doctor architecture.
+- Distinguish shipped `0.1.3` analysis from the full-codebase north star so a
+  full requested scope is not mistaken for complete analyzer coverage across
+  every language, framework, and domain.
+
+### Security
+
+- Exclude local private planning material from the Git index and npm package,
+  narrow the public documentation package whitelist, and enforce the package
+  boundary during tarball verification.
+
 ## [0.1.3] - 2026-07-17
 
 ### Changed

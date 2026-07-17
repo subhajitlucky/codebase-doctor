@@ -22,6 +22,15 @@ const historicalPlans = [
 const supersededPlans = historicalPlans.slice(0, 2);
 const targetWriteCapability = new RegExp(["filesystem", "write"].join(":"), "i");
 
+const unifiedProductDocuments = [
+  ...canonicalDocuments,
+  "docs/plans/2026-07-15-core-ci-foundation-design.md",
+  "docs/plans/2026-07-15-unified-rls-audit-design.md",
+  "docs/plans/2026-07-15-static-sql-rls-audit-design.md",
+  "docs/plans/2026-07-16-agent-native-changed-audit-design.md",
+  "docs/plans/2026-07-16-independent-auditor-boundary-design.md",
+] as const;
+
 async function documents(paths: readonly string[]) {
   return Promise.all(paths.map(async (path) => ({
     path,
@@ -142,6 +151,60 @@ describe("independent auditor product boundary", () => {
     for (const { path, text } of await documents(supersededPlans)) {
       expect(text, path).toMatch(/^\*\*Status:\*\* Superseded[ \t]*$/m);
       expect(text, path).not.toMatch(/^\*\*Status:\*\* Approved/m);
+    }
+  });
+
+  it("keeps current product direction inside one unified auditor", async () => {
+    const separateProductDirection = [
+      /future .*doctor packages/i,
+      /specialized doctor packs/i,
+      /specialized doctor packages and external tools/i,
+      /@codebase-doctor\/(?:frontend|backend|database|security|infrastructure|performance|ai)/i,
+      /specialized analysis should live in curated packages/i,
+    ];
+
+    for (const { path, text } of await documents(unifiedProductDocuments)) {
+      for (const pattern of separateProductDirection) {
+        expect(text, `${path}: ${pattern}`).not.toMatch(pattern);
+      }
+    }
+
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/one (?:unified )?(?:full-codebase )?auditor|one doctor for the whole codebase/is);
+      expect(text, path).toMatch(/built-in|internal audit modules/is);
+    }
+  });
+
+  it("does not leave superseded external protocols as executable next steps", async () => {
+    for (const { path, text } of await documents(supersededPlans)) {
+      expect(text, path).not.toMatch(
+        /## Immediate Next Step[\s\S]*implement external-doctor protocol/i,
+      );
+      expect(text, path).not.toMatch(
+        /## Implementation Order[\s\S]*external doctor adapters/i,
+      );
+    }
+  });
+
+  it("distinguishes shipped audit coverage from the full-codebase north star", async () => {
+    const [readme, architecture, skill] = await Promise.all([
+      readFile("README.md", "utf8"),
+      readFile("docs/architecture.md", "utf8"),
+      readFile(".agents/skills/codebase-doctor/SKILL.md", "utf8"),
+    ]);
+
+    expect(readme).toMatch(/## Current coverage versus north star/i);
+    expect(readme).toMatch(/\|\s*Domain\s*\|\s*Current 0\.1\.3 coverage\s*\|\s*North star\s*\|/i);
+
+    for (const [path, text] of [
+      ["README.md", readme],
+      ["docs/architecture.md", architecture],
+      [".agents/skills/codebase-doctor/SKILL.md", skill],
+    ] as const) {
+      expect(text, path).toMatch(
+        /full audit.*(?:requested|repository) scope.*not.*(?:complete|universal|every).*(?:domain|analyzer|coverage)/is,
+      );
+      expect(text, path).toMatch(/inspect.*coverage.*before.*(?:verified|clean)|coverage.*before.*(?:verified|clean)/is);
     }
   });
 });

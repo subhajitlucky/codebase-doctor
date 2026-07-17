@@ -5,8 +5,10 @@ description: Run evidence-backed, model-independent codebase diagnostics with th
 
 # Codebase Doctor
 
-Use Codebase Doctor as an independent verification layer. Prefer a changed
-audit after edits and a full audit at trust or release boundaries.
+Use Codebase Doctor as one unified full-codebase auditor and independent
+verification layer. Domain knowledge lives in built-in internal audit modules,
+not separately installed Doctor products. Prefer a changed audit after edits
+and a full audit at trust or release boundaries.
 
 > **Models build. Codebase Doctor verifies.**
 
@@ -16,6 +18,11 @@ be granted direct target-write or remediation authority. Remediation and
 verification commands are guidance, not executable repairs. A human or
 separately authorized external coding agent performs the fix; Codebase Doctor
 reruns independently.
+
+A full audit examines the full requested repository scope for applicable
+implemented modules. It does not mean complete analyzer coverage for every
+domain. Inspect `doctorRuns` and `coverage` before calling a codebase verified
+or clean.
 
 Use a trusted, already-installed `codebase-doctor` binary, or the explicit local
 `./node_modules/.bin/codebase-doctor` binary. Package acquisition or package

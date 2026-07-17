@@ -59,6 +59,28 @@ migration coverage.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
+## Current coverage versus north star
+
+A full audit examines the full requested repository scope for applicable
+implemented modules. It does not mean complete analyzer coverage for every
+language, framework, or domain. Inspect `doctorRuns` and `coverage` before
+calling a codebase verified or clean.
+
+| Domain | Current 0.1.3 coverage | North star |
+| --- | --- | --- |
+| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, and visible-test diagnostics | Cross-language dependency and behavioral topology |
+| Configured validation | JavaScript/TypeScript and Python command planning; execution only with `--run-checks` | Sandboxed validation across supported ecosystems |
+| Database | Offline PostgreSQL migration RLS and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
+| Frontend | Framework detection only; repository-owned checks may provide evidence | Built-in React, Next.js, accessibility, SEO, and bundle analysis |
+| Backend and authorization | NestJS detection only; repository-owned checks may provide evidence | Built-in API, authentication, worker, webhook, cron, permission, and rate-limit analysis |
+| Security | Command-output redaction and RLS security findings; no general repository security analyzer | Built-in secrets, dependency, permission, and supply-chain analysis |
+| Infrastructure | Configuration files may be inventoried but have no semantic analyzer | Built-in Docker, CI, hosting, and deployment analysis |
+| Performance | No semantic analyzer | Built-in cache, query, memory, and profiling analysis with explicit runtime permissions |
+| AI systems | No semantic analyzer | Built-in prompt, token, model, and grounding analysis with honest statistical limits |
+
+The north-star entries are planned internal modules, not separately installed
+Doctor products and not shipped behavior.
+
 ## What works in the current source
 
 - Bounded, symlink-safe repository inventory.

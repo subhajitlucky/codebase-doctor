@@ -2,9 +2,10 @@
 
 ## Purpose and boundary
 
-Codebase Doctor is a local-first, model-independent auditor. It combines
-repository inspection, configured validation, offline SQL analysis, and an
-explicitly permitted live PostgreSQL audit behind one normalized report.
+Codebase Doctor is one unified full-codebase auditor. It is local-first and
+model-independent, combining repository inspection, configured validation,
+offline SQL analysis, and an explicitly permitted live PostgreSQL audit behind
+one normalized report.
 
 > **Models build. Codebase Doctor verifies.**
 
@@ -23,6 +24,11 @@ The implemented safety principles are deterministic output, bounded read-only
 discovery, evidence-backed findings, explicit capabilities, visible partial
 failure, and honest scope. Detection is not diagnosis, and selected scope is
 not evidence that unselected areas are clean.
+
+A full audit examines the full requested repository scope for applicable
+implemented modules. It does not mean complete analyzer coverage for every
+domain. Consumers must inspect module runs and coverage before calling a result
+verified or clean.
 
 ## Implemented audit pipeline
 
