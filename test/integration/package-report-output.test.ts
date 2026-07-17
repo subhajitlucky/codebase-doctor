@@ -41,6 +41,7 @@ describe("package report output", () => {
       timeoutMs: 1_000,
       failOn: "high",
       includeDatabaseAudit: true,
+      includeSecurityAudit: true,
       withDatabase: false,
     };
     const evidence: Evidence = {
@@ -62,6 +63,7 @@ describe("package report output", () => {
 
     expect(typeof auditCodebase).toBe("function");
     expect(request.includeDatabaseAudit).toBe(true);
+    expect(request.includeSecurityAudit).toBe(true);
     expect(evidence.type).toBe("database");
     expect(coverage.status).toBe("partial");
   });

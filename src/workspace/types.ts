@@ -1,4 +1,5 @@
 import type { AuditScope } from "../scope/types.js";
+import type { RepositoryFileSelection } from "../scope/repository-files.js";
 
 export interface FileRecord {
   path: string;
@@ -68,4 +69,5 @@ export interface ProjectSnapshot {
   projects: readonly DetectedProject[];
   workspaces: readonly WorkspaceRecord[];
   readonly auditScope: AuditScope;
+  readonly repositoryFiles?: RepositoryFileSelection;
 }

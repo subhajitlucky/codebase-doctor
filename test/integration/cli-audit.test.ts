@@ -19,6 +19,15 @@ import {
 const repositoryRoot = process.cwd();
 const fixture = (name: string) => resolve(repositoryRoot, "test", "fixtures", name);
 const temporaryRoots: string[] = [];
+const SECRET_ALPHABET = "M7n9B2v8C4x6Z1l3K5j0HgFdSaPqWeRt";
+
+function generatedToken(prefix: string, length = 32): string {
+  let value = prefix;
+  for (let index = 0; value.length < prefix.length + length; index += 1) {
+    value += SECRET_ALPHABET[index % SECRET_ALPHABET.length];
+  }
+  return value;
+}
 
 function isolatedGitEnvironment(root: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
@@ -62,6 +71,110 @@ afterEach(async () => {
 });
 
 describe("audit CLI", () => {
+  it("reports tracked env credentials but ignores a Git-ignored local env file", async () => {
+    const trackedSecret = generatedToken("ghp_");
+    const ignoredSecret = generatedToken("glpat-");
+    const { root } = await createRepository({
+      ".gitignore": ".env.local\n",
+      ".env": `GITHUB_TOKEN=${trackedSecret}\n`,
+      ".env.example": "GITHUB_TOKEN=your_key_here\n",
+    });
+    await writeProjectFile(root, ".env.local", `GITLAB_TOKEN=${ignoredSecret}\n`);
+    const before = await captureGitRepositorySnapshot(root);
+
+    const result = cli(["audit", root, "--json", "--fail-on", "none"], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
+      doctorId === "security/secrets"
+    )).toEqual([expect.objectContaining({
+      ruleId: "security/secrets/provider-token",
+      location: expect.objectContaining({ path: ".env", line: 1 }),
+    })]);
+    expect(report.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "security/secrets",
+      status: "completed",
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "security",
+      applicability: "detected",
+      status: "completed",
+      coverageComplete: true,
+      modules: [expect.objectContaining({
+        moduleId: "security/secrets",
+        status: "completed",
+      })],
+    }));
+    expect(result.stdout).not.toContain(trackedSecret);
+    expect(result.stdout).not.toContain(ignoredSecret);
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+  });
+
+  it("limits changed secret scanning to current changed files", async () => {
+    const unchangedSecret = generatedToken("ghp_");
+    const changedSecret = generatedToken("xoxb-");
+    const { root } = await createRepository({
+      "unchanged.ts": `const GITHUB_TOKEN = "${unchangedSecret}";\n`,
+      "changed.ts": "export const value = 1;\n",
+    });
+    await writeProjectFile(root, "changed.ts", `const SLACK_TOKEN = "${changedSecret}";\n`);
+
+    const result = cli([
+      "audit", root, "--changed", "--json", "--fail-on", "none",
+    ], root);
+    const report = JSON.parse(result.stdout);
+    const secretFindings = report.findings.filter(({ doctorId }: { doctorId: string }) =>
+      doctorId === "security/secrets"
+    );
+
+    expect(result.status).toBe(0);
+    expect(secretFindings).toEqual([expect.objectContaining({
+      location: expect.objectContaining({ path: "changed.ts" }),
+    })]);
+    expect(result.stdout).not.toContain(unchangedSecret);
+    expect(result.stdout).not.toContain(changedSecret);
+  });
+
+  it("applies the existing high-severity exit threshold to secret findings", async () => {
+    const secret = generatedToken("github_pat_");
+    const { root } = await createRepository({
+      "config.ts": `const API_KEY = "${secret}";\n`,
+    });
+
+    const result = cli(["audit", root, "--json", "--fail-on", "high"], root);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).not.toContain(secret);
+  });
+
+  it("keeps text and SARIF secret findings redacted with matching coverage", async () => {
+    const secret = generatedToken("glpat-");
+    const { root } = await createRepository({
+      "config.ts": `const GITLAB_TOKEN = "${secret}";\n`,
+    });
+
+    const text = cli(["audit", root, "--format", "text", "--fail-on", "none"], root);
+    const sarif = cli(["audit", root, "--format", "sarif", "--fail-on", "none"], root);
+    const sarifReport = JSON.parse(sarif.stdout);
+
+    expect(text.status).toBe(0);
+    expect(text.stdout).toContain("security/secrets");
+    expect(text.stdout).not.toContain(secret);
+    expect(sarif.status).toBe(0);
+    expect(sarif.stdout).not.toContain(secret);
+    expect(sarifReport.runs[0].results).toContainEqual(expect.objectContaining({
+      ruleId: "security/secrets/provider-token",
+    }));
+    expect(sarifReport.runs[0].properties.domainCoverage).toContainEqual(
+      expect.objectContaining({
+        domain: "security",
+        status: "completed",
+        coverageComplete: true,
+      }),
+    );
+  });
+
   it("reports staged, unstaged, and untracked changes from HEAD without mutating the repository", async () => {
     const { root, initialCommit } = await createRepository({
       "staged.txt": "initial\n",

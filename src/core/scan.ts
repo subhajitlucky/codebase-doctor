@@ -6,6 +6,7 @@ import { createCheckDoctor } from "../doctors/checks/doctor.js";
 import { projectDoctor } from "../doctors/project/doctor.js";
 import { createRlsDoctor } from "../audits/database/rls/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
+import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
@@ -17,6 +18,7 @@ import {
   type DiscoverChangesOptions,
   type DiscoveredChanges,
 } from "../scope/git.js";
+import { discoverRepositoryFiles } from "../scope/repository-files.js";
 import { fullAuditScope, planChangedScope } from "../scope/planner.js";
 import { planDomainCoverage } from "./domain-coverage.js";
 import type {
@@ -35,6 +37,7 @@ export interface ScanRequest {
   failOn: FindingThreshold;
   exclude?: readonly string[];
   includeDatabaseAudit?: boolean;
+  includeSecurityAudit?: boolean;
   withDatabase?: boolean;
   databaseSchemas?: readonly string[];
   databaseTimeoutMs?: number;
@@ -44,6 +47,7 @@ export interface ScanRequest {
 
 export interface AuditRequest extends ScanRequest {
   includeDatabaseAudit: true;
+  includeSecurityAudit: true;
 }
 
 export interface ScanDependencies {
@@ -54,6 +58,7 @@ export interface ScanDependencies {
     manifests: readonly ManifestRecord[],
   ): Promise<ProjectDetection>;
   discoverChanges(options: DiscoverChangesOptions): Promise<DiscoveredChanges>;
+  discoverRepositoryFiles(root: string): ReturnType<typeof discoverRepositoryFiles>;
   createDoctors(
     request: ScanRequest,
     hooks: ScanHooks,
@@ -70,6 +75,7 @@ const defaultDependencies: ScanDependencies = {
   loadManifests: loadPackageManifests,
   detectWorkspaceProjects: detectProjects,
   discoverChanges: discoverGitChanges,
+  discoverRepositoryFiles,
   createDoctors: (request, hooks, plans) => {
     const doctors: Doctor[] = [
       projectDoctor,
@@ -79,6 +85,9 @@ const defaultDependencies: ScanDependencies = {
         ...(hooks.onCommandPlan === undefined ? {} : { onPlan: hooks.onCommandPlan }),
       }),
     ];
+    if (request.includeSecurityAudit === true) {
+      doctors.push(createSecretsDoctor());
+    }
     if (request.includeDatabaseAudit === true) {
       doctors.push(createSqlRlsDoctor());
       doctors.push(createRlsDoctor({
@@ -104,6 +113,9 @@ export async function scanCodebase(
   });
   const manifests = await dependencies.loadManifests(inventory);
   const detection = await dependencies.detectWorkspaceProjects(inventory, manifests);
+  const repositoryFiles = request.includeSecurityAudit === true && request.changed !== true
+    ? await dependencies.discoverRepositoryFiles(inventory.root)
+    : undefined;
   let auditScope = fullAuditScope();
   if (request.changed === true) {
     const { base, changes } = await dependencies.discoverChanges({
@@ -119,6 +131,7 @@ export async function scanCodebase(
     projects: detection.projects,
     workspaces: detection.workspaces,
     auditScope,
+    ...(repositoryFiles === undefined ? {} : { repositoryFiles }),
   };
   const plans = planChecks(snapshot, request.timeoutMs);
   const results = await runDoctors(
@@ -157,7 +170,7 @@ export async function auditCodebase(
   hooks: ScanHooks = {},
 ): Promise<ScanResult> {
   return scanCodebase(
-    { ...request, includeDatabaseAudit: true },
+    { ...request, includeDatabaseAudit: true, includeSecurityAudit: true },
     overrides,
     hooks,
   );

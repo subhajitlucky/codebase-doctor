@@ -263,6 +263,121 @@ describe("domain coverage planning", () => {
     });
   });
 
+  it("maps completed Secrets Doctor coverage into the security domain", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [result("project"), {
+        doctorId: "security/secrets",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "security/secrets",
+            status: "completed",
+            scope: "full",
+            filesExamined: 4,
+            statementsExamined: 20,
+            statementsRecognized: 0,
+            limitations: [],
+          }],
+        },
+      }],
+      plans: [],
+      includeDatabaseAudit: false,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "security")).toEqual({
+      domain: "security",
+      applicability: "detected",
+      status: "completed",
+      coverageComplete: true,
+      evidence: [{ type: "module", value: "security/secrets" }],
+      modules: [{
+        moduleId: "security/secrets",
+        status: "completed",
+        scopes: ["full"],
+        limitations: [],
+      }],
+      limitations: [],
+    });
+  });
+
+  it.each([
+    ["partial", "partial", "detected", false],
+    ["failed", "failed", "detected", false],
+    ["not-applicable", "not-applicable", "not-detected", true],
+  ] as const)(
+    "maps %s Secrets Doctor coverage conservatively",
+    (moduleStatus, status, applicability, coverageComplete) => {
+      const registered = moduleStatus === "failed"
+        ? result("security/secrets", "failed")
+        : {
+            doctorId: "security/secrets",
+            result: {
+              status: "completed" as const,
+              findings: [],
+              durationMs: 1,
+              coverage: [{
+                moduleId: "security/secrets",
+                status: moduleStatus,
+                scope: "full",
+                filesExamined: 0,
+                statementsExamined: 0,
+                statementsRecognized: 0,
+                limitations: moduleStatus === "partial" ? ["Budget reached."] : [],
+              }],
+            },
+          };
+      const coverage = planDomainCoverage({
+        snapshot: snapshot(),
+        registeredResults: [result("project"), registered],
+        plans: [],
+        includeDatabaseAudit: false,
+      });
+
+      expect(coverage.find(({ domain }) => domain === "security")).toMatchObject({
+        applicability,
+        status,
+        coverageComplete,
+        evidence: [{ type: "module", value: "security/secrets" }],
+      });
+    },
+  );
+
+  it("marks an empty changed Secrets Doctor selection as not selected", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot({ auditScope: changedScope([]) }),
+      registeredResults: [result("project"), {
+        doctorId: "security/secrets",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "security/secrets",
+            status: "not-applicable",
+            scope: "changed",
+            filesExamined: 0,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [],
+          }],
+        },
+      }],
+      plans: [],
+      includeDatabaseAudit: false,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "security")).toMatchObject({
+      applicability: "unknown",
+      status: "not-selected",
+      coverageComplete: false,
+      modules: [{ moduleId: "security/secrets", status: "not-applicable" }],
+      limitations: ["No current changed file was selected for secrets analysis."],
+    });
+  });
+
   it("marks detected domains outside an empty changed scope as not selected", () => {
     const project: ProjectSnapshot["projects"][number] = {
       id: "root",

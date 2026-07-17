@@ -47,6 +47,7 @@ export function parseDatabaseTimeout(value: string): number {
 function databaseRequest(options: AuditCommandOptions): Partial<ScanRequest> {
   return {
     includeDatabaseAudit: true,
+    includeSecurityAudit: true,
     withDatabase: options.withDatabase,
     databaseSchemas: normalizeDatabaseSchemas(options.databaseSchema),
     databaseTimeoutMs: parseDatabaseTimeout(options.databaseTimeout),

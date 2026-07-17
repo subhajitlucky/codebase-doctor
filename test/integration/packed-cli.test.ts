@@ -6,6 +6,15 @@ import { describe, expect, it } from "vitest";
 import { parseNpmPackJson } from "../../scripts/npm-pack-json.mjs";
 
 const repositoryRoot = process.cwd();
+const SECRET_ALPHABET = "R7t9Y2u8I4o6P1a3S5d0FgHjKlZxCvBn";
+
+function generatedToken(prefix: string, length = 32): string {
+  let value = prefix;
+  for (let index = 0; value.length < prefix.length + length; index += 1) {
+    value += SECRET_ALPHABET[index % SECRET_ALPHABET.length];
+  }
+  return value;
+}
 
 function run(executable: string, args: readonly string[], cwd = repositoryRoot) {
   return spawnSync(executable, [...args], {
@@ -188,9 +197,13 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
       expect(report.domainCoverage).toHaveLength(9);
       expect(report.domainCoverage).toContainEqual(expect.objectContaining({
         domain: "security",
-        applicability: "unknown",
-        status: "unsupported",
+        applicability: "detected",
+        status: "partial",
         coverageComplete: false,
+        modules: [expect.objectContaining({
+          moduleId: "security/secrets",
+          status: "partial",
+        })],
       }));
 
       const unsafe = run(binary, [
@@ -220,10 +233,39 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
         .toBe(0);
       expect(run("git", ["config", "user.name", "Codebase Doctor Test"], gitRepository).status)
         .toBe(0);
+      const trackedSecret = generatedToken("ghp_");
+      const ignoredSecret = generatedToken("glpat-");
       await writeFile(join(gitRepository, "tracked.txt"), "initial\n");
-      expect(run("git", ["add", "--", "tracked.txt"], gitRepository).status).toBe(0);
+      await writeFile(join(gitRepository, ".gitignore"), ".env\n");
+      await writeFile(join(gitRepository, "tracked.env"), `GITHUB_TOKEN=${trackedSecret}\n`);
+      expect(run(
+        "git",
+        ["add", "--", "tracked.txt", ".gitignore", "tracked.env"],
+        gitRepository,
+      ).status).toBe(0);
       expect(run("git", ["commit", "--quiet", "--message", "initial"], gitRepository).status)
         .toBe(0);
+      await writeFile(join(gitRepository, ".env"), `GITLAB_TOKEN=${ignoredSecret}\n`);
+
+      const packedSecretAudit = run(binary, [
+        "audit", gitRepository, "--json", "--fail-on", "none",
+      ], temporaryRoot);
+      expect(packedSecretAudit.status, packedSecretAudit.stderr).toBe(0);
+      expect(packedSecretAudit.stdout).not.toContain(trackedSecret);
+      expect(packedSecretAudit.stdout).not.toContain(ignoredSecret);
+      const packedSecretReport = JSON.parse(packedSecretAudit.stdout);
+      expect(packedSecretReport.findings.filter(({ doctorId }: { doctorId: string }) =>
+        doctorId === "security/secrets"
+      )).toEqual([expect.objectContaining({
+        ruleId: "security/secrets/provider-token",
+        location: expect.objectContaining({ path: "tracked.env" }),
+      })]);
+      expect(packedSecretReport.domainCoverage).toContainEqual(expect.objectContaining({
+        domain: "security",
+        status: "completed",
+        coverageComplete: true,
+      }));
+
       await writeFile(join(gitRepository, "tracked.txt"), "changed\n");
       await writeFile(join(gitRepository, "untracked.txt"), "untracked\n");
 

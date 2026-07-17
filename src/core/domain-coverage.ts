@@ -234,6 +234,7 @@ function applyChangedSelection(
 ): DomainCoverage {
   if (
     snapshot.auditScope.mode === "full" ||
+    entry.status === "not-selected" ||
     entry.status === "not-applicable" ||
     isDomainSelectedInChangedScope(entry, snapshot)
   ) {
@@ -247,6 +248,47 @@ function applyChangedSelection(
       ...entry.limitations,
       "This domain was outside the selected changed scope.",
     ])].sort(),
+  };
+}
+
+function securityCoverage(
+  modules: readonly DomainModuleCoverage[],
+  snapshot: ProjectSnapshot,
+): DomainCoverage {
+  if (modules.length === 0) {
+    return {
+      domain: "security",
+      applicability: "unknown",
+      status: "unsupported",
+      coverageComplete: false,
+      evidence: [],
+      modules: [],
+      limitations: ["General security applicability and semantic analysis are not implemented."],
+    };
+  }
+
+  const moduleStatus = aggregateStatuses(modules.map(({ status }) => status));
+  const emptyChangedSelection = snapshot.auditScope.mode === "changed" &&
+    snapshot.auditScope.changes.length === 0 &&
+    moduleStatus === "not-applicable";
+  const status = emptyChangedSelection ? "not-selected" : moduleStatus;
+  const applicability = status === "not-selected"
+    ? "unknown"
+    : status === "not-applicable" ? "not-detected" : "detected";
+  const limitations = emptyChangedSelection
+    ? ["No current changed file was selected for secrets analysis."]
+    : modules.flatMap(({ limitations: moduleLimitations }) => moduleLimitations);
+  return {
+    domain: "security",
+    applicability,
+    status,
+    coverageComplete: status === "completed" || status === "not-applicable",
+    evidence: sortEvidence(modules.map(({ moduleId }) => ({
+      type: "module" as const,
+      value: moduleId,
+    }))),
+    modules,
+    limitations: [...new Set(limitations)].sort(),
   };
 }
 
@@ -294,6 +336,7 @@ export function planDomainCoverage(
     ? aggregateStatuses(validationModules.map(({ status }) => status))
     : "not-applicable";
   const databaseModules = modulesByDomain.get("database") ?? [];
+  const securityModules = modulesByDomain.get("security") ?? [];
   const databaseStatus = input.includeDatabaseAudit
     ? aggregateStatuses(databaseModules.map(({ status }) => status))
     : "not-selected";
@@ -342,15 +385,7 @@ export function planDomainCoverage(
         ? databaseModules.flatMap(({ limitations }) => limitations)
         : ["The repository-only scan command does not select database audit modules."],
     },
-    {
-      domain: "security",
-      applicability: "unknown",
-      status: "unsupported",
-      coverageComplete: false,
-      evidence: [],
-      modules: [],
-      limitations: ["General security applicability and semantic analysis are not implemented."],
-    },
+    securityCoverage(securityModules, input.snapshot),
     infrastructure,
     {
       domain: "performance",

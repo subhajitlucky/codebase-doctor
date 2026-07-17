@@ -70,6 +70,11 @@ function dependencies(doctors: readonly Doctor[]): ScanDependencies {
     inventoryWorkspace: vi.fn(async () => inventory),
     loadManifests: vi.fn(async () => []),
     detectWorkspaceProjects: vi.fn(async () => detection),
+    discoverRepositoryFiles: vi.fn(async () => ({
+      availability: "available" as const,
+      paths: ["package.json"],
+      limitations: [],
+    })),
     discoverChanges: vi.fn(async () => ({
       base: { kind: "head" as const, requestedRef: null, resolvedCommit: "a".repeat(40) },
       changes: [],
@@ -112,6 +117,47 @@ describe("scan orchestration", () => {
       "performance",
       "ai",
     ]);
+  });
+
+  it("discovers repository-shareable files once for a full combined audit", async () => {
+    const contexts: DoctorContext[] = [];
+    const auditDoctor = doctor("project", ["filesystem:read"], async (context) => {
+      contexts.push(context);
+      return { status: "completed", findings: [], durationMs: 1 };
+    });
+    const deps = dependencies([auditDoctor]);
+
+    await scanCodebase(request(false, { includeSecurityAudit: true }), deps);
+
+    expect(deps.discoverRepositoryFiles).toHaveBeenCalledOnce();
+    expect(deps.discoverRepositoryFiles).toHaveBeenCalledWith("/repo");
+    expect(contexts[0]?.snapshot.repositoryFiles).toEqual({
+      availability: "available",
+      paths: ["package.json"],
+      limitations: [],
+    });
+  });
+
+  it("does not run full repository-file discovery for changed audit or scan", async () => {
+    const changed = dependencies([]);
+    await scanCodebase(request(false, {
+      includeSecurityAudit: true,
+      changed: true,
+    }), changed);
+
+    const scanned = dependencies([]);
+    await scanCodebase(request(false), scanned);
+
+    expect(changed.discoverRepositoryFiles).not.toHaveBeenCalled();
+    expect(scanned.discoverRepositoryFiles).not.toHaveBeenCalled();
+  });
+
+  it("does not couple repository-file discovery to the database audit flag", async () => {
+    const deps = dependencies([]);
+
+    await scanCodebase(request(false, { includeDatabaseAudit: true }), deps);
+
+    expect(deps.discoverRepositoryFiles).not.toHaveBeenCalled();
   });
 
   it("discovers changed scope once after project detection and exposes it to every doctor", async () => {
@@ -240,6 +286,7 @@ describe("scan orchestration", () => {
     const scanned = await scanCodebase(request(false), discovery);
     const audited = await scanCodebase(request(false, {
       includeDatabaseAudit: true,
+      includeSecurityAudit: true,
       withDatabase: false,
       databaseSchemas: ["public"],
       databaseTimeoutMs: 10_000,
@@ -247,6 +294,11 @@ describe("scan orchestration", () => {
 
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/rls");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/sql-rls");
+    expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/secrets");
+    expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "security/secrets",
+      status: "completed",
+    }));
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "database/sql-rls",
       status: "completed",
