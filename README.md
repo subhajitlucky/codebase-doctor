@@ -81,6 +81,28 @@ calling a codebase verified or clean.
 The north-star entries are planned internal modules, not separately installed
 Doctor products and not shipped behavior.
 
+## Domain coverage inventory
+
+Every text, JSON, and SARIF report includes `domainCoverage`: a fixed checklist
+of all nine domains shown above. It separates `applicability` from `status` so
+an agent can distinguish “this domain was not detected” from “this domain was
+detected but its analysis is unsupported, skipped, failed, or not selected.”
+Each entry includes evidence, limitations, and module-level status where a
+domain contains more than one analysis module.
+
+For example, the database domain can show the offline `database/sql-rls` module
+as completed while the separately permissioned live `database/rls` module is
+skipped. The database domain is then partial rather than silently clean.
+Changed audits can mark unaffected domains `not-selected`; security and
+performance can remain `unknown` and `unsupported` until an applicable analyzer
+exists.
+
+`coverageComplete` is true only when the declared applicable, selected analysis
+completed, or when the domain is justified as not applicable. `coverageComplete`
+does not mean the code is bug-free or correct, and it does not claim that every
+possible analyzer exists. Always interpret it with applicability, status,
+module details, evidence, limitations, and findings.
+
 ## What works in the current source
 
 - Bounded, symlink-safe repository inventory.

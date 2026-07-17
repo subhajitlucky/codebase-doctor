@@ -4,6 +4,14 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add a deterministic `domainCoverage` inventory for all nine audit domains,
+  separating applicability from status and preserving module details, evidence,
+  limitations, and conservative `coverageComplete` semantics across text, JSON,
+  SARIF, and the public package contract. Complete coverage describes declared
+  audit execution; it is not proof that code is bug-free or correct.
+
 ### Changed
 
 - Align current and historical product documentation around one unified auditor

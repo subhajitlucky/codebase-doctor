@@ -21,8 +21,12 @@ reruns independently.
 
 A full audit examines the full requested repository scope for applicable
 implemented modules. It does not mean complete analyzer coverage for every
-domain. Inspect `doctorRuns` and `coverage` before calling a codebase verified
-or clean.
+domain. Every report includes `domainCoverage`, a fixed checklist of all nine
+domains. It separates applicability from status and preserves evidence,
+limitations, and module-level status. `coverageComplete` means only that the
+declared applicable, selected analysis completed, or that non-applicability was
+justified. `coverageComplete` does not mean the code is bug-free or correct.
+Inspect the complete inventory before calling a codebase verified or clean.
 
 Use a trusted, already-installed `codebase-doctor` binary, or the explicit local
 `./node_modules/.bin/codebase-doctor` binary. Package acquisition or package
@@ -56,7 +60,12 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    codebase-doctor audit . --json
    ```
 
-3. Inspect `auditScope`, then `doctorRuns`, then `coverage`, then `findings`.
+3. Inspect `auditScope`, then `domainCoverage`, then `doctorRuns`, then
+   low-level `coverage`, then `findings`. For every domain, read applicability
+   separately from status and inspect its module details, evidence, and
+   limitations. `unsupported`, `unknown`, and `not-selected` are explicit gaps,
+   not successful audits.
+
    Changed mode is mixed-scope, not a universal file filter. Project Doctor
    structural rules run with the full repository snapshot and may report
    findings outside changed paths or projects for manifests, lockfiles,

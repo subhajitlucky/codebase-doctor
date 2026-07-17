@@ -207,4 +207,16 @@ describe("independent auditor product boundary", () => {
       expect(text, path).toMatch(/inspect.*coverage.*before.*(?:verified|clean)|coverage.*before.*(?:verified|clean)/is);
     }
   });
+
+  it("documents the machine-readable domain coverage contract without overstating assurance", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/domainCoverage/);
+      expect(text, path).toMatch(/applicability.*status|status.*applicability/is);
+      expect(text, path).toMatch(/module[- ]level|modules.*status|status.*modules/is);
+      expect(text, path).toMatch(/coverageComplete/);
+      expect(text, path).toMatch(
+        /coverageComplete.*does not mean.*(?:bug[- ]free|no bugs|correct)|(?:bug[- ]free|no bugs|correct).*coverageComplete/is,
+      );
+    }
+  });
 });

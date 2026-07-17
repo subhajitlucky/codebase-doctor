@@ -119,6 +119,17 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/--base.*present.*missing operand.*invalid ref.*exit `?2`?/is);
   });
 
+  it("teaches agents to interpret the complete domain coverage checklist", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/domainCoverage/);
+    expect(skill).toMatch(/nine|9.*domains|domains.*nine|domains.*9/is);
+    expect(skill).toMatch(/applicability.*status|status.*applicability/is);
+    expect(skill).toMatch(/coverageComplete/);
+    expect(skill).toMatch(/coverageComplete.*does not mean.*(?:bug[- ]free|no bugs|correct)/is);
+    expect(skill).toMatch(/unsupported|unknown|not-selected/is);
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",

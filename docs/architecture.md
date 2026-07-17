@@ -194,11 +194,33 @@ coverage, findings, summaries, and `auditScope`. Text, JSON, and SARIF reporters
 consume that same normalized result. Operational failures stay in `doctorRuns`;
 they are not fabricated findings.
 
+### Domain coverage inventory
+
+Every normalized result also contains `domainCoverage` in a fixed nine-domain
+order: repository, validation, frontend, backend, database, security,
+infrastructure, performance, and AI. The inventory separates applicability
+from status. Applicability is `detected`, `not-detected`, or `unknown`; status is
+`completed`, `partial`, `not-applicable`, `unsupported`, `skipped`, `failed`, or
+`not-selected`.
+
+Domain records preserve evidence, limitations, and module-level status. Domain
+aggregation is conservative: for example, a completed static SQL/RLS module and
+a skipped live RLS module make database coverage partial. Changed-scope modules
+outside the selected impact set remain `not-selected` without erasing modules
+whose contracts require full-repository context.
+
+`coverageComplete` means only that the declared applicable, selected analysis
+completed, or that non-applicability was justified. The coverageComplete field
+does not mean the code is bug-free or correct. It does not guarantee that every
+relevant analyzer exists and does not change exit-code behavior. Text, JSON,
+and SARIF expose the same inventory so humans and models can inspect limitations
+rather than infer assurance from zero findings.
+
 JSON schema version `1` remains the report contract. `auditScope`, `coverage`,
-guidance fields, and comparison options are additive fields, so existing
-schema-1 consumers remain valid. The JSON schema version is independent from
-the npm package version; removing or reinterpreting existing fields would
-require a schema change.
+`domainCoverage`, guidance fields, and comparison options are additive fields,
+so existing schema-1 consumers remain valid. The JSON schema version is
+independent from the npm package version; removing or reinterpreting existing
+fields would require a schema change.
 
 Baseline comparison uses finding fingerprints. With a baseline, failure
 thresholds apply only to new findings. Changed audits set comparison to exclude
