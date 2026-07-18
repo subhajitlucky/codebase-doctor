@@ -203,7 +203,7 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
       }
 
       for (const target of selection.targets) {
-        const targetLimitations = [...selection.limitations];
+        const targetLimitations = [...selection.limitations, ...target.limitations];
         let parsedLock: NpmLockParseResult | undefined;
         let lockExamined = 0;
         let statementsExamined = 0;

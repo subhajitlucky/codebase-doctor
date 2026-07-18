@@ -159,6 +159,83 @@ describe("Dependencies Doctor", () => {
     }]);
   });
 
+  it("keeps ambiguous nested npm lock ownership as partial coverage", async () => {
+    const base = npmSnapshot();
+    const { packageManager: _packageManager, ...inheritedProject } = base.projects[0]!;
+    const child = {
+      ...inheritedProject,
+      id: "published",
+      root: "packages/published",
+      manifestPaths: ["packages/published/package.json"],
+    };
+    const readFile = vi.fn(async () => lock({
+      "": { dependencies: { alpha: "^1.0.0" } },
+    }));
+    const doctor = createDependenciesDoctor({ readFile });
+    const result = await doctor.diagnose({
+      snapshot: npmSnapshot({
+        files: [
+          ...base.files,
+          { path: "packages/published/package.json", kind: "file", size: 100 },
+        ],
+        manifests: [
+          base.manifests[0]!,
+          {
+            kind: "package-json",
+            path: "packages/published/package.json",
+            status: "valid",
+            data: { dependencies: { alpha: "^1.0.0" } },
+          },
+        ],
+        projects: [base.projects[0]!, child],
+      }),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(readFile).toHaveBeenCalledOnce();
+    expect(result.findings).not.toContainEqual(expect.objectContaining({
+      ruleId: "security/dependencies/missing-lockfile",
+    }));
+    expect(result.coverage).toContainEqual(expect.objectContaining({
+      status: "partial",
+      scope: "full:packages/published",
+      limitations: [
+        "packages/published: npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
+      ],
+    }));
+  });
+
+  it("reports a missing lock for an explicitly npm-governed standalone graph", async () => {
+    const readFile = vi.fn(async () => lock({}));
+    const doctor = createDependenciesDoctor({ readFile });
+    const result = await doctor.diagnose({
+      snapshot: npmSnapshot({
+        files: [{ path: "package.json", kind: "file", size: 100 }],
+        manifests: [{
+          kind: "package-json",
+          path: "package.json",
+          status: "valid",
+          data: {
+            packageManager: "npm@11.0.0",
+            dependencies: { alpha: "^1.0.0" },
+          },
+        }],
+      }),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(readFile).not.toHaveBeenCalled();
+    expect(result.findings).toEqual([expect.objectContaining({
+      ruleId: "security/dependencies/missing-lockfile",
+      location: { path: "package.json" },
+    })]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "completed",
+      scope: "full:.",
+      limitations: [],
+    })]);
+  });
+
   it("preserves an unrelated changed scope as not selected", async () => {
     const readFile = vi.fn(async () => lock({}));
     const doctor = createDependenciesDoctor({ readFile });

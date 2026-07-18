@@ -4,6 +4,7 @@ import type {
   FileRecord,
   ProjectSnapshot,
 } from "../../../workspace/types.js";
+import type { NpmLockOwnership } from "./types.js";
 
 export interface CoveredDependencyProject {
   readonly projectId: string;
@@ -14,9 +15,11 @@ export interface CoveredDependencyProject {
 export interface DependencyAuditTarget {
   readonly lockRoot: string;
   readonly authority: "package-lock" | "shrinkwrap" | "none";
+  readonly lockOwnership: NpmLockOwnership;
   readonly lockfile?: FileRecord;
   readonly coveredProjects: readonly CoveredDependencyProject[];
   readonly competingLockfilePaths: readonly string[];
+  readonly limitations: readonly string[];
   readonly scope: "full" | "changed";
 }
 
@@ -54,13 +57,16 @@ function isNodeProject(project: DetectedProject): boolean {
   return project.ecosystems.some((ecosystem) => ecosystem.toLowerCase() === "node");
 }
 
-function unsupportedEcosystem(project: DetectedProject): string | undefined {
+function unsupportedEcosystem(
+  project: DetectedProject,
+  packageManager = project.packageManager,
+): string | undefined {
   if (!isNodeProject(project)) return [...project.ecosystems].sort()[0] ?? "unknown";
   if (
-    project.packageManager !== undefined &&
-    project.packageManager !== "npm"
+    packageManager !== undefined &&
+    packageManager !== "npm"
   ) {
-    return `node:${project.packageManager}`;
+    return `node:${packageManager}`;
   }
   return undefined;
 }
@@ -124,11 +130,41 @@ export function selectDependencyAuditTargets(
     .filter((entry) => scope === "full" || affected.has(entry.id))
     .sort((left, right) => left.root.localeCompare(right.root));
 
+  function containsProjectRoot(owner: DetectedProject, project: DetectedProject): boolean {
+    return owner.root === "." ||
+      project.root === owner.root ||
+      project.root.startsWith(`${owner.root}/`);
+  }
+
+  function localNpmLock(project: DetectedProject): boolean {
+    return ["package-lock.json", "npm-shrinkwrap.json"].some((name) =>
+      filesByPath.get(pathAtRoot(project.root, name))?.kind === "file"
+    );
+  }
+
+  function effectiveManager(project: DetectedProject): DetectedProject["packageManager"] {
+    if (project.packageManager !== undefined) return project.packageManager;
+    if (localNpmLock(project)) return "npm";
+    return snapshot.projects
+      .filter((candidate) => candidate.id !== project.id && containsProjectRoot(candidate, project))
+      .sort((left, right) =>
+        right.root.split("/").length - left.root.split("/").length ||
+        left.root.localeCompare(right.root)
+      )
+      .map((candidate) => candidate.packageManager ?? (localNpmLock(candidate) ? "npm" : undefined))
+      .find((manager) => manager !== undefined);
+  }
+
+  const managerByProjectId = new Map(snapshot.projects.map((project) => [
+    project.id,
+    effectiveManager(project),
+  ]));
+
   const unsupportedScopes: UnsupportedDependencyScope[] = [];
   const notApplicableScopes: NotApplicableDependencyScope[] = [];
   const analyzableProjects: DetectedProject[] = [];
   for (const project of selectedProjects) {
-    const ecosystem = unsupportedEcosystem(project);
+    const ecosystem = unsupportedEcosystem(project, managerByProjectId.get(project.id));
     if (ecosystem !== undefined) {
       unsupportedScopes.push({ projectId: project.id, root: project.root, ecosystem });
       continue;
@@ -157,7 +193,7 @@ export function selectDependencyAuditTargets(
       )
       .map((workspace) => projectsById.get(workspace.ownerProjectId))
       .filter((owner): owner is DetectedProject => owner !== undefined)
-      .filter((owner) => unsupportedEcosystem(owner) === undefined)
+      .filter((owner) => managerByProjectId.get(owner.id) === "npm")
       .sort((left, right) => right.root.length - left.root.length || left.root.localeCompare(right.root));
     return owners[0]?.root ?? project.root;
   }
@@ -185,8 +221,40 @@ export function selectDependencyAuditTargets(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([lockRoot, projects]) => {
       const selectedAuthority = authority(lockRoot);
+      const orderedProjects = projects
+        .sort((left, right) => left.root.localeCompare(right.root));
+      const standalone = orderedProjects.length === 1 ? orderedProjects[0] : undefined;
+      const standaloneManifestPath = standalone === undefined
+        ? undefined
+        : packageManifestPath(standalone);
+      const standaloneManifest = standaloneManifestPath === undefined
+        ? undefined
+        : manifestsByPath.get(standaloneManifestPath);
+      const declaredManager = standaloneManifest?.status === "valid" &&
+        typeof standaloneManifest.data.packageManager === "string"
+        ? standaloneManifest.data.packageManager.split("@", 1)[0]
+        : undefined;
+      const hasAncestorProject = standalone !== undefined && snapshot.projects.some((candidate) =>
+        candidate.id !== standalone.id &&
+        isNodeProject(candidate) &&
+        containsProjectRoot(candidate, standalone)
+      );
+      const ownsWorkspace = standalone !== undefined && snapshot.workspaces.some((workspace) =>
+        workspace.ownerProjectId === standalone.id
+      );
+      const lockOwnership: NpmLockOwnership = selectedAuthority.authority !== "none"
+        ? "governed"
+        : standalone !== undefined &&
+            declaredManager === "npm" &&
+            managerByProjectId.get(standalone.id) === "npm" &&
+            !hasAncestorProject &&
+            !ownsWorkspace
+          ? "explicit-standalone"
+          : "unresolved";
+      const targetLimitations = lockOwnership === "unresolved"
+        ? [`${lockRoot}: npm lock ownership is unresolved; missing-lockfile analysis was withheld.`]
+        : [];
       const coveredProjects = projects
-        .sort((left, right) => left.root.localeCompare(right.root))
         .map((project): CoveredDependencyProject => {
           const manifestPath = packageManifestPath(project);
           if (manifestPath !== undefined) {
@@ -206,11 +274,13 @@ export function selectDependencyAuditTargets(
       return {
         lockRoot,
         authority: selectedAuthority.authority,
+        lockOwnership,
         ...(selectedAuthority.lockfile === undefined
           ? {}
           : { lockfile: selectedAuthority.lockfile }),
         coveredProjects,
         competingLockfilePaths: selectedAuthority.competingLockfilePaths,
+        limitations: targetLimitations,
         scope,
       };
     });

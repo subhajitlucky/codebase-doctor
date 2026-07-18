@@ -30,12 +30,19 @@ function project(
   };
 }
 
-function manifest(path: string, dependencies: Record<string, string> = { alpha: "1.0.0" }): ManifestRecord {
+function manifest(
+  path: string,
+  dependencies: Record<string, string> = { alpha: "1.0.0" },
+  packageManager?: string,
+): ManifestRecord {
   return {
     kind: "package-json",
     path,
     status: "valid",
-    data: { dependencies },
+    data: {
+      dependencies,
+      ...(packageManager === undefined ? {} : { packageManager }),
+    },
   };
 }
 
@@ -79,6 +86,7 @@ describe("dependency audit target selection", () => {
       targets: [{
         lockRoot: ".",
         authority: "package-lock",
+        lockOwnership: "governed",
         lockfile: file("package-lock.json"),
         coveredProjects: [{
           projectId: "root",
@@ -86,6 +94,7 @@ describe("dependency audit target selection", () => {
           manifestPath: "package.json",
         }],
         competingLockfilePaths: [],
+        limitations: [],
         scope: "full",
       }],
       unsupportedScopes: [],
@@ -148,7 +157,7 @@ describe("dependency audit target selection", () => {
     ]);
   });
 
-  it("keeps manifest-only npm projects selectable for missing-lock analysis", () => {
+  it("withholds missing-lock proof when a manifest-only manager is ambiguous", () => {
     const selection = selectDependencyAuditTargets(snapshot({
       files: [file("package.json")],
       manifests: [manifest("package.json")],
@@ -158,9 +167,85 @@ describe("dependency audit target selection", () => {
     expect(selection.targets[0]).toMatchObject({
       lockRoot: ".",
       authority: "none",
+      lockOwnership: "unresolved",
       coveredProjects: [expect.objectContaining({ projectId: "root" })],
+      limitations: [
+        ".: npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
+      ],
     });
     expect(selection.targets[0]).not.toHaveProperty("lockfile");
+  });
+
+  it("requires a lock only for an explicitly npm-governed standalone project", () => {
+    const selection = selectDependencyAuditTargets(snapshot({
+      files: [file("package.json")],
+      manifests: [manifest("package.json", { alpha: "1.0.0" }, "npm@11.0.0")],
+      projects: [project("root", ".", { packageManager: "npm" })],
+    }));
+
+    expect(selection.targets).toEqual([expect.objectContaining({
+      lockRoot: ".",
+      authority: "none",
+      lockOwnership: "explicit-standalone",
+      limitations: [],
+    })]);
+  });
+
+  it.each(["pnpm", "yarn"] as const)(
+    "inherits an unsupported %s manager across nested publication packages",
+    (packageManager) => {
+      const lockName = packageManager === "pnpm" ? "pnpm-lock.yaml" : "yarn.lock";
+      const root = project("root", ".", { packageManager });
+      const child = project("child", "packages/child");
+      const selection = selectDependencyAuditTargets(snapshot({
+        files: [
+          file("package.json"),
+          file(lockName),
+          file("packages/child/package.json"),
+        ],
+        manifests: [
+          manifest("package.json"),
+          manifest("packages/child/package.json"),
+        ],
+        projects: [root, child],
+      }));
+
+      expect(selection.targets).toEqual([]);
+      expect(selection.unsupportedScopes).toEqual([
+        { projectId: "root", root: ".", ecosystem: `node:${packageManager}` },
+        { projectId: "child", root: "packages/child", ecosystem: `node:${packageManager}` },
+      ]);
+    },
+  );
+
+  it("withholds lockfile claims for a nested npm manifest outside a proven workspace", () => {
+    const selection = selectDependencyAuditTargets(snapshot({
+      files: [
+        file("package.json"),
+        file("package-lock.json"),
+        file("packages/published/package.json"),
+      ],
+      manifests: [
+        manifest("package.json", { alpha: "1.0.0" }, "npm@11.0.0"),
+        manifest("packages/published/package.json"),
+      ],
+      projects: [
+        project("root", ".", { packageManager: "npm" }),
+        project("published", "packages/published"),
+      ],
+    }));
+
+    expect(selection.targets).toEqual([
+      expect.objectContaining({ lockRoot: ".", lockOwnership: "governed" }),
+      expect.objectContaining({
+        lockRoot: "packages/published",
+        authority: "none",
+        lockOwnership: "unresolved",
+        limitations: [
+          "packages/published: npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
+        ],
+      }),
+    ]);
   });
 
   it("reports unsupported ecosystems and dependency-free Node projects truthfully", () => {

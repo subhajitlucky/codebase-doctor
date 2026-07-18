@@ -298,7 +298,10 @@ export function analyzeDependencyTarget(
     const sections = manifestSections(manifest, limitations);
     matches.push(...sourceMatches(manifest.path, sections, supportedGraph));
     if (target.authority === "none") {
-      if (hasExternalInstallGraph(sections, internalNames)) {
+      if (
+        target.lockOwnership === "explicit-standalone" &&
+        hasExternalInstallGraph(sections, internalNames)
+      ) {
         matches.push({
           family: "missing-lockfile",
           path: manifest.path,

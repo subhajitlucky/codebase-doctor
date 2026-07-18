@@ -15,17 +15,21 @@ function target(overrides: Partial<DependencyAuditTarget> = {}): DependencyAudit
   return {
     lockRoot: ".",
     authority: "package-lock",
+    lockOwnership: "governed",
     lockfile: { path: "package-lock.json", kind: "file", size: 100 },
     coveredProjects: [{ projectId: "root", root: ".", manifestPath: "package.json" }],
     competingLockfilePaths: [],
+    limitations: [],
     scope: "full",
     ...overrides,
   };
 }
 
-function unlockedTarget(): DependencyAuditTarget {
+function unlockedTarget(
+  lockOwnership: DependencyAuditTarget["lockOwnership"] = "explicit-standalone",
+): DependencyAuditTarget {
   const { lockfile: _lockfile, ...base } = target();
-  return { ...base, authority: "none" };
+  return { ...base, authority: "none", lockOwnership };
 }
 
 function parsedLock(
@@ -52,6 +56,18 @@ describe("offline dependency target analysis", () => {
       })],
       limitations: [],
     });
+  });
+
+  it("withholds missing-lock findings when lock ownership is unresolved", () => {
+    const result = analyzeDependencyTarget({
+      target: unlockedTarget("unresolved"),
+      manifests: [manifest("package.json", {
+        dependencies: { alpha: "^1.0.0" },
+      })],
+      internalPackages: [],
+    });
+
+    expect(result.matches).toEqual([]);
   });
 
   it.each([

@@ -304,9 +304,14 @@ describe("audit CLI", () => {
         name: "pnpm-fixture",
         private: true,
         packageManager: "pnpm@10.0.0",
+        workspaces: ["packages/*"],
         dependencies: { alpha: "^1.0.0" },
       }),
       "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+      "packages/published/package.json": JSON.stringify({
+        name: "published-package",
+        dependencies: { beta: "^1.0.0" },
+      }),
     });
 
     const result = cli(["audit", root, "--json", "--fail-on", "none"], root);
@@ -316,16 +321,59 @@ describe("audit CLI", () => {
     expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
       doctorId === "security/dependencies"
     )).toEqual([]);
-    expect(report.coverage).toContainEqual(expect.objectContaining({
+    expect(report.coverage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        moduleId: "security/dependencies",
+        status: "unsupported",
+        scope: "full:root",
+        limitations: ["root: node:pnpm dependency metadata is not supported."],
+      }),
+      expect.objectContaining({
+        moduleId: "security/dependencies",
+        status: "unsupported",
+        scope: "full:project:packages/published",
+        limitations: [
+          "project:packages/published: node:pnpm dependency metadata is not supported.",
+        ],
+      }),
+    ]));
+    expect(report.coverage).not.toContainEqual(expect.objectContaining({
       moduleId: "security/dependencies",
-      status: "unsupported",
-      limitations: ["root: node:pnpm dependency metadata is not supported."],
+      scope: "full:packages/published",
     }));
     expect(report.domainCoverage).toContainEqual(expect.objectContaining({
       domain: "security",
       status: "partial",
       coverageComplete: false,
     }));
+  });
+
+  it("withholds missing-lock findings for nested npm manifests with unresolved ownership", async () => {
+    const files = npmGraphFiles();
+    files["packages/published/package.json"] = JSON.stringify({
+      name: "published-package",
+      dependencies: { beta: "^1.0.0" },
+    });
+    const { root } = await createRepository(files);
+    const before = await captureGitRepositorySnapshot(root);
+
+    const result = cli(["audit", root, "--json", "--fail-on", "none"], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(report.findings).not.toContainEqual(expect.objectContaining({
+      ruleId: "security/dependencies/missing-lockfile",
+      location: { path: "packages/published/package.json" },
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/dependencies",
+      status: "partial",
+      scope: "full:packages/published",
+      limitations: [
+        "packages/published: npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
+      ],
+    }));
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
   });
 
   it("reports cross-project changed source impact in every format without mutation", async () => {

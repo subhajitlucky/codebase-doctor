@@ -9,6 +9,11 @@ export const DEPENDENCY_SECTIONS = [
 
 export type DependencySection = (typeof DEPENDENCY_SECTIONS)[number];
 
+export type NpmLockOwnership =
+  | "governed"
+  | "explicit-standalone"
+  | "unresolved";
+
 export type SafeSourceClass =
   | "registry"
   | "local-file"
