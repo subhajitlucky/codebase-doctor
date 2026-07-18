@@ -113,6 +113,54 @@ describe("bounded source graph builder", () => {
     ]);
   });
 
+  it("retains safe proof and the first deterministic location for missing edges", async () => {
+    const secret = "credential-H8m4Q2v7N5k9";
+    const result = await build(
+      inventory(["src/importer.ts", "src/present.ts"]),
+      {
+        "src/importer.ts": [
+          `import "./missing.ts";`,
+          `import "./missing.ts";`,
+          `import "./extensionless";`,
+          `import "./present.ts";`,
+          `// import "https://user:${secret}@example.invalid/comment.ts";`,
+          `const text = "import('https://user:${secret}@example.invalid/string.ts')";`,
+        ].join("\n"),
+        "src/present.ts": "export {};",
+      },
+    );
+
+    expect(result.edges).toEqual([
+      {
+        importerPath: "src/importer.ts",
+        targetPath: "src/extensionless.ts",
+        kind: "static",
+        targetExists: false,
+        line: 3,
+        column: 1,
+      },
+      {
+        importerPath: "src/importer.ts",
+        targetPath: "src/missing.ts",
+        kind: "static",
+        targetExists: false,
+        missingTargetProof: "relative-explicit",
+        line: 1,
+        column: 1,
+      },
+      {
+        importerPath: "src/importer.ts",
+        targetPath: "src/present.ts",
+        kind: "static",
+        targetExists: true,
+        line: 4,
+        column: 1,
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(JSON.stringify(result)).not.toContain("example.invalid");
+  });
+
   it("combines selection, configuration, parse, read, and resolution limitations", async () => {
     const secret = "credential-M7n9B2v8C4x6Z1l3K5j0HgFd";
     const result = await build(

@@ -160,6 +160,11 @@ export async function buildSourceGraph(
         targetPath: resolution.targetPath,
         kind: reference.kind,
         targetExists: resolution.targetExists,
+        ...(resolution.missingTargetProof === undefined
+          ? {}
+          : { missingTargetProof: resolution.missingTargetProof }),
+        ...(reference.line === undefined ? {} : { line: reference.line }),
+        ...(reference.column === undefined ? {} : { column: reference.column }),
       };
       const key = edgeKey(edge);
       if (edges.has(key)) continue;
