@@ -309,4 +309,42 @@ describe("independent auditor product boundary", () => {
     expect(release).toMatch(/repository\/source-graph/);
     expect(release).toMatch(/sourceImpact/);
   });
+
+  it("documents the separate precision-first source-integrity Doctor", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/repository\/source-integrity/);
+      expect(text, path).toMatch(/source\/import-target-missing/);
+      expect(text, path).toMatch(
+        /repository\/source-graph.*finding-free.*repository\/source-integrity|repository\/source-integrity.*separate.*repository\/source-graph/is,
+      );
+      expect(text, path).toMatch(/precision-first/);
+      expect(text, path).toMatch(
+        /explicit.*relative.*supported.*extension.*single.*alias.*explicit.*supported.*(?:file|target).*unique.*workspace.*explicit.*(?:entry|file)/is,
+      );
+      expect(text, path).toMatch(
+        /extensionless.*JSON.*custom.*conditional.*ambiguous.*external.*dynamic.*cycles?.*not.*findings?/is,
+      );
+      expect(text, path).toMatch(/does not (?:check|validate).*(?:named export|export name)/is);
+      expect(text, path).toMatch(
+        /full.*qualifying.*edges.*changed.*changed importers.*reverse[- ]impacted importers/is,
+      );
+      expect(text, path).toMatch(/deleted.*renamed.*target.*importer/is);
+      expect(text, path).toMatch(/1,000.*findings.*partial coverage|partial coverage.*1,000.*findings/is);
+      expect(text, path).toMatch(/raw.*import specifier.*source text.*withheld/is);
+      expect(text, path).toMatch(/coverage.*partial.*not.*clean|partial.*coverage.*not.*clean/is);
+      expect(text, path).toMatch(
+        /external.*(?:human|agent).*(?:correct|restore|change).*rerun.*same.*scope/is,
+      );
+      expect(text, path).toMatch(/Codebase Doctor (?:never|does not).*(?:modify|repair|fix)/is);
+    }
+
+    const changelog = await readFile("CHANGELOG.md", "utf8");
+    const unreleased = changelog.slice(
+      changelog.indexOf("## [Unreleased]"),
+      changelog.indexOf("## [0.1.4]"),
+    );
+    expect(unreleased).toMatch(/repository\/source-integrity/);
+    expect(unreleased).toMatch(/source\/import-target-missing/);
+    expect(unreleased).toMatch(/not.*0\.1\.4|unreleased.*source/is);
+  });
 });

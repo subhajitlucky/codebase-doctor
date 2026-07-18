@@ -4,6 +4,28 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add the capability-free, read-only, offline `repository/source-integrity`
+  Doctor and its precision-first `source/import-target-missing` rule. It reports
+  only provably missing explicit supported relative files, single deterministic
+  alias targets, and unique-workspace explicit entries while keeping uncertain
+  resolution as coverage limitations.
+
+### Changed
+
+- Select changed source-integrity work from changed importers plus complete
+  reverse-impacted importers, including unchanged importers whose explicit
+  target was deleted or renamed. Bound findings to 1,000 and report truncation
+  or upstream graph limitations as partial coverage.
+
+### Security
+
+- Keep `repository/source-graph` finding-free, withhold raw import specifiers
+  and source text from the new findings and fingerprints, and preserve the
+  permanent external-remediation boundary. This is Unreleased source behavior,
+  not part of the published `0.1.4` package.
+
 ## [0.1.4] - 2026-07-18
 
 ### Added

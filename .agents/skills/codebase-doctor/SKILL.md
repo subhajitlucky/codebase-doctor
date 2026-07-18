@@ -99,6 +99,27 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    Raw import specifiers and source text are withheld from reports and
    fingerprints. The graph uses no plugins, network requests, or writes.
 
+   Also inspect the separate precision-first source-integrity Doctor:
+   `repository/source-graph` remains finding-free, while
+   `repository/source-integrity` emits only `source/import-target-missing`. It
+   proves only an explicit relative target
+   with a supported source extension, a single deterministic alias whose
+   configured target explicitly names a supported source file, or a unique
+   workspace whose explicit entry names a supported source file.
+
+   Extensionless, JSON, custom-loader, conditional, ambiguous, external, and
+   dynamic references and cycles are not findings. The Doctor does not check
+   named exports. Full mode examines all qualifying edges; changed mode examines
+   changed importers and complete reverse-impacted importers. A deleted
+   or renamed target can therefore select its unchanged importer. Raw import
+   specifiers and source text are withheld from findings and fingerprints.
+
+   The source-integrity Doctor emits at most 1,000 findings and reports partial
+   coverage when limited. Partial coverage is not clean. Never invent or guess
+   a target or repair. Ask an external authorized human or coding agent to
+   correct or restore the intended target, then rerun the same scope. Codebase
+   Doctor does not modify or repair files.
+
 5. Read each finding's evidence and machine-readable `impact`,
    `remediationConstraints`, and `verification` guidance. Expected repair
    requires the fingerprint to be absent on rerun and all applicable coverage

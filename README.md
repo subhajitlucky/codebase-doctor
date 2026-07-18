@@ -58,6 +58,10 @@ source-impact planning, model-oriented finding guidance, static and live RLS
 coverage, repository-shareable secrets analysis, and offline npm dependency
 analysis.
 
+The current Unreleased source also includes the precision-first
+`repository/source-integrity` Doctor described below. It is not part of the
+published `0.1.4` package.
+
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
 ## Current coverage versus north star
@@ -69,7 +73,7 @@ calling a codebase verified or clean.
 
 | Domain | Current source coverage | North star |
 | --- | --- | --- |
-| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, visible-test diagnostics, and a bounded JavaScript/TypeScript source-impact graph | Cross-language dependency and behavioral topology |
+| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, visible-test diagnostics, a bounded JavaScript/TypeScript source-impact graph, and precision-first missing-target findings | Cross-language dependency and behavioral topology |
 | Configured validation | JavaScript/TypeScript and Python command planning; execution only with `--run-checks` | Sandboxed validation across supported ecosystems |
 | Database | Offline PostgreSQL migration RLS and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
 | Frontend | Framework detection only; repository-owned checks may provide evidence | Built-in React, Next.js, accessibility, SEO, and bundle analysis |
@@ -124,6 +128,8 @@ module details, evidence, limitations, and findings.
   changes with explicit scope metadata.
 - Bounded JavaScript/TypeScript source topology and reverse changed-impact
   propagation across internal files and workspaces.
+- Precision-first `repository/source-integrity` findings for provably missing
+  internal JavaScript and TypeScript import targets.
 - SARIF 2.1.0 output for code-scanning integrations.
 - Stable text and JSON schema version `1` reports.
 - Severity thresholds and CI-friendly exit codes.
@@ -173,6 +179,36 @@ coverage, limitations, and `sourceImpact`. The module uses no plugins, network
 requests, or writes. Inspect `repository/source-graph` coverage before calling
 changed source scope clean or verified; partial, unsupported, ambiguous, or
 bounded topology cannot support a completeness claim.
+
+## Built-in JavaScript and TypeScript source integrity audit
+
+The current Unreleased source automatically runs the read-only, offline
+`repository/source-integrity` Doctor after the graph. The
+`repository/source-graph` Doctor remains finding-free; the separate
+`repository/source-integrity` Doctor emits the high-confidence
+`source/import-target-missing` rule. This separation keeps topology limitations
+from becoming guessed bugs.
+
+The Doctor is precision-first and diagnoses only three proof classes: an
+explicit relative target with a supported source extension; a single
+deterministic alias whose configured target explicitly names a supported source
+file; and a unique workspace package whose explicit entry names a supported
+source file. Extensionless, JSON, custom-loader, conditional, ambiguous,
+external, and dynamic references and cycles are not findings. It does not check
+named exports or validate that a referenced export name exists.
+
+Full mode examines all qualifying edges. Changed mode examines changed importers
+and complete reverse-impacted importers. A deleted or renamed target selects its
+unchanged importer. Raw import specifiers and source text are
+withheld; findings expose only normalized repository paths, import kind, proof
+class, and safe source location.
+
+The Doctor emits at most 1,000 findings per audit and reports partial coverage
+when that ceiling or any upstream graph limitation applies. Partial coverage is
+not a clean source-integrity result, and uncertain references remain coverage
+limitations rather than findings. An external authorized human or coding agent
+must correct or restore the intended target and rerun the same scope. Codebase
+Doctor does not modify or repair files.
 
 ## Built-in secrets audit
 
@@ -433,6 +469,8 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
   another package manager, and never installs or changes dependencies.
 - Offline source-impact analysis parses bounded JavaScript/TypeScript syntax but
   never executes source, loads plugins, uses the network, or writes target files.
+- Offline source-integrity analysis consumes only the bounded graph, withholds
+  raw import values, and never creates, renames, or edits a target file.
 - Target commands require `--run-checks`.
 - Live database access requires the separate `--with-database` permission.
 - Database credentials are read from `DATABASE_URL` or `SUPABASE_DB_URL`, not a
@@ -460,6 +498,7 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 - `database/sql-rls/*`
 - `security/secrets/*`
 - `security/dependencies/*`
+- `source/import-target-missing`
 
 Every finding contains a rule ID, doctor ID, severity, confidence, category,
 explanation, structured evidence, and a stable fingerprint. Applicable findings

@@ -170,6 +170,21 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/raw.*(?:import )?specifier.*source.*withheld/is);
   });
 
+  it("teaches agents to act on proven missing targets without asking Doctor to repair", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/repository\/source-integrity/);
+    expect(skill).toMatch(/source\/import-target-missing/);
+    expect(skill).toMatch(/source-graph.*finding-free.*source-integrity|source-integrity.*separate.*source-graph/is);
+    expect(skill).toMatch(/precision-first/);
+    expect(skill).toMatch(/extensionless.*ambiguous.*dynamic.*not.*findings?/is);
+    expect(skill).toMatch(/full.*qualifying.*changed.*reverse[- ]impacted/is);
+    expect(skill).toMatch(/1,000.*partial coverage|partial coverage.*1,000/is);
+    expect(skill).toMatch(/raw.*import specifier.*source text.*withheld/is);
+    expect(skill).toMatch(/external.*(?:human|agent).*(?:correct|restore).*rerun.*same.*scope/is);
+    expect(skill).toMatch(/never.*(?:invent|guess).*(?:target|repair)/is);
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",

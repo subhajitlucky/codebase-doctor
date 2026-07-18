@@ -182,6 +182,37 @@ coverage before calling changed source scope clean or verified. Partial or
 bounded topology is not complete reachability, and an impact path is not proof
 that the dependant is bug-free, buggy, or correct.
 
+## JavaScript and TypeScript source integrity
+
+The capability-free, read-only, offline `repository/source-integrity` Doctor
+consumes the precomputed graph after scope planning. The
+`repository/source-graph` Doctor remains finding-free; the separate
+`repository/source-integrity` Doctor emits only
+`source/import-target-missing`. This prevents topology uncertainty from being
+reclassified as a correctness defect.
+
+The Doctor is precision-first and diagnoses only three proof classes: an
+explicit relative target with a supported source extension; a single
+deterministic alias whose configured target explicitly names a supported source
+file; and a unique workspace package whose explicit entry names a supported
+source file. Extensionless, JSON, custom-loader, conditional, ambiguous,
+external, and dynamic references and cycles are not findings. It does not check
+named exports or validate export names.
+
+Full mode examines all qualifying edges. Changed mode examines changed importers
+and complete reverse-impacted importers. A deleted or renamed target selects its
+unchanged importer. Complete changed selection is held privately;
+the bounded public `sourceImpact` representation remains unchanged. Raw import
+specifiers and source text are withheld from findings, fingerprints, coverage,
+and reports. Safe evidence contains only normalized repository paths, import
+kind, proof class, and source location.
+
+Output is bounded to 1,000 findings per audit. Reaching that ceiling or
+inheriting a graph limitation produces partial coverage. Partial coverage is
+not a clean source-integrity result. An external authorized human or coding
+agent must correct or restore the intended target and rerun the same scope.
+Codebase Doctor does not modify or repair files.
+
 ## Doctors and capabilities
 
 The implemented Doctor capability vocabulary is read-only filesystem access,
@@ -193,6 +224,8 @@ granted to Doctor.
 - Project Doctor performs built-in structural repository diagnostics.
 - `repository/source-graph` supplies bounded JavaScript/TypeScript topology and
   changed-impact coverage without emitting bug findings.
+- `repository/source-integrity` consumes that topology without capabilities and
+  reports only provably missing supported internal source targets.
 - Check Doctor previews configured JavaScript/TypeScript and Python validation
   commands, and executes them only with `--run-checks`.
 - `database/sql-rls` automatically reads inventoried PostgreSQL migration files
@@ -361,8 +394,10 @@ not the findings themselves. Partial and skipped coverage still qualify an exit
 
 The package entry point exports the normalized audit, finding, coverage,
 baseline comparison, Git discovery, and scope-planning contracts needed by API
-consumers. `GitRunner` injection, command runners, database adapters, and other
-unsafe execution internals remain private implementation details.
+consumers. It also exposes the safe additive `SourceGraphEdge` and
+`MissingTargetProof` types, but not private complete-impact selection.
+`GitRunner` injection, command runners, database adapters, and other unsafe
+execution internals remain private implementation details.
 
 The npm tarball includes compiled JavaScript and declarations, README,
 changelog, this architecture document, and the provider-neutral agent skill.
