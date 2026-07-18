@@ -279,4 +279,33 @@ describe("independent auditor product boundary", () => {
     expect(unreleased).toMatch(/security\/dependencies/);
     expect(unreleased).toMatch(/offline.*read-only|read-only.*offline/is);
   });
+
+  it("documents the bounded source-impact graph without overstating topology", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(/repository\/source-graph/);
+      expect(text, path).toMatch(/JavaScript.*TypeScript|TypeScript.*JavaScript/is);
+      expect(text, path).toMatch(/import.*re-export.*require.*literal dynamic import/is);
+      expect(text, path).toMatch(/syntax\s+parser.*never executes|never executes.*syntax\s+parser/is);
+      expect(text, path).toMatch(/local.*(?:tsconfig|jsconfig).*deterministic\s+subset/is);
+      expect(text, path).toMatch(/not.*complete.*(?:Node|TypeScript).*resolution/is);
+      expect(text, path).toMatch(
+        /dynamic.*ambiguous.*unsupported.*ceiling.*coverage\s+limitations?.*not.*findings?/is,
+      );
+      expect(text, path).toMatch(/cycles?.*not.*finding/is);
+      expect(text, path).toMatch(/sourceImpact.*schema.*1/is);
+      expect(text, path).toMatch(/shortest.*impact path/is);
+      expect(text, path).toMatch(/full.*count.*bounded.*records|bounded.*records.*full.*count/is);
+      expect(text, path).toMatch(/raw.*(?:import )?specifier.*source.*withheld/is);
+      expect(text, path).toMatch(/read-only.*offline|offline.*read-only/is);
+      expect(text, path).toMatch(/no plugins?.*network.*writes?|no network.*plugins?.*writes?/is);
+    }
+
+    const changelog = await readFile("CHANGELOG.md", "utf8");
+    const unreleased = changelog.slice(
+      changelog.indexOf("## [Unreleased]"),
+      changelog.indexOf("## [0.1.3]"),
+    );
+    expect(unreleased).toMatch(/repository\/source-graph/);
+    expect(unreleased).toMatch(/sourceImpact/);
+  });
 });

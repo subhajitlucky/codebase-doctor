@@ -45,12 +45,15 @@ CLI request
           |                                                   |
           v                                                   |
       changed-scope planner                                   |
-      direct projects + conservative workspace dependants     |
+      direct projects + workspace/source dependants            |
           |                                                   |
           +---------------------------------------------------+
                               |
                               v
                     full repository snapshot
+                              |
+                    bounded source graph
+                    changed impact paths
                               |
               +---------------+----------------+
               |               |                |
@@ -118,8 +121,9 @@ The planner selects:
   package names and declared dependency names.
 
 Missing dependency metadata, unnamed Node projects, and duplicate internal
-package names become limitations instead of guesses. This is a package-level
-dependency graph, not a source import graph.
+package names become limitations instead of guesses. A separate bounded source
+graph augments this package-level selection for supported JavaScript and
+TypeScript files before doctor-specific work is selected.
 
 Changed mode is mixed-scope, not a universal file filter. Project Doctor
 structural rules run with the full repository snapshot and may report findings
@@ -144,6 +148,40 @@ Zero changed findings is not a full clean result. Consumers must read
 `auditScope`, `doctorRuns`, `coverage`, and `findings` to determine each doctor's
 actual scope.
 
+## JavaScript and TypeScript source-impact graph
+
+The core builds source topology before changed-scope planning and exposes it
+through the finding-free `repository/source-graph` Doctor. The Doctor is
+read-only and offline. It recognizes static `import`, re-export, type-only
+import, literal `require`, and literal dynamic import edges with a real syntax
+parser that never executes repository code. Local `tsconfig` and `jsconfig`
+files contribute a deterministic subset of relative aliases and project
+configuration; this is not complete Node or TypeScript module resolution.
+
+Selection admits supported regular JavaScript and TypeScript source files from
+the bounded, symlink-safe inventory. Resolution covers internal relative,
+extension, index, selected alias, unique workspace-package, and supported
+package-entry cases. Dynamic non-literal imports, ambiguous targets,
+unsupported configuration or syntax, unreadable input, and reached graph
+ceilings are coverage limitations, not findings. Cycles are valid topology and
+are not findings. This topology selects conservative scope; it does not diagnose
+application correctness.
+
+The optional schema-1 `sourceImpact` object reports graph node and edge counts,
+external and dynamic boundary counts, status, and limitations. Changed mode
+also reports changed source roots, impacted file and project counts, a
+deterministic shortest impact path for each serialized dependant, and the
+`source-dependent` project-selection reason. Full counts are preserved while
+impact records are bounded; `omittedImpactCount` states the difference. Full
+mode reports graph coverage without inventing changed impacts.
+
+Raw import specifiers and source text are withheld from findings, fingerprints,
+coverage, limitations, and `sourceImpact`. The source graph uses no plugins,
+network requests, or writes. Consumers must inspect `repository/source-graph`
+coverage before calling changed source scope clean or verified. Partial or
+bounded topology is not complete reachability, and an impact path is not proof
+that the dependant is bug-free, buggy, or correct.
+
 ## Doctors and capabilities
 
 The implemented Doctor capability vocabulary is read-only filesystem access,
@@ -153,6 +191,8 @@ remediation executor; direct target-write or remediation authority can never be
 granted to Doctor.
 
 - Project Doctor performs built-in structural repository diagnostics.
+- `repository/source-graph` supplies bounded JavaScript/TypeScript topology and
+  changed-impact coverage without emitting bug findings.
 - Check Doctor previews configured JavaScript/TypeScript and Python validation
   commands, and executes them only with `--run-checks`.
 - `database/sql-rls` automatically reads inventoried PostgreSQL migration files
@@ -267,9 +307,9 @@ conservatively incomplete at the security-domain level.
 ## Normalized report contract
 
 The normalizer copies and deterministically sorts projects, plans, doctor runs,
-coverage, findings, summaries, and `auditScope`. Text, JSON, and SARIF reporters
-consume that same normalized result. Operational failures stay in `doctorRuns`;
-they are not fabricated findings.
+coverage, findings, summaries, `auditScope`, and optional `sourceImpact`. Text,
+JSON, and SARIF reporters consume that same normalized result. Operational
+failures stay in `doctorRuns`; they are not fabricated findings.
 
 ### Domain coverage inventory
 
@@ -293,11 +333,11 @@ relevant analyzer exists and does not change exit-code behavior. Text, JSON,
 and SARIF expose the same inventory so humans and models can inspect limitations
 rather than infer assurance from zero findings.
 
-JSON schema version `1` remains the report contract. `auditScope`, `coverage`,
-`domainCoverage`, guidance fields, and comparison options are additive fields,
-so existing schema-1 consumers remain valid. The JSON schema version is
-independent from the npm package version; removing or reinterpreting existing
-fields would require a schema change.
+JSON schema version `1` remains the report contract. `auditScope`, optional
+`sourceImpact`, `coverage`, `domainCoverage`, guidance fields, and comparison
+options are additive fields, so existing schema-1 consumers remain valid. The
+JSON schema version is independent from the npm package version; removing or
+reinterpreting existing fields would require a schema change.
 
 Baseline comparison uses finding fingerprints. With a baseline, failure
 thresholds apply only to new findings. Changed audits set comparison to exclude
@@ -333,7 +373,8 @@ and changed CLI behavior.
 
 The following are not implemented behavior:
 
-- source-level import graph propagation beyond workspace package metadata;
+- source topology beyond the current deterministic JavaScript/TypeScript subset,
+  including additional languages and explicitly bounded resolution semantics;
 - caching or incremental snapshot persistence;
 - container, sandbox, read-only mount, or disposable-copy enforcement for
   approved checks;

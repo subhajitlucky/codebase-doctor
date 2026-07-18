@@ -68,7 +68,7 @@ calling a codebase verified or clean.
 
 | Domain | Current source coverage | North star |
 | --- | --- | --- |
-| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, and visible-test diagnostics | Cross-language dependency and behavioral topology |
+| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, visible-test diagnostics, and a bounded JavaScript/TypeScript source-impact graph | Cross-language dependency and behavioral topology |
 | Configured validation | JavaScript/TypeScript and Python command planning; execution only with `--run-checks` | Sandboxed validation across supported ecosystems |
 | Database | Offline PostgreSQL migration RLS and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
 | Frontend | Framework detection only; repository-owned checks may provide evidence | Built-in React, Next.js, accessibility, SEO, and bundle analysis |
@@ -81,9 +81,9 @@ calling a codebase verified or clean.
 The north-star entries are planned internal modules, not separately installed
 Doctor products and not shipped behavior.
 
-The built-in secrets and dependency analyses described below are current
-Unreleased source behavior and are not part of the already published `0.1.3`
-package.
+The built-in source-impact graph, secrets analysis, and dependency analysis
+described below are current Unreleased source behavior and are not part of the
+already published `0.1.3` package.
 
 ## Domain coverage inventory
 
@@ -121,6 +121,8 @@ module details, evidence, limitations, and findings.
 - Fingerprint-based baseline comparisons.
 - Git-aware changed audits covering staged, unstaged, untracked, and branch
   changes with explicit scope metadata.
+- Bounded JavaScript/TypeScript source topology and reverse changed-impact
+  propagation across internal files and workspaces.
 - SARIF 2.1.0 output for code-scanning integrations.
 - Stable text and JSON schema version `1` reports.
 - Severity thresholds and CI-friendly exit codes.
@@ -139,6 +141,37 @@ module details, evidence, limitations, and findings.
   2 and 3, with bounded work and source-value-safe findings.
 
 Go, Rust, and Java are detection-only in `0.1.x`; Codebase Doctor does not execute their toolchains yet.
+
+## Built-in JavaScript and TypeScript source-impact graph
+
+The combined audit automatically runs the read-only, offline
+`repository/source-graph` Doctor for supported JavaScript and TypeScript files.
+It recognizes static `import`, re-export, type-only import, literal `require`,
+and literal dynamic import edges with a real syntax parser that never executes
+repository code. Local `tsconfig` and `jsconfig` files contribute a deterministic
+subset of relative aliases and project configuration. This is not complete Node
+or TypeScript module resolution.
+
+The graph resolves internal relative, index, selected alias, workspace-package,
+and supported package-entry edges. Dynamic non-literal imports, ambiguous
+targets, unsupported configuration or syntax, unreadable input, and reached
+graph ceilings are coverage limitations, not findings. Cycles are valid source
+topology and are not findings. The Doctor intentionally emits no bug findings;
+it supplies auditable topology and changed-scope evidence for other analyses.
+
+Schema-1 reports may include `sourceImpact`. Full mode reports graph counts and
+coverage. Changed mode additionally walks reverse internal edges, adds impacted
+projects to `affectedProjectIds` with a `source-dependent` reason, and reports a
+deterministic shortest impact path from each changed source root to each shown
+dependant. Reports preserve full impacted-file and omitted-record counts while
+serializing only bounded impact records. A path proves only the static edge chain
+that selected scope; it does not prove the dependant contains a bug.
+
+Raw import specifiers and source text are withheld from findings, fingerprints,
+coverage, limitations, and `sourceImpact`. The module uses no plugins, network
+requests, or writes. Inspect `repository/source-graph` coverage before calling
+changed source scope clean or verified; partial, unsupported, ambiguous, or
+bounded topology cannot support a completeness claim.
 
 ## Built-in secrets audit
 
@@ -245,9 +278,12 @@ establish its Git root, revision, merge base, or change list also exits `2`.
 
 The report's `auditScope` is `full` for the default command and `changed` for
 `--changed`. Changed mode is mixed-scope, not a universal file filter. Scope
-planning selects directly affected projects and conservative internal Node
-workspace dependants, but each doctor applies that selection according to its
-contract. Project Doctor structural rules run with the full repository snapshot
+planning selects directly affected projects, conservative internal Node
+workspace dependants, and bounded static source dependants. The optional
+schema-1 `sourceImpact` object explains the source-level selection with shortest
+impact paths, full counts, bounded records, and explicit limitations, but each
+doctor applies selection according to its contract. Project Doctor structural
+rules run with the full repository snapshot
 and may report findings outside changed paths or projects for manifests,
 lockfiles, workspaces, and test visibility. Configured validation command plans
 are built from the full project topology and then filtered to
@@ -394,6 +430,8 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
   size ceiling, and never evaluates or executes SQL.
 - Offline dependency auditing reads bounded npm metadata, never invokes npm or
   another package manager, and never installs or changes dependencies.
+- Offline source-impact analysis parses bounded JavaScript/TypeScript syntax but
+  never executes source, loads plugins, uses the network, or writes target files.
 - Target commands require `--run-checks`.
 - Live database access requires the separate `--with-database` permission.
 - Database credentials are read from `DATABASE_URL` or `SUPABASE_DB_URL`, not a
@@ -438,8 +476,8 @@ model is driving it:
 
 1. Prefer `audit . --changed --json` after edits; run a full audit at trust and
    release boundaries.
-2. Read `auditScope`, `doctorRuns`, `coverage`, and `findings` in the compact,
-   schema-versioned evidence.
+2. Read `auditScope`, optional `sourceImpact`, `doctorRuns`, `coverage`, and
+   `findings` in the compact, schema-versioned evidence.
 3. Let a human or separately authorized external coding agent fix a specific
    finding.
 4. Rerun the same scope to verify the external change independently. Do not
@@ -481,8 +519,9 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 
 - Compare completed static migration state with observed live catalog state for
   deployment drift.
-- Expand built-in frontend, backend, security, infrastructure, performance, and
-  AI audit coverage without requiring separate doctor installations.
+- Expand source topology beyond the current deterministic JavaScript/TypeScript
+  subset and add built-in frontend, backend, security, infrastructure,
+  performance, and AI audit coverage without separate doctor installations.
 - Report which applicable areas were audited, skipped, unsupported, or blocked
   so an agent never mistakes partial coverage for a clean codebase.
 - Add reusable GitHub Action, pull-request annotations, hooks, agent plugins,

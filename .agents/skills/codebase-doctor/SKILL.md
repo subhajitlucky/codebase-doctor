@@ -81,18 +81,36 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    zero changed findings as a full repository clean result. Read every partial,
    skipped, failed, and limitation record to understand each doctor's scope.
 
-4. Read each finding's evidence and machine-readable `impact`,
+4. Inspect the optional schema-1 `sourceImpact` object and
+   `repository/source-graph` coverage. This read-only, offline JavaScript and
+   TypeScript graph recognizes static import, re-export, type-only import,
+   literal require, and literal dynamic import edges with a real syntax parser
+   that never executes repository code. Local `tsconfig` and `jsconfig` files
+   supply a deterministic subset of aliases; this is not complete Node or
+   TypeScript resolution.
+
+   Changed impact adds `source-dependent` projects and shows a deterministic
+   shortest impact path for each serialized dependant. It preserves full
+   impacted-file counts while emitting bounded records. Dynamic, ambiguous,
+   unsupported, unreadable, or ceiling-limited topology is a coverage
+   limitation, not a finding; cycles are not findings. Inspect source graph
+   coverage before calling changed source scope clean or verified. Source
+   impact does not prove code is bug-free, correct, or completely reachable.
+   Raw import specifiers and source text are withheld from reports and
+   fingerprints. The graph uses no plugins, network requests, or writes.
+
+5. Read each finding's evidence and machine-readable `impact`,
    `remediationConstraints`, and `verification` guidance. Expected repair
    requires the fingerprint to be absent on rerun and all applicable coverage
    to be completed. Do not claim a finding resolved outside coverage. A changed
    baseline comparison never calls absent baseline findings resolved; a
    comparable full audit can.
 
-5. Ask a human or external coding agent to fix one evidence-backed finding.
+6. Ask a human or external coding agent to fix one evidence-backed finding.
    Then rerun the same scope and compare fingerprints, evidence, coverage, and
    severity totals. Codebase Doctor does not execute remediation or verification.
 
-6. Request separate permission before adding `--run-checks`:
+7. Request separate permission before adding `--run-checks`:
 
    ```bash
    codebase-doctor audit . --changed --run-checks --json
@@ -105,7 +123,7 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    permission is validation execution, not Doctor repair authority. Do not use
    `--run-checks` on an untrusted repository.
 
-7. Static `database/sql-rls` coverage runs automatically and offline for
+8. Static `database/sql-rls` coverage runs automatically and offline for
    supported migration streams. It reports expected migration state, never
    executes SQL, and may be partial for dynamic, malformed, or unsupported SQL.
    Partial coverage is not clean. Live `database/rls` reports observed catalog
@@ -121,7 +139,7 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    `--database-timeout` to change the catalog statement timeout. A skipped or
    failed live doctor is not a clean database audit.
 
-8. The combined audit automatically runs the read-only, offline
+9. The combined audit automatically runs the read-only, offline
    `security/secrets` module. It is precision-first and not exhaustive. A
    Git-ignored local `.env` file is normal and is not a finding; a tracked
    `.env`, template, source file, or other repository-shareable file containing
@@ -136,7 +154,7 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    outside Codebase Doctor, and then rerun the same audit. Doctor never performs
    those actions.
 
-9. The combined audit also automatically runs the read-only, offline
+10. The combined audit also automatically runs the read-only, offline
    `security/dependencies` module for npm lockfile versions 2 and 3. pnpm, Yarn,
    Bun, Python, and other ecosystems remain explicit unsupported coverage for
    this module. It never invokes npm or another package manager, runs a shell or

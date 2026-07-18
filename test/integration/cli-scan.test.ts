@@ -81,7 +81,7 @@ describe("scan CLI", () => {
     expect(result.stderr).not.toMatch(/^error:/im);
   });
 
-  it("does not run static or live database audit modules", () => {
+  it("runs repository source coverage without database audit modules", () => {
     const result = cli(["scan", fixture("sql-rls/unsafe"), "--json"]);
     const report = JSON.parse(result.stdout);
     const doctorIds = report.doctorRuns.map(({ doctorId }: { doctorId: string }) => doctorId);
@@ -89,7 +89,12 @@ describe("scan CLI", () => {
     expect(result.status).toBe(0);
     expect(doctorIds).not.toContain("database/sql-rls");
     expect(doctorIds).not.toContain("database/rls");
-    expect(report.coverage).toBeUndefined();
+    expect(report.coverage).toEqual([
+      expect.objectContaining({
+        moduleId: "repository/source-graph",
+        scope: "full",
+      }),
+    ]);
   });
 
   it("defaults to the current directory", () => {

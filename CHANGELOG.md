@@ -6,6 +6,11 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Add a bounded, read-only, offline `repository/source-graph` Doctor for
+  JavaScript and TypeScript. It parses static import, re-export, type-only,
+  literal `require`, and literal dynamic-import topology without executing
+  source, then exposes optional schema-1 `sourceImpact` counts, coverage,
+  shortest changed-impact paths, impacted projects, and bounded records.
 - Add a deterministic `domainCoverage` inventory for all nine audit domains,
   separating applicability from status and preserving module details, evidence,
   limitations, and conservative `coverageComplete` semantics across text, JSON,
@@ -26,6 +31,9 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Changed
 
+- Extend changed-scope planning with conservative `source-dependent` projects
+  derived from internal source edges while preserving full counts and explicit
+  graph limitations.
 - Align current and historical product documentation around one unified auditor
   with built-in domain modules, and remove executable direction for the rejected
   external-Doctor architecture.
@@ -35,6 +43,10 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Security
 
+- Withhold raw import specifiers and source text from source-graph reports and
+  fingerprints. The parser loads no repository plugins, makes no network
+  requests, performs no writes, and treats dynamic, ambiguous, unsupported, or
+  ceiling-limited topology as coverage limitations rather than findings.
 - Exclude local private planning material from the Git index and npm package,
   narrow the public documentation package whitelist, and enforce the package
   boundary during tarball verification.
