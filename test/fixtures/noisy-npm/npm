@@ -15,9 +15,9 @@ const requiredFiles = [
 process.stdout.write("CLI Building entry: src/cli.ts, src/index.ts\n");
 process.stdout.write(`${JSON.stringify([
   {
-    id: "codebase-doctor@0.1.5",
+    id: "codebase-doctor@0.1.6",
     name: "codebase-doctor",
-    version: "0.1.5",
+    version: "0.1.6",
     size: 123,
     files: requiredFiles.map((path) => ({ path })),
   },

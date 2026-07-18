@@ -4,6 +4,8 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-18
+
 ### Changed
 
 - Treat workspace publication entries, generated targets, and fixture-controlled

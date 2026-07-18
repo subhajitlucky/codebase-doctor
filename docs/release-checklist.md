@@ -45,4 +45,4 @@ validation subprocesses remain unsandboxed and may have side effects.
 - [ ] Run the published package's `--version` in a clean temporary directory.
 - [ ] Run a read-only `codebase-doctor audit . --json` smoke test and inspect skipped coverage.
 - [ ] Confirm the npm package page shows the expected README, license, files, and version.
-- [ ] Create and push the approved `v0.1.5` tag only after the published package passes the clean-install smoke test.
+- [ ] Create and push the approved `v0.1.6` tag only after the published package passes the clean-install smoke test.
