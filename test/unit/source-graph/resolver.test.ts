@@ -268,6 +268,55 @@ describe("source import resolver", () => {
     ), context)).toMatchObject({ kind: "unsupported" });
   });
 
+  it("withholds proof for declared, ignored, and fixture-controlled relative targets", () => {
+    const context = {
+      files: files(),
+      manifests: [manifest("packages/pkg/package.json", { files: ["cjs/"] })],
+      projects: [project("pkg", "packages/pkg")],
+      configs: [],
+      generatedTargetEvidence: {
+        literalIgnoredPrefixes: ["bench/module-cost/commonjs"],
+      },
+    };
+    const cases = [
+      {
+        importer: "packages/pkg/npm/index.js",
+        source: `require("./cjs/pkg.production.js")`,
+        targetPath: "packages/pkg/npm/cjs/pkg.production.js",
+        limitation:
+          "packages/pkg/npm/index.js: relative source target is declared publication output and may require generation.",
+      },
+      {
+        importer: "bench/module-cost/index.js",
+        source: `require("./commonjs/index.js")`,
+        targetPath: "bench/module-cost/commonjs/index.js",
+        limitation:
+          "bench/module-cost/index.js: relative source target is covered by a literal ignore rule and may be generated.",
+      },
+      {
+        importer: "tests/fixtures/broken/index.ts",
+        source: `import "./missing.ts"`,
+        targetPath: "tests/fixtures/broken/missing.ts",
+        limitation:
+          "tests/fixtures/broken/index.ts: relative source target is fixture-controlled.",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const result = resolveSourceImport(testCase.importer, reference(
+        testCase.importer,
+        testCase.source,
+      ), context);
+      expect(result).toMatchObject({
+        kind: "internal",
+        targetPath: testCase.targetPath,
+        targetExists: false,
+        limitations: [testCase.limitation],
+      });
+      expect(result).not.toHaveProperty("missingTargetProof");
+    }
+  });
+
   it("classifies only single explicit alias targets as provably missing", async () => {
     const configText = JSON.stringify({
       compilerOptions: {

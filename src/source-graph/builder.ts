@@ -9,6 +9,7 @@ import {
 } from "./config.js";
 import { parseSourceImports } from "./parser.js";
 import { resolveSourceImport } from "./resolver.js";
+import { loadGeneratedTargetEvidence } from "./generated-targets.js";
 import {
   DEFAULT_MAX_SOURCE_BYTES,
   DEFAULT_MAX_TOTAL_SOURCE_BYTES,
@@ -103,7 +104,12 @@ export async function buildSourceGraph(
       ? {}
       : { maxExtendsDepth: options.maxExtendsDepth },
   );
-  const limitations = new Set([...selection.limitations, ...config.limitations]);
+  const generatedTargets = await loadGeneratedTargetEvidence(inventory, readFile);
+  const limitations = new Set([
+    ...selection.limitations,
+    ...config.limitations,
+    ...generatedTargets.limitations,
+  ]);
   const nodes: SourceGraphNode[] = selection.files.map(({ path }) => {
     const projectId = ownerOf(path, projects);
     return projectId === undefined ? { path } : { path, projectId };
@@ -148,6 +154,7 @@ export async function buildSourceGraph(
         manifests,
         projects,
         configs: config.configs,
+        generatedTargetEvidence: generatedTargets.evidence,
       });
       for (const limitation of resolution.limitations) limitations.add(limitation);
       if (resolution.kind === "external") {

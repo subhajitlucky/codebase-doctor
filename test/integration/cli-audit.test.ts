@@ -459,6 +459,15 @@ describe("audit CLI", () => {
           },
         },
       }, null, 2),
+      "packages/generated/package.json": JSON.stringify({
+        name: "@workspace/generated",
+        private: true,
+        files: ["index.js", "cjs/"],
+      }, null, 2),
+      "packages/generated/npm/index.js": 'module.exports = require("./cjs/generated.production.js");\n',
+      "bench/module-cost/.gitignore": "commonjs/*\n",
+      "bench/module-cost/index.js": 'module.exports = require("./commonjs/index.js");\n',
+      "tests/fixtures/broken/index.ts": 'import "./missing.ts";\n',
       "src/existing.ts": "export const existing = true;\n",
       "src/relative.ts": [
         'import "./existing.ts";',
@@ -494,6 +503,11 @@ describe("audit CLI", () => {
       "tsconfig.json",
       "packages/core/package.json",
       "packages/conditional/package.json",
+      "packages/generated/package.json",
+      "packages/generated/npm/index.js",
+      "bench/module-cost/.gitignore",
+      "bench/module-cost/index.js",
+      "tests/fixtures/broken/index.ts",
       "src/existing.ts",
       "src/relative.ts",
       "src/alias.ts",
@@ -528,7 +542,6 @@ describe("audit CLI", () => {
       "src/alias.ts",
       "src/alias.ts",
       "src/relative.ts",
-      "src/workspace.ts",
     ]);
     expect(integrityFindings).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -542,22 +555,22 @@ describe("audit CLI", () => {
           "src/alias/private-missing.ts",
         ) })],
       }),
-      expect.objectContaining({
-        evidence: [expect.objectContaining({ detail: expect.stringContaining(
-          "packages/core/src/missing-entry.ts",
-        ) })],
-      }),
     ]));
     expect(report.coverage).toContainEqual(expect.objectContaining({
       moduleId: "repository/source-integrity",
       status: "partial",
       scope: "full",
-      statementsRecognized: 4,
+      statementsRecognized: 3,
+      limitations: expect.arrayContaining([
+        "bench/module-cost/index.js: relative source target is covered by a literal ignore rule and may be generated.",
+        "packages/generated/npm/index.js: relative source target is declared publication output and may require generation.",
+        "tests/fixtures/broken/index.ts: relative source target is fixture-controlled.",
+      ]),
     }));
-    expect(text.stdout.match(/Internal import target is missing/g)).toHaveLength(4);
+    expect(text.stdout.match(/Internal import target is missing/g)).toHaveLength(3);
     expect(sarifReport.runs[0].results.filter(
       ({ ruleId }: { ruleId: string }) => ruleId === "source/import-target-missing",
-    )).toHaveLength(4);
+    )).toHaveLength(3);
     for (const output of [
       json.stdout,
       json.stderr,

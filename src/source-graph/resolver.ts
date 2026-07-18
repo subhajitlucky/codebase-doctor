@@ -13,6 +13,11 @@ import {
 } from "./config.js";
 import { importSpecifier, type SafeImportReference } from "./parser.js";
 import { isSupportedSourcePath } from "./selection.js";
+import {
+  classifyMissingRelativeTarget,
+  type GeneratedTargetEvidence,
+  type MissingTargetDisposition,
+} from "./generated-targets.js";
 import type { MissingTargetProof } from "./types.js";
 
 type JsonObject = Record<string, unknown>;
@@ -22,6 +27,7 @@ export interface SourceResolverContext {
   readonly manifests: readonly ManifestRecord[];
   readonly projects: readonly DetectedProject[];
   readonly configs: readonly SourceAliasConfig[];
+  readonly generatedTargetEvidence?: GeneratedTargetEvidence;
 }
 
 export type SourceResolution =
@@ -96,6 +102,22 @@ function existingSourcePaths(context: SourceResolverContext): ReadonlySet<string
   return new Set(context.files
     .filter(({ kind, path }) => kind === "file" && isSupportedSourcePath(path))
     .map(({ path }) => path));
+}
+
+function relativeTargetLimitation(
+  importerPath: string,
+  disposition: MissingTargetDisposition,
+): string {
+  if (disposition === "declared-publication-output") {
+    return `${importerPath}: relative source target is declared publication output and may require generation.`;
+  }
+  if (disposition === "literal-ignored-output") {
+    return `${importerPath}: relative source target is covered by a literal ignore rule and may be generated.`;
+  }
+  if (disposition === "fixture-controlled") {
+    return `${importerPath}: relative source target is fixture-controlled.`;
+  }
+  return `${importerPath}: relative source target was not found in the current inventory.`;
 }
 
 function resolveCandidates(
@@ -318,15 +340,23 @@ export function resolveSourceImport(
         limitations: [`${importerPath}: relative source target is unsupported.`],
       };
     }
+    const disposition = resolved.targetExists || !isExplicitSupportedTarget(specifier)
+      ? "provable"
+      : classifyMissingRelativeTarget(
+          importerPath,
+          resolved.targetPath,
+          context.manifests,
+          context.generatedTargetEvidence ?? { literalIgnoredPrefixes: [] },
+        );
     return {
       kind: "internal",
       ...resolved,
-      ...(!resolved.targetExists && isExplicitSupportedTarget(specifier)
+      ...(!resolved.targetExists && isExplicitSupportedTarget(specifier) && disposition === "provable"
         ? { missingTargetProof: "relative-explicit" as const }
         : {}),
       limitations: resolved.targetExists
         ? []
-        : [`${importerPath}: relative source target was not found in the current inventory.`],
+        : [relativeTargetLimitation(importerPath, disposition)],
     };
   }
   if (specifier.startsWith("/") || specifier.includes("\0")) {

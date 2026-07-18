@@ -161,6 +161,37 @@ describe("bounded source graph builder", () => {
     expect(JSON.stringify(result)).not.toContain("example.invalid");
   });
 
+  it("loads nested ignore evidence once and keeps generated targets coverage-only", async () => {
+    const reads = new Map<string, number>();
+    const result = await buildSourceGraph(
+      inventory([
+        "bench/module-cost/.gitignore",
+        "bench/module-cost/index.js",
+      ]),
+      [],
+      [project("root", ".")],
+      async (path) => {
+        reads.set(path, (reads.get(path) ?? 0) + 1);
+        if (path === "bench/module-cost/.gitignore") return "commonjs/*\n";
+        if (path === "bench/module-cost/index.js") return `require("./commonjs/index.js")`;
+        throw new Error("unexpected path");
+      },
+    );
+
+    expect(reads.get("bench/module-cost/.gitignore")).toBe(1);
+    expect(result.edges).toEqual([{
+      importerPath: "bench/module-cost/index.js",
+      targetPath: "bench/module-cost/commonjs/index.js",
+      kind: "require",
+      targetExists: false,
+      line: 1,
+      column: 1,
+    }]);
+    expect(result.limitations).toContain(
+      "bench/module-cost/index.js: relative source target is covered by a literal ignore rule and may be generated.",
+    );
+  });
+
   it("combines selection, configuration, parse, read, and resolution limitations", async () => {
     const secret = "credential-M7n9B2v8C4x6Z1l3K5j0HgFd";
     const result = await build(
