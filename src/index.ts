@@ -85,6 +85,10 @@ export type {
   ScopeReason,
 } from "./scope/types.js";
 export type {
+  MissingTargetProof,
+  SourceGraph,
+  SourceGraphEdge,
+  SourceGraphNode,
   SourceGraphStatus,
   SourceImpact,
   SourceImpactRecord,

@@ -8,6 +8,11 @@ export const SOURCE_IMPORT_KINDS = [
 
 export type SourceImportKind = (typeof SOURCE_IMPORT_KINDS)[number];
 
+export type MissingTargetProof =
+  | "relative-explicit"
+  | "alias-explicit"
+  | "workspace-entry-explicit";
+
 export type SourceGraphStatus =
   | "completed"
   | "partial"
@@ -24,6 +29,9 @@ export interface SourceGraphEdge {
   readonly targetPath: string;
   readonly kind: SourceImportKind;
   readonly targetExists: boolean;
+  readonly missingTargetProof?: MissingTargetProof;
+  readonly line?: number;
+  readonly column?: number;
 }
 
 export interface SourceGraph {

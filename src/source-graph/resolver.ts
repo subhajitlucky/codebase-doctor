@@ -13,6 +13,7 @@ import {
 } from "./config.js";
 import { importSpecifier, type SafeImportReference } from "./parser.js";
 import { isSupportedSourcePath } from "./selection.js";
+import type { MissingTargetProof } from "./types.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -28,6 +29,7 @@ export type SourceResolution =
       readonly kind: "internal";
       readonly targetPath: string;
       readonly targetExists: boolean;
+      readonly missingTargetProof?: MissingTargetProof;
       readonly limitations: readonly string[];
     }
   | {
@@ -106,6 +108,10 @@ function resolveCandidates(
   return first === undefined ? undefined : { targetPath: first, targetExists: false };
 }
 
+function isExplicitSupportedTarget(value: string): boolean {
+  return isSupportedSourcePath(value.replace("*", "__codebase_doctor_wildcard__"));
+}
+
 function aliasMatch(alias: SafeSourceAlias, specifier: string): string | undefined {
   const pattern = aliasPattern(alias);
   if (pattern === undefined) return undefined;
@@ -148,10 +154,14 @@ function resolveAlias(
     }
     const first = targetCandidates[0];
     if (first !== undefined && aliasTargets(alias).length === 1) {
+      const target = aliasTargets(alias)[0];
       return {
         kind: "internal",
         targetPath: first,
         targetExists: false,
+        ...(target !== undefined && isExplicitSupportedTarget(target)
+          ? { missingTargetProof: "alias-explicit" as const }
+          : {}),
         limitations: [`${importerPath}: source alias target was not found in the current inventory.`],
       };
     }
@@ -191,32 +201,36 @@ function workspaceEntry(
   manifest: Extract<ManifestRecord, { status: "valid" }> | undefined,
   subpath: string,
   typeOnly: boolean,
-): { entry?: string; unsupported: boolean } {
+): { entry?: string; unsupported: boolean; explicit: boolean } {
   const data = manifest?.data ?? {};
   if (subpath.length > 0) {
     const exports = objectValue(data.exports);
     if (exports !== undefined) {
       const exported = exports[`./${subpath}`];
       return typeof exported === "string"
-        ? { entry: exported, unsupported: false }
-        : { unsupported: true };
+        ? { entry: exported, unsupported: false, explicit: true }
+        : { unsupported: true, explicit: false };
     }
-    return { entry: subpath, unsupported: false };
+    return { entry: subpath, unsupported: false, explicit: false };
   }
   if (typeOnly && typeof data.types === "string") {
-    return { entry: data.types, unsupported: false };
+    return { entry: data.types, unsupported: false, explicit: true };
   }
   if (data.exports !== undefined) {
-    if (typeof data.exports === "string") return { entry: data.exports, unsupported: false };
+    if (typeof data.exports === "string") {
+      return { entry: data.exports, unsupported: false, explicit: true };
+    }
     const exports = objectValue(data.exports);
     if (exports !== undefined && typeof exports["."] === "string") {
-      return { entry: exports["."] as string, unsupported: false };
+      return { entry: exports["."] as string, unsupported: false, explicit: true };
     }
-    return { unsupported: true };
+    return { unsupported: true, explicit: false };
   }
+  const explicitEntry = stringEntry(data.module) ?? stringEntry(data.main);
   return {
-    entry: stringEntry(data.module) ?? stringEntry(data.main) ?? "index",
+    entry: explicitEntry ?? "index",
     unsupported: false,
+    explicit: explicitEntry !== undefined,
   };
 }
 
@@ -268,6 +282,9 @@ function resolveWorkspace(
   return {
     kind: "internal",
     ...resolved,
+    ...(!resolved.targetExists && entry.explicit && isExplicitSupportedTarget(entry.entry)
+      ? { missingTargetProof: "workspace-entry-explicit" as const }
+      : {}),
     limitations: resolved.targetExists
       ? []
       : [`${importerPath}: workspace source target was not found in the current inventory.`],
@@ -305,6 +322,9 @@ export function resolveSourceImport(
     return {
       kind: "internal",
       ...resolved,
+      ...(!resolved.targetExists && isExplicitSupportedTarget(specifier)
+        ? { missingTargetProof: "relative-explicit" as const }
+        : {}),
       limitations: resolved.targetExists
         ? []
         : [`${importerPath}: relative source target was not found in the current inventory.`],

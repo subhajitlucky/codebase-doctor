@@ -239,7 +239,138 @@ describe("source import resolver", () => {
       kind: "internal",
       targetPath: "src/deleted.ts",
       targetExists: false,
+      missingTargetProof: "relative-explicit",
       limitations: ["src/index.ts: relative source target was not found in the current inventory."],
+    });
+  });
+
+  it("classifies only explicit supported relative targets as provably missing", () => {
+    const context = { files: [], manifests: [], projects: [], configs: [] };
+
+    expect(resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "./missing.js"`,
+    ), context)).toMatchObject({
+      kind: "internal",
+      targetPath: "src/missing.js",
+      targetExists: false,
+      missingTargetProof: "relative-explicit",
+    });
+    const extensionless = resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "./missing"`,
+    ), context);
+    expect(extensionless).toMatchObject({
+      kind: "internal",
+      targetExists: false,
+    });
+    expect(extensionless).not.toHaveProperty("missingTargetProof");
+    expect(resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "./missing.json"`,
+    ), context)).toMatchObject({ kind: "unsupported" });
+  });
+
+  it("classifies only single explicit alias targets as provably missing", async () => {
+    const configText = JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: {
+          "@explicit/*": ["src/*.ts"],
+          "@extensionless/*": ["src/*"],
+          "@ambiguous/*": ["src/*.ts", "generated/*.ts"],
+        },
+      },
+    });
+    const inventoryFiles = files("tsconfig.json");
+    const configs = await loadSourceAliasConfigs(
+      { root: "/repo", files: inventoryFiles },
+      async () => configText,
+    );
+    const context = {
+      files: inventoryFiles,
+      manifests: [],
+      projects: [project("root", ".")],
+      configs: configs.configs,
+    };
+
+    expect(resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@explicit/missing"`,
+    ), context)).toMatchObject({
+      kind: "internal",
+      targetPath: "src/missing.ts",
+      targetExists: false,
+      missingTargetProof: "alias-explicit",
+    });
+    const extensionless = resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@extensionless/missing"`,
+    ), context);
+    expect(extensionless).toMatchObject({
+      kind: "internal",
+      targetExists: false,
+    });
+    expect(extensionless).not.toHaveProperty("missingTargetProof");
+    expect(resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@ambiguous/missing"`,
+    ), context)).toMatchObject({ kind: "unsupported" });
+  });
+
+  it("classifies only explicit workspace entries as provably missing", () => {
+    const explicit = {
+      files: files(),
+      manifests: [manifest("packages/lib/package.json", {
+        name: "@workspace/lib",
+        exports: "./src/index.ts",
+      })],
+      projects: [project("lib", "packages/lib", "@workspace/lib")],
+      configs: [],
+    };
+    const implicit = {
+      files: files(),
+      manifests: [manifest("packages/lib/package.json", { name: "@workspace/lib" })],
+      projects: [project("lib", "packages/lib", "@workspace/lib")],
+      configs: [],
+    };
+
+    expect(resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@workspace/lib"`,
+    ), explicit)).toMatchObject({
+      kind: "internal",
+      targetPath: "packages/lib/src/index.ts",
+      targetExists: false,
+      missingTargetProof: "workspace-entry-explicit",
+    });
+    const defaultIndex = resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@workspace/lib"`,
+    ), implicit);
+    expect(defaultIndex).toMatchObject({
+      kind: "internal",
+      targetExists: false,
+    });
+    expect(defaultIndex).not.toHaveProperty("missingTargetProof");
+  });
+
+  it("withholds credential-bearing values from diagnostic resolutions", async () => {
+    const secret = "credential-Q7v4T9n2K8m6";
+    const inventoryFiles = files("tsconfig.json");
+    const configs = await loadSourceAliasConfigs(
+      { root: "/repo", files: inventoryFiles },
+      async () => JSON.stringify({
+        compilerOptions: { paths: { "@private/*": ["src/fixed.ts"] } },
+      }),
+    );
+    const result = resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@private/${secret}"`,
+    ), {
+      files: inventoryFiles,
+      manifests: [],
+      projects: [project("root", ".")],
+      configs: configs.configs,
+    });
+
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(JSON.stringify(result)).not.toContain("@private");
+    expect(result).toMatchObject({
+      kind: "internal",
+      targetPath: "src/fixed.ts",
+      missingTargetProof: "alias-explicit",
     });
   });
 });

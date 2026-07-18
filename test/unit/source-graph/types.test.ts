@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  MissingTargetProof,
   SourceGraph,
   SourceGraphEdge,
   SourceImpact,
@@ -7,11 +8,15 @@ import type {
 
 describe("source graph contracts", () => {
   it("represent topology and impact with safe paths and fixed classifications", () => {
+    const proof: MissingTargetProof = "relative-explicit";
     const edge: SourceGraphEdge = {
       importerPath: "src/routes.ts",
       targetPath: "src/auth/session.ts",
       kind: "static",
-      targetExists: true,
+      targetExists: false,
+      missingTargetProof: proof,
+      line: 4,
+      column: 1,
     };
     const graph: SourceGraph = {
       status: "completed",
@@ -46,6 +51,8 @@ describe("source graph contracts", () => {
     };
 
     expect(JSON.stringify({ graph, impact })).not.toMatch(/specifier|sourceText|rawValue/);
+    expect(edge.missingTargetProof).toBe("relative-explicit");
+    expect(edge).toMatchObject({ line: 4, column: 1 });
     expect(impact.impacts[0]?.dependencyPath).toEqual([
       "src/auth/session.ts",
       "src/routes.ts",
