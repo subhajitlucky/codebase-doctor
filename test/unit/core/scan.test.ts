@@ -346,11 +346,25 @@ describe("scan orchestration", () => {
       doctorId: "repository/source-graph",
       status: "completed",
     }));
+    expect(scanned.doctorRuns.slice(0, 4).map(({ doctorId }) => doctorId)).toEqual([
+      "checks",
+      "project",
+      "repository/source-graph",
+      "repository/source-integrity",
+    ]);
+    expect(scanned.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "repository/source-integrity",
+      status: "completed",
+    }));
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/sql-rls");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/secrets");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/dependencies");
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "security/secrets",
+      status: "completed",
+    }));
+    expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "repository/source-integrity",
       status: "completed",
     }));
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({

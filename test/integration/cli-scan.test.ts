@@ -94,6 +94,10 @@ describe("scan CLI", () => {
         moduleId: "repository/source-graph",
         scope: "full",
       }),
+      expect.objectContaining({
+        moduleId: "repository/source-integrity",
+        scope: "full",
+      }),
     ]);
   });
 

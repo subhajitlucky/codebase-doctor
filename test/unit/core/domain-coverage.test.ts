@@ -87,6 +87,23 @@ describe("domain coverage planning", () => {
               }],
             },
           },
+          {
+            doctorId: "repository/source-integrity",
+            result: {
+              status: "completed",
+              findings: [],
+              durationMs: 1,
+              coverage: [{
+                moduleId: "repository/source-integrity",
+                status: graphStatus,
+                scope: "changed",
+                filesExamined: 2,
+                statementsExamined: 1,
+                statementsRecognized: 0,
+                limitations: graphStatus === "partial" ? ["integrity limitation"] : [],
+              }],
+            },
+          },
         ],
         plans: [],
         includeDatabaseAudit: false,
@@ -99,11 +116,16 @@ describe("domain coverage planning", () => {
         evidence: [
           { type: "module", value: "project" },
           { type: "module", value: "repository/source-graph" },
+          { type: "module", value: "repository/source-integrity" },
         ],
         modules: [
           expect.objectContaining({ moduleId: "project", status: "completed" }),
           expect.objectContaining({
             moduleId: "repository/source-graph",
+            status: graphStatus,
+          }),
+          expect.objectContaining({
+            moduleId: "repository/source-integrity",
             status: graphStatus,
           }),
         ],

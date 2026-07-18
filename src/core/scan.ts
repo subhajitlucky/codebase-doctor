@@ -26,6 +26,7 @@ import { buildInventoriedSourceGraph } from "../source-graph/builder.js";
 import { planSourceImpact as planSourceImpactInternal } from "../source-graph/impact.js";
 import type { SourceGraph, SourceImpact } from "../source-graph/types.js";
 import { sourceGraphDoctor } from "../source-graph/doctor.js";
+import { sourceIntegrityDoctor } from "../source-integrity/doctor.js";
 import type {
   FileInventory,
   FileInventoryOptions,
@@ -97,6 +98,7 @@ const defaultDependencies: ScanDependencies = {
     const doctors: Doctor[] = [
       projectDoctor,
       sourceGraphDoctor,
+      sourceIntegrityDoctor,
       createCheckDoctor({
         timeoutMs: request.timeoutMs,
         plans,
