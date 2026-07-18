@@ -16,3 +16,8 @@ export interface SecretMatch {
   readonly severity: Severity;
   readonly confidence: Confidence;
 }
+
+export interface LocalTestKeyLocation {
+  readonly line: number;
+  readonly column: number;
+}

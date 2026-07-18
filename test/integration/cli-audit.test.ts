@@ -15,6 +15,7 @@ import {
   runGitFixtureCommand,
   writeProjectFile,
 } from "../helpers/temp-project.js";
+import { createTestCertificate } from "../helpers/crypto-fixture.js";
 
 const repositoryRoot = process.cwd();
 const fixture = (name: string) => resolve(repositoryRoot, "test", "fixtures", name);
@@ -141,6 +142,32 @@ describe("audit CLI", () => {
     }));
     expect(result.stdout).not.toContain(trackedSecret);
     expect(result.stdout).not.toContain(ignoredSecret);
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+  });
+
+  it("classifies a matching localhost test key without mutating or disclosing it", async () => {
+    const fixture = createTestCertificate("localhost", "DNS:localhost,IP:127.0.0.1");
+    const { root } = await createRepository({
+      "test/certificate.pem": fixture.certificate,
+      "test/key.pem": fixture.privateKey,
+    });
+    const before = await captureGitRepositorySnapshot(root);
+
+    const result = cli(["audit", root, "--json", "--fail-on", "none"], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(report.findings).not.toContainEqual(expect.objectContaining({
+      ruleId: "security/secrets/private-key",
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/secrets",
+      status: "partial",
+      limitations: [
+        "test/key.pem: private key matched an inventoried localhost-only test certificate; no finding was emitted.",
+      ],
+    }));
+    expect(result.stdout).not.toContain(fixture.privateKey.trim());
     expect(await captureGitRepositorySnapshot(root)).toEqual(before);
   });
 

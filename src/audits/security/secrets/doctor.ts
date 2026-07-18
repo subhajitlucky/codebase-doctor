@@ -8,6 +8,10 @@ import {
   type Finding,
 } from "../../../core/findings.js";
 import { analyzeSecrets } from "./analyzer.js";
+import {
+  classifyLocalhostTestKeys,
+  isCertificateCandidatePath,
+} from "./local-test-key.js";
 import { selectSecretAuditFiles } from "./selection.js";
 import type { SecretFindingFamily, SecretMatch } from "./types.js";
 
@@ -129,10 +133,73 @@ export function createSecretsDoctor(options: SecretsDoctorOptions = {}): Doctor 
       const selection = selectSecretAuditFiles(snapshot);
       const limitations = [...selection.limitations];
       const findings: Finding[] = [];
-      let filesExamined = 0;
+      const examinedPaths = new Set<string>();
+      const lineCountedPaths = new Set<string>();
+      const contentByPath = new Map<string, string>();
       let linesExamined = 0;
       let matchesRecognized = 0;
       let totalBytes = 0;
+
+      function recordExamined(path: string, content: string): void {
+        examinedPaths.add(path);
+        if (lineCountedPaths.has(path)) return;
+        lineCountedPaths.add(path);
+        linesExamined += lineCount(content);
+      }
+
+      async function certificateContents(): Promise<string[]> {
+        const contents: string[] = [];
+        const candidates = snapshot.files
+          .filter(({ kind, path }) => kind === "file" && isCertificateCandidatePath(path))
+          .sort((left, right) => left.path.localeCompare(right.path));
+        for (const candidate of candidates) {
+          const cached = contentByPath.get(candidate.path);
+          if (cached !== undefined) {
+            contents.push(cached);
+            continue;
+          }
+          if (candidate.size > maxFileBytes) {
+            limitations.push(
+              `${candidate.path}: companion certificate exceeds the ${maxFileBytes}-byte secrets audit size limit.`,
+            );
+            continue;
+          }
+          if (totalBytes + candidate.size > maxTotalBytes) {
+            limitations.push(
+              `${candidate.path}: total secrets audit content limit of ${maxTotalBytes} bytes was reached while examining companion certificates.`,
+            );
+            break;
+          }
+          let bytes: Uint8Array;
+          try {
+            bytes = await readSelectedFile(join(snapshot.root, ...candidate.path.split("/")));
+          } catch {
+            limitations.push(
+              `${candidate.path}: unable to read companion certificate for localhost test-key classification.`,
+            );
+            continue;
+          }
+          if (bytes.byteLength > maxFileBytes) {
+            limitations.push(
+              `${candidate.path}: companion certificate exceeds the ${maxFileBytes}-byte secrets audit size limit.`,
+            );
+            continue;
+          }
+          if (totalBytes + bytes.byteLength > maxTotalBytes) {
+            limitations.push(
+              `${candidate.path}: total secrets audit content limit of ${maxTotalBytes} bytes was reached while examining companion certificates.`,
+            );
+            break;
+          }
+          totalBytes += bytes.byteLength;
+          if (bytes.includes(0)) continue;
+          const content = Buffer.from(bytes).toString("utf8");
+          contentByPath.set(candidate.path, content);
+          recordExamined(candidate.path, content);
+          contents.push(content);
+        }
+        return contents;
+      }
 
       for (const file of selection.files) {
         if (findings.length >= maxFindings) {
@@ -141,44 +208,61 @@ export function createSecretsDoctor(options: SecretsDoctorOptions = {}): Doctor 
           );
           break;
         }
-        if (file.size > maxFileBytes) {
-          limitations.push(
-            `${file.path}: file exceeds the ${maxFileBytes}-byte secrets audit size limit.`,
-          );
-          continue;
+        let content = contentByPath.get(file.path);
+        if (content === undefined) {
+          if (file.size > maxFileBytes) {
+            limitations.push(
+              `${file.path}: file exceeds the ${maxFileBytes}-byte secrets audit size limit.`,
+            );
+            continue;
+          }
+          if (totalBytes + file.size > maxTotalBytes) {
+            limitations.push(
+              `${file.path}: total secrets audit content limit of ${maxTotalBytes} bytes was reached; remaining selected files were not examined.`,
+            );
+            break;
+          }
+          let bytes: Uint8Array;
+          try {
+            bytes = await readSelectedFile(join(snapshot.root, ...file.path.split("/")));
+          } catch {
+            limitations.push(`${file.path}: unable to read selected file for secrets audit.`);
+            continue;
+          }
+          if (bytes.byteLength > maxFileBytes) {
+            limitations.push(
+              `${file.path}: file exceeds the ${maxFileBytes}-byte secrets audit size limit.`,
+            );
+            continue;
+          }
+          if (totalBytes + bytes.byteLength > maxTotalBytes) {
+            limitations.push(
+              `${file.path}: total secrets audit content limit of ${maxTotalBytes} bytes was reached; remaining selected files were not examined.`,
+            );
+            break;
+          }
+          totalBytes += bytes.byteLength;
+          if (bytes.includes(0)) continue;
+          content = Buffer.from(bytes).toString("utf8");
+          contentByPath.set(file.path, content);
+          recordExamined(file.path, content);
         }
-        if (totalBytes + file.size > maxTotalBytes) {
-          limitations.push(
-            `${file.path}: total secrets audit content limit of ${maxTotalBytes} bytes was reached; remaining selected files were not examined.`,
-          );
-          break;
-        }
-        let bytes: Uint8Array;
-        try {
-          bytes = await readSelectedFile(join(snapshot.root, ...file.path.split("/")));
-        } catch {
-          limitations.push(`${file.path}: unable to read selected file for secrets audit.`);
-          continue;
-        }
-        if (bytes.byteLength > maxFileBytes) {
-          limitations.push(
-            `${file.path}: file exceeds the ${maxFileBytes}-byte secrets audit size limit.`,
-          );
-          continue;
-        }
-        if (totalBytes + bytes.byteLength > maxTotalBytes) {
-          limitations.push(
-            `${file.path}: total secrets audit content limit of ${maxTotalBytes} bytes was reached; remaining selected files were not examined.`,
-          );
-          break;
-        }
-        totalBytes += bytes.byteLength;
-        if (bytes.includes(0)) continue;
-
-        const content = Buffer.from(bytes).toString("utf8");
         const detectedMatches = analyzeSecrets(content);
-        const fileMatches = detectedMatches.slice(0, maxFindingsPerFile);
-        if (detectedMatches.length > maxFindingsPerFile) {
+        const hasPrivateKey = detectedMatches.some(({ family }) => family === "private-key");
+        const localKeyLocations = hasPrivateKey
+          ? classifyLocalhostTestKeys(content, await certificateContents())
+          : [];
+        const localKeys = new Set(localKeyLocations.map(({ line, column }) => `${line}:${column}`));
+        const eligibleMatches = detectedMatches.filter((match) =>
+          match.family !== "private-key" || !localKeys.has(`${match.line}:${match.column}`)
+        );
+        if (localKeys.size > 0) {
+          limitations.push(
+            `${file.path}: private key matched an inventoried localhost-only test certificate; no finding was emitted.`,
+          );
+        }
+        const fileMatches = eligibleMatches.slice(0, maxFindingsPerFile);
+        if (eligibleMatches.length > maxFindingsPerFile) {
           limitations.push(
             `${file.path}: secrets finding limit of ${maxFindingsPerFile} was reached; additional matches were withheld.`,
           );
@@ -191,8 +275,6 @@ export function createSecretsDoctor(options: SecretsDoctorOptions = {}): Doctor 
             `Secrets audit finding limit of ${maxFindings} was reached; additional matches and remaining selected files were not reported.`,
           );
         }
-        filesExamined += 1;
-        linesExamined += lineCount(content);
         matchesRecognized += matches.length;
         findings.push(...matches.map((match) =>
           findingFor(file.path, match, snapshot.auditScope.mode === "changed")
@@ -205,7 +287,7 @@ export function createSecretsDoctor(options: SecretsDoctorOptions = {}): Doctor 
         findings: sortFindings(findings),
         coverage: [coverage(
           selection.scope,
-          filesExamined,
+          examinedPaths.size,
           linesExamined,
           matchesRecognized,
           limitations,

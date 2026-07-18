@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSecretsDoctor } from "../../../../../src/audits/security/secrets/doctor.js";
 import { fullAuditScope } from "../../../../../src/scope/planner.js";
 import type { ProjectSnapshot } from "../../../../../src/workspace/types.js";
+import { createTestCertificate } from "../../../../helpers/crypto-fixture.js";
 
 const ALPHABET = "Q7w9E2r8T4y6U1i3O5p0AsDfGhJkLzXc";
 
@@ -80,6 +81,105 @@ describe("Secrets Doctor", () => {
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain(seededSecret);
     expect(result.findings[0]?.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("uses an inventoried unchanged certificate to classify a changed localhost test key", async () => {
+    const fixture = createTestCertificate("localhost", "DNS:localhost,IP:127.0.0.1");
+    const contents = new Map([
+      ["/repo/test/key.pem", Buffer.from(fixture.privateKey)],
+      ["/repo/test/certificate.pem", Buffer.from(fixture.certificate)],
+    ]);
+    const readFile = vi.fn(async (path: string) => {
+      const content = contents.get(path);
+      if (content === undefined) throw new Error("unexpected path");
+      return content;
+    });
+    const doctor = createSecretsDoctor({ readFile });
+    const result = await doctor.diagnose({
+      snapshot: snapshot({
+        files: [
+          { path: "test/certificate.pem", kind: "file", size: Buffer.byteLength(fixture.certificate) },
+          { path: "test/key.pem", kind: "file", size: Buffer.byteLength(fixture.privateKey) },
+        ],
+        repositoryFiles: {
+          availability: "available",
+          paths: ["test/certificate.pem", "test/key.pem"],
+          limitations: [],
+        },
+        auditScope: {
+          mode: "changed",
+          base: { kind: "head", requestedRef: null, resolvedCommit: "a".repeat(40) },
+          changes: [{ status: "modified", path: "test/key.pem" }],
+          affectedProjectIds: [],
+          reasons: [],
+          limitations: [],
+        },
+      }),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(readFile).toHaveBeenCalledTimes(2);
+    expect(result.findings).toEqual([]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      scope: "changed",
+      filesExamined: 2,
+      statementsRecognized: 0,
+      limitations: [
+        "test/key.pem: private key matched an inventoried localhost-only test certificate; no finding was emitted.",
+      ],
+    })]);
+    expect(JSON.stringify(result)).not.toContain(fixture.privateKey.trim());
+  });
+
+  it("keeps non-local, unmatched, and certificate-less private keys as high findings", async () => {
+    const local = createTestCertificate("localhost", "DNS:localhost");
+    const nonLocal = createTestCertificate("service.example.invalid", "DNS:service.example.invalid");
+    const otherLocal = createTestCertificate("localhost", "DNS:localhost,IP:127.0.0.1");
+    const cases = [
+      { key: nonLocal.privateKey, certificates: [nonLocal.certificate] },
+      { key: local.privateKey, certificates: [otherLocal.certificate] },
+      { key: local.privateKey, certificates: [] },
+    ];
+
+    for (const testCase of cases) {
+      const files = [
+        { path: "test/key.pem", kind: "file" as const, size: Buffer.byteLength(testCase.key) },
+        ...testCase.certificates.map((certificate, index) => ({
+          path: `test/certificate-${index}.pem`,
+          kind: "file" as const,
+          size: Buffer.byteLength(certificate),
+        })),
+      ];
+      const contents = new Map<string, Buffer>([
+        ["/repo/test/key.pem", Buffer.from(testCase.key)],
+        ...testCase.certificates.map((certificate, index): [string, Buffer] => [
+          `/repo/test/certificate-${index}.pem`,
+          Buffer.from(certificate),
+        ]),
+      ]);
+      const doctor = createSecretsDoctor({
+        readFile: async (path) => contents.get(path) ?? Buffer.from(""),
+      });
+      const result = await doctor.diagnose({
+        snapshot: snapshot({
+          files,
+          repositoryFiles: {
+            availability: "available",
+            paths: files.map(({ path }) => path),
+            limitations: [],
+          },
+        }),
+        allowedCapabilities: new Set(["filesystem:read"]),
+      });
+
+      expect(result.findings).toContainEqual(expect.objectContaining({
+        ruleId: "security/secrets/private-key",
+        severity: "high",
+        location: expect.objectContaining({ path: "test/key.pem" }),
+      }));
+      expect(JSON.stringify(result)).not.toContain(testCase.key.trim());
+    }
   });
 
   it("makes oversized selected files partial without reading them", async () => {
