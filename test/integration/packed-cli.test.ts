@@ -397,6 +397,90 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
         status: "unsupported",
       }));
 
+      const sourceRepository = join(temporaryRoot, "source-impact-repository");
+      await mkdir(join(sourceRepository, "packages", "core", "src"), { recursive: true });
+      await mkdir(join(sourceRepository, "apps", "web", "src"), { recursive: true });
+      const sourceCredential = generatedToken("packed-import-");
+      const sourceFiles = {
+        "package.json": JSON.stringify({
+          name: "packed-source-workspace",
+          private: true,
+          workspaces: ["packages/*", "apps/*"],
+        }, null, 2),
+        "packages/core/package.json": JSON.stringify({
+          name: "@packed/core",
+          private: true,
+          module: "src/value.ts",
+        }, null, 2),
+        "packages/core/src/value.ts": "export const value = 1;\n",
+        "apps/web/package.json": JSON.stringify({
+          name: "@packed/web",
+          private: true,
+        }, null, 2),
+        "apps/web/src/page.ts": [
+          'import { value } from "@packed/core";',
+          `import "https://user:${sourceCredential}@example.invalid/external.js";`,
+          "export const page = value;",
+          "",
+        ].join("\n"),
+      };
+      for (const [path, contents] of Object.entries(sourceFiles)) {
+        await writeFile(join(sourceRepository, ...path.split("/")), contents);
+      }
+      expect(run("git", ["init", "--quiet"], sourceRepository).status).toBe(0);
+      expect(run("git", ["config", "user.email", "doctor@example.invalid"], sourceRepository).status)
+        .toBe(0);
+      expect(run("git", ["config", "user.name", "Codebase Doctor Test"], sourceRepository).status)
+        .toBe(0);
+      expect(run("git", ["add", "--all"], sourceRepository).status).toBe(0);
+      expect(run("git", ["commit", "--quiet", "--message", "initial"], sourceRepository).status)
+        .toBe(0);
+      const changedCore = "export const value = 2;\n";
+      await writeFile(join(sourceRepository, "packages", "core", "src", "value.ts"), changedCore);
+      const sourceStatusBefore = run(
+        "git", ["status", "--porcelain=v1", "-z"], sourceRepository,
+      ).stdout;
+      const sourceHeadBefore = run("git", ["rev-parse", "HEAD"], sourceRepository).stdout;
+      const webBefore = await readFile(
+        join(sourceRepository, "apps", "web", "src", "page.ts"),
+        "utf8",
+      );
+
+      const packedSourceImpact = run(binary, [
+        "audit", sourceRepository, "--changed", "--json", "--fail-on", "none",
+      ], temporaryRoot);
+      expect(packedSourceImpact.status, packedSourceImpact.stderr).toBe(0);
+      expect(packedSourceImpact.stdout).not.toContain(sourceCredential);
+      expect(packedSourceImpact.stderr).not.toContain(sourceCredential);
+      const packedSourceReport = JSON.parse(packedSourceImpact.stdout);
+      expect(packedSourceReport.sourceImpact).toMatchObject({
+        status: "completed",
+        changedSourcePaths: ["packages/core/src/value.ts"],
+        impactedProjectIds: ["project:apps/web"],
+        impacts: [{
+          path: "apps/web/src/page.ts",
+          dependencyPath: [
+            "packages/core/src/value.ts",
+            "apps/web/src/page.ts",
+          ],
+        }],
+      });
+      expect(packedSourceReport.coverage).toContainEqual(expect.objectContaining({
+        moduleId: "repository/source-graph",
+        status: "completed",
+      }));
+      expect(run("git", ["status", "--porcelain=v1", "-z"], sourceRepository).stdout)
+        .toBe(sourceStatusBefore);
+      expect(run("git", ["rev-parse", "HEAD"], sourceRepository).stdout).toBe(sourceHeadBefore);
+      expect(await readFile(
+        join(sourceRepository, "packages", "core", "src", "value.ts"),
+        "utf8",
+      )).toBe(changedCore);
+      expect(await readFile(
+        join(sourceRepository, "apps", "web", "src", "page.ts"),
+        "utf8",
+      )).toBe(webBefore);
+
       await writeFile(join(gitRepository, "tracked.txt"), "changed\n");
       await writeFile(join(gitRepository, "untracked.txt"), "untracked\n");
 

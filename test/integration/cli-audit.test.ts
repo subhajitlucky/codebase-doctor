@@ -328,6 +328,103 @@ describe("audit CLI", () => {
     }));
   });
 
+  it("reports cross-project changed source impact in every format without mutation", async () => {
+    const sourceCredential = generatedToken("import-source-");
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        name: "source-impact-workspace",
+        private: true,
+        workspaces: ["packages/*", "apps/*"],
+      }, null, 2),
+      "packages/core/package.json": JSON.stringify({
+        name: "@workspace/core",
+        private: true,
+        module: "src/value.ts",
+      }, null, 2),
+      "packages/core/src/value.ts": "export const value = 1;\n",
+      "apps/web/package.json": JSON.stringify({
+        name: "@workspace/web",
+        private: true,
+      }, null, 2),
+      "apps/web/src/page.ts": [
+        'import { value } from "@workspace/core";',
+        `import "https://user:${sourceCredential}@example.invalid/external.js";`,
+        "export const page = value;",
+        "",
+      ].join("\n"),
+    });
+    await writeProjectFile(root, "packages/core/src/value.ts", "export const value = 2;\n");
+    const protectedPaths = [
+      "package.json",
+      "packages/core/package.json",
+      "packages/core/src/value.ts",
+      "apps/web/package.json",
+      "apps/web/src/page.ts",
+    ];
+    const contentsBefore = new Map(protectedPaths.map((path) => [
+      path,
+      readFileSync(join(root, path), "utf8"),
+    ]));
+    const repositoryBefore = await captureGitRepositorySnapshot(root);
+
+    const json = cli(["audit", root, "--changed", "--json", "--fail-on", "none"], root);
+    const text = cli([
+      "audit", root, "--changed", "--format", "text", "--fail-on", "none",
+    ], root);
+    const sarif = cli([
+      "audit", root, "--changed", "--format", "sarif", "--fail-on", "none",
+    ], root);
+    const report = JSON.parse(json.stdout);
+    const sarifReport = JSON.parse(sarif.stdout);
+
+    expect(json.status, json.stderr).toBe(0);
+    expect(text.status, text.stderr).toBe(0);
+    expect(sarif.status, sarif.stderr).toBe(0);
+    expect(report.sourceImpact).toMatchObject({
+      mode: "changed",
+      status: "completed",
+      changedSourcePaths: ["packages/core/src/value.ts"],
+      impactedFileCount: 1,
+      impactedProjectIds: ["project:apps/web"],
+      impacts: [{
+        path: "apps/web/src/page.ts",
+        projectId: "project:apps/web",
+        dependencyPath: [
+          "packages/core/src/value.ts",
+          "apps/web/src/page.ts",
+        ],
+      }],
+    });
+    expect(report.auditScope.affectedProjectIds).toEqual(expect.arrayContaining([
+      "project:apps/web",
+      "project:packages/core",
+    ]));
+    expect(report.auditScope.reasons).toContainEqual(expect.objectContaining({
+      projectId: "project:apps/web",
+      reason: "source-dependent",
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "repository/source-graph",
+      status: "completed",
+      scope: "changed",
+    }));
+    expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
+      doctorId === "repository/source-graph"
+    )).toEqual([]);
+    expect(text.stdout).toContain(
+      "Impact: packages/core/src/value.ts -> apps/web/src/page.ts (project project:apps/web)",
+    );
+    expect(sarifReport.runs[0].properties.sourceImpact).toEqual(report.sourceImpact);
+    for (const output of [json.stdout, json.stderr, text.stdout, text.stderr, sarif.stdout, sarif.stderr]) {
+      expect(output).not.toContain(sourceCredential);
+      expect(output).not.toContain("example.invalid");
+    }
+    expect(await captureGitRepositorySnapshot(root)).toEqual(repositoryBefore);
+    for (const [path, contents] of contentsBefore) {
+      expect(readFileSync(join(root, path), "utf8"), path).toBe(contents);
+    }
+  });
+
   it("reports staged, unstaged, and untracked changes from HEAD without mutating the repository", async () => {
     const { root, initialCommit } = await createRepository({
       "staged.txt": "initial\n",
