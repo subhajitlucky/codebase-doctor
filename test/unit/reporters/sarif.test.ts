@@ -59,6 +59,51 @@ function result(): ScanResult {
 }
 
 describe("SARIF reporter", () => {
+  it("maps source-integrity findings through the generic SARIF contract", () => {
+    const sourceResult = result();
+    sourceResult.findings = [{
+      ...sourceResult.findings[0]!,
+      ruleId: "source/import-target-missing",
+      doctorId: "repository/source-integrity",
+      category: "correctness",
+      title: "Internal import target is missing",
+      location: { path: "src/importer.ts", line: 3, column: 9 },
+      evidence: [{
+        type: "file",
+        path: "src/importer.ts",
+        detail: "Expected internal target src/missing.ts (static; proof: relative-explicit).",
+      }],
+      remediation: "Codebase Doctor does not modify files.",
+      fingerprint: "source-fingerprint",
+    }];
+    sourceResult.comparison = {
+      new: ["source-fingerprint"],
+      unchanged: [],
+      resolved: [],
+      newSummary: sourceResult.summary,
+    };
+
+    const serialized = renderSarifReport(sourceResult);
+    const report = JSON.parse(serialized);
+    const finding = report.runs[0].results[0];
+
+    expect(report.version).toBe("2.1.0");
+    expect(finding).toMatchObject({
+      ruleId: "source/import-target-missing",
+      baselineState: "new",
+      partialFingerprints: { codebaseDoctorFingerprint: "source-fingerprint" },
+      locations: [{ physicalLocation: {
+        artifactLocation: { uri: "src/importer.ts" },
+        region: { startLine: 3, startColumn: 9 },
+      } }],
+      properties: { category: "correctness" },
+    });
+    expect(finding.properties.evidence).toEqual([
+      expect.objectContaining({ type: "file", path: "src/importer.ts" }),
+    ]);
+    expect(serialized).not.toContain("sk-test-raw-import-specifier");
+  });
+
   it("maps findings, locations, fingerprints, and baseline state", () => {
     const report = JSON.parse(renderSarifReport(result()));
     const run = report.runs[0];

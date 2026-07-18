@@ -78,6 +78,38 @@ function result(): ScanResult {
 }
 
 describe("JSON reporter", () => {
+  it("preserves safe source-integrity evidence under schema version 1", () => {
+    const sourceResult = result();
+    sourceResult.findings = [{
+      ...sourceResult.findings[0]!,
+      ruleId: "source/import-target-missing",
+      doctorId: "repository/source-integrity",
+      category: "correctness",
+      title: "Internal import target is missing",
+      location: { path: "src/importer.ts", line: 3, column: 9 },
+      evidence: [{
+        type: "file",
+        path: "src/importer.ts",
+        detail: "Expected internal target src/missing.ts (static; proof: relative-explicit).",
+      }],
+      remediation: "Codebase Doctor does not modify files.",
+      fingerprint: "source-fingerprint",
+    }];
+
+    const serialized = renderJsonReport(sourceResult);
+    const parsed = JSON.parse(serialized);
+
+    expect(parsed.schemaVersion).toBe("1");
+    expect(parsed.findings[0]).toMatchObject({
+      ruleId: "source/import-target-missing",
+      doctorId: "repository/source-integrity",
+      location: { path: "src/importer.ts", line: 3, column: 9 },
+      evidence: [{ type: "file", path: "src/importer.ts" }],
+      fingerprint: "source-fingerprint",
+    });
+    expect(serialized).not.toContain("sk-test-raw-import-specifier");
+  });
+
   it("returns valid schema-versioned JSON with every severity count", () => {
     const parsed = JSON.parse(renderJsonReport(result()));
 

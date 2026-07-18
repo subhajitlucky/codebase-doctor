@@ -27,11 +27,50 @@ function finding(fingerprint: string, severity: Severity = "high"): Finding {
   };
 }
 
+function sourceFinding(fingerprint: string): Finding {
+  return {
+    ...finding(fingerprint),
+    ruleId: "source/import-target-missing",
+    doctorId: "repository/source-integrity",
+    category: "correctness",
+    title: "Internal import target is missing",
+    location: { path: "src/importer.ts", line: 3, column: 9 },
+    evidence: [{
+      type: "file",
+      path: "src/importer.ts",
+      detail: "Expected internal target src/missing.ts.",
+    }],
+  };
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(removeTempProject));
 });
 
 describe("baseline comparison", () => {
+  it("classifies source-integrity fingerprints without claiming out-of-scope resolution", () => {
+    const full = compareFindingBaseline(
+      [sourceFinding("same"), sourceFinding("new")],
+      [sourceFinding("same"), sourceFinding("resolved")],
+    );
+    const changed = compareFindingBaseline(
+      [sourceFinding("same"), sourceFinding("new")],
+      [sourceFinding("same"), sourceFinding("out-of-scope")],
+      { includeResolved: false },
+    );
+
+    expect(full).toMatchObject({
+      new: ["new"],
+      unchanged: ["same"],
+      resolved: ["resolved"],
+    });
+    expect(changed).toMatchObject({
+      new: ["new"],
+      unchanged: ["same"],
+      resolved: [],
+    });
+  });
+
   it("classifies fingerprints and summarizes only new findings", () => {
     const comparison = compareFindingBaseline(
       [finding("same"), finding("new-medium", "medium")],

@@ -269,4 +269,25 @@ describe("scan normalization", () => {
     expect(classifyScanExit(healthy, "none")).toBe(0);
     expect(classifyScanExit(operational, "none")).toBe(2);
   });
+
+  it("treats a high source-integrity finding as a finding exit, never an operational error", () => {
+    const missingTarget = {
+      ...finding("high", "source/import-target-missing"),
+      doctorId: "repository/source-integrity",
+      category: "correctness",
+      title: "Internal import target is missing",
+    } satisfies Finding;
+    const result = normalizeScanResult("/repo", [], fullAuditScope(), [
+      run("repository/source-integrity", {
+        status: "completed",
+        findings: [missingTarget],
+        durationMs: 0,
+      }),
+    ]);
+
+    expect(result.schemaVersion).toBe("1");
+    expect(result.doctorRuns[0]).toMatchObject({ status: "completed", error: null });
+    expect(classifyScanExit(result, "high")).toBe(1);
+    expect(classifyScanExit(result, "none")).toBe(0);
+  });
 });

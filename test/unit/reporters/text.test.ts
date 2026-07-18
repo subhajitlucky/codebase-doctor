@@ -93,6 +93,36 @@ function result(): ScanResult {
 }
 
 describe("text reporter", () => {
+  it("renders source-integrity evidence and external-only repair guidance safely", () => {
+    const sourceResult = result();
+    sourceResult.findings = [{
+      ...sourceResult.findings[0]!,
+      ruleId: "source/import-target-missing",
+      doctorId: "repository/source-integrity",
+      category: "correctness",
+      title: "Internal import target is missing",
+      message: "A statically resolved internal reference has no target.",
+      location: { path: "src/importer.ts", line: 3, column: 9 },
+      evidence: [{
+        type: "file",
+        path: "src/importer.ts",
+        detail: "Expected internal target src/missing.ts (static; proof: relative-explicit).",
+      }],
+      remediationConstraints: ["Only an authorized human or external agent may change files."],
+      remediation: "Codebase Doctor does not modify files.",
+      fingerprint: "source-fingerprint",
+    }];
+
+    const report = renderTextReport(sourceResult);
+
+    expect(report).toContain("[HIGH] Internal import target is missing");
+    expect(report).toContain("src/importer.ts:3:9");
+    expect(report).toContain("Expected internal target src/missing.ts");
+    expect(report).toContain("Only an authorized human or external agent may change files.");
+    expect(report).toContain("Codebase Doctor does not modify files.");
+    expect(report).not.toContain("sk-test-raw-import-specifier");
+  });
+
   it("shows projects, execution support, and doctor status", () => {
     const report = renderTextReport(result());
 
