@@ -122,8 +122,9 @@ export function parseSourceImports(path: string, source: string): SourceImportPa
     if (type === "ImportDeclaration") {
       addImport(isTypeOnlyImport(node) ? "type-only" : "static", node, objectValue(node.source));
     } else if (type === "ExportNamedDeclaration" || type === "ExportAllDeclaration") {
-      if (node.source !== undefined) {
-        addImport(isTypeOnlyExport(node) ? "type-only" : "re-export", node, objectValue(node.source));
+      const sourceNode = objectValue(node.source);
+      if (sourceNode !== undefined) {
+        addImport(isTypeOnlyExport(node) ? "type-only" : "re-export", node, sourceNode);
       }
     } else if (type === "ImportExpression") {
       addImport("dynamic-literal", node, objectValue(node.source));

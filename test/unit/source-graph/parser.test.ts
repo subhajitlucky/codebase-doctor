@@ -81,6 +81,16 @@ describe("source import parser", () => {
     expect(result.dynamicBoundaryCount).toBe(2);
   });
 
+  it("does not treat local export declarations as dynamic boundaries", () => {
+    const result = parseSourceImports(
+      "src/local.ts",
+      `export const value = true; export function helper() { return value; }`,
+    );
+
+    expect(result.imports).toEqual([]);
+    expect(result.dynamicBoundaryCount).toBe(0);
+  });
+
   it("turns malformed syntax into a fixed path-only limitation", () => {
     const secret = "credential-M7n9B2v8C4x6Z1l3K5j0HgFd";
     const result = parseSourceImports(

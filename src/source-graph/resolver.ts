@@ -31,7 +31,11 @@ export type SourceResolution =
       readonly limitations: readonly string[];
     }
   | {
-      readonly kind: "external" | "unsupported";
+      readonly kind: "external";
+      readonly limitations: readonly string[];
+    }
+  | {
+      readonly kind: "unsupported";
       readonly limitations: readonly string[];
     };
 
