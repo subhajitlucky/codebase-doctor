@@ -30,6 +30,15 @@ export interface SourceResolverContext {
   readonly generatedTargetEvidence?: GeneratedTargetEvidence;
 }
 
+export interface SourceResolverIndex extends SourceResolverContext {
+  readonly sourcePaths: ReadonlySet<string>;
+  readonly projectsByPackageName: ReadonlyMap<string, readonly DetectedProject[]>;
+  readonly manifestByProjectId: ReadonlyMap<
+    string,
+    Extract<ManifestRecord, { status: "valid" }>
+  >;
+}
+
 export type SourceResolution =
   | {
       readonly kind: "internal";
@@ -98,10 +107,41 @@ function candidatePaths(basePath: string, target: string, importerPath: string):
   return [...new Set(candidates)].filter(isSupportedSourcePath);
 }
 
-function existingSourcePaths(context: SourceResolverContext): ReadonlySet<string> {
-  return new Set(context.files
-    .filter(({ kind, path }) => kind === "file" && isSupportedSourcePath(path))
-    .map(({ path }) => path));
+export function createSourceResolverIndex(
+  context: SourceResolverContext,
+): SourceResolverIndex {
+  const sourcePaths = new Set<string>();
+  for (const file of context.files) {
+    const kind = file.kind;
+    const path = file.path;
+    if (kind === "file" && isSupportedSourcePath(path)) sourcePaths.add(path);
+  }
+  const projectsByPackageName = new Map<string, DetectedProject[]>();
+  for (const project of context.projects) {
+    if (project.packageName === undefined) continue;
+    const projects = projectsByPackageName.get(project.packageName) ?? [];
+    projects.push(project);
+    projectsByPackageName.set(project.packageName, projects);
+  }
+  for (const projects of projectsByPackageName.values()) {
+    projects.sort((left, right) => left.id.localeCompare(right.id));
+  }
+  const manifestByProjectId = new Map<
+    string,
+    Extract<ManifestRecord, { status: "valid" }>
+  >();
+  for (const project of context.projects) {
+    const manifest = context.manifests.find((entry): entry is Extract<ManifestRecord, { status: "valid" }> =>
+      entry.status === "valid" && project.manifestPaths.includes(entry.path)
+    );
+    if (manifest !== undefined) manifestByProjectId.set(project.id, manifest);
+  }
+  return {
+    ...context,
+    sourcePaths,
+    projectsByPackageName,
+    manifestByProjectId,
+  };
 }
 
 function relativeTargetLimitation(
@@ -206,15 +246,6 @@ function packageIdentity(specifier: string): { name: string; subpath: string } |
   };
 }
 
-function projectManifest(
-  project: DetectedProject,
-  manifests: readonly ManifestRecord[],
-): Extract<ManifestRecord, { status: "valid" }> | undefined {
-  return manifests.find((manifest): manifest is Extract<ManifestRecord, { status: "valid" }> =>
-    manifest.status === "valid" && project.manifestPaths.includes(manifest.path)
-  );
-}
-
 function stringEntry(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
@@ -260,14 +291,12 @@ function resolveWorkspace(
   importerPath: string,
   specifier: string,
   reference: SafeImportReference,
-  context: SourceResolverContext,
+  context: SourceResolverIndex,
   sourcePaths: ReadonlySet<string>,
 ): SourceResolution | undefined {
   const identity = packageIdentity(specifier);
   if (identity === undefined) return undefined;
-  const projects = context.projects
-    .filter(({ packageName }) => packageName === identity.name)
-    .sort((left, right) => left.id.localeCompare(right.id));
+  const projects = context.projectsByPackageName.get(identity.name) ?? [];
   if (projects.length === 0) return undefined;
   if (projects.length > 1) {
     return {
@@ -277,7 +306,7 @@ function resolveWorkspace(
   }
   const project = projects[0]!;
   const entry = workspaceEntry(
-    projectManifest(project, context.manifests),
+    context.manifestByProjectId.get(project.id),
     identity.subpath,
     reference.kind === "type-only",
   );
@@ -315,8 +344,9 @@ function resolveWorkspace(
 export function resolveSourceImport(
   importerPath: string,
   reference: SafeImportReference,
-  context: SourceResolverContext,
+  context: SourceResolverContext | SourceResolverIndex,
 ): SourceResolution {
+  const index = "sourcePaths" in context ? context : createSourceResolverIndex(context);
   const specifier = importSpecifier(reference);
   if (specifier === undefined) {
     return {
@@ -324,7 +354,7 @@ export function resolveSourceImport(
       limitations: [`${importerPath}: source import value is unavailable.`],
     };
   }
-  const sourcePaths = existingSourcePaths(context);
+  const sourcePaths = index.sourcePaths;
   if (specifier.startsWith(".")) {
     const candidates = candidatePaths(posix.dirname(importerPath), specifier, importerPath);
     if (candidates === undefined) {
@@ -345,8 +375,8 @@ export function resolveSourceImport(
       : classifyMissingRelativeTarget(
           importerPath,
           resolved.targetPath,
-          context.manifests,
-          context.generatedTargetEvidence ?? { literalIgnoredPrefixes: [] },
+          index.manifests,
+          index.generatedTargetEvidence ?? { literalIgnoredPrefixes: [] },
         );
     return {
       kind: "internal",
@@ -369,9 +399,9 @@ export function resolveSourceImport(
     return { kind: "external", limitations: [] };
   }
 
-  const alias = resolveAlias(importerPath, specifier, context, sourcePaths);
+  const alias = resolveAlias(importerPath, specifier, index, sourcePaths);
   if (alias !== undefined) return alias;
-  const workspace = resolveWorkspace(importerPath, specifier, reference, context, sourcePaths);
+  const workspace = resolveWorkspace(importerPath, specifier, reference, index, sourcePaths);
   if (workspace !== undefined) return workspace;
   return { kind: "external", limitations: [] };
 }

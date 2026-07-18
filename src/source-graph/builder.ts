@@ -8,7 +8,10 @@ import {
   type SourceAliasConfigOptions,
 } from "./config.js";
 import { parseSourceImports } from "./parser.js";
-import { resolveSourceImport } from "./resolver.js";
+import {
+  createSourceResolverIndex,
+  resolveSourceImport,
+} from "./resolver.js";
 import { loadGeneratedTargetEvidence } from "./generated-targets.js";
 import {
   DEFAULT_MAX_SOURCE_BYTES,
@@ -105,6 +108,13 @@ export async function buildSourceGraph(
       : { maxExtendsDepth: options.maxExtendsDepth },
   );
   const generatedTargets = await loadGeneratedTargetEvidence(inventory, readFile);
+  const resolver = createSourceResolverIndex({
+    files: inventory.files,
+    manifests,
+    projects,
+    configs: config.configs,
+    generatedTargetEvidence: generatedTargets.evidence,
+  });
   const limitations = new Set([
     ...selection.limitations,
     ...config.limitations,
@@ -149,13 +159,7 @@ export async function buildSourceGraph(
     dynamicBoundaryCount += parsed.dynamicBoundaryCount;
 
     for (const reference of parsed.imports) {
-      const resolution = resolveSourceImport(file.path, reference, {
-        files: inventory.files,
-        manifests,
-        projects,
-        configs: config.configs,
-        generatedTargetEvidence: generatedTargets.evidence,
-      });
+      const resolution = resolveSourceImport(file.path, reference, resolver);
       for (const limitation of resolution.limitations) limitations.add(limitation);
       if (resolution.kind === "external") {
         externalBoundaryCount += 1;
