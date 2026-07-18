@@ -1,3 +1,8 @@
+import type {
+  LimitationGroup,
+  OmittedRecordSummary,
+} from "../core/bounded-evidence.js";
+
 export const SOURCE_IMPORT_KINDS = [
   "static",
   "re-export",
@@ -72,4 +77,6 @@ export interface SourceImpact {
   readonly impacts: readonly SourceImpactRecord[];
   readonly omittedImpactCount: number;
   readonly limitations: readonly string[];
+  readonly limitationGroups?: readonly LimitationGroup[];
+  readonly limitationSummary?: OmittedRecordSummary;
 }

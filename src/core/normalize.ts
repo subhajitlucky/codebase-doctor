@@ -22,6 +22,12 @@ import {
   type DomainCoverage,
   type DomainCoverageEvidence,
 } from "./domain-coverage.js";
+import {
+  boundLimitations,
+  boundRecords,
+  MAX_COVERAGE_RECORDS,
+  type OmittedRecordSummary,
+} from "./bounded-evidence.js";
 
 export interface DoctorRunRecord {
   doctorId: string;
@@ -45,11 +51,13 @@ export interface ScanResult {
   findings: readonly Finding[];
   summary: FindingSummary;
   coverage?: readonly AuditCoverage[];
+  coverageSummary?: OmittedRecordSummary;
   comparison?: FindingComparison;
   sourceImpact?: SourceImpact;
 }
 
 function normalizeSourceImpact(sourceImpact: SourceImpact): SourceImpact {
+  const boundedLimitations = boundLimitations(sourceImpact.limitations);
   return {
     ...sourceImpact,
     changedSourcePaths: [...new Set(sourceImpact.changedSourcePaths)].sort(),
@@ -64,7 +72,13 @@ function normalizeSourceImpact(sourceImpact: SourceImpact): SourceImpact {
         left.dependencyPath.join("\0").localeCompare(right.dependencyPath.join("\0")) ||
         (left.projectId ?? "").localeCompare(right.projectId ?? "")
       ),
-    limitations: [...new Set(sourceImpact.limitations)].sort(),
+    limitations: boundedLimitations.limitations,
+    ...(boundedLimitations.groups.length === 0
+      ? {}
+      : { limitationGroups: boundedLimitations.groups }),
+    ...(boundedLimitations.summary.omitted === 0
+      ? {}
+      : { limitationSummary: boundedLimitations.summary }),
   };
 }
 
@@ -107,13 +121,37 @@ export function normalizeScanResult(
   const doctorRuns = registeredResults
     .map(doctorRun)
     .sort((left, right) => left.doctorId < right.doctorId ? -1 : left.doctorId > right.doctorId ? 1 : 0);
-  const coverage = registeredResults
+  const normalizedCoverage = registeredResults
     .flatMap(({ result }) => result.coverage ?? [])
-    .map((entry) => ({ ...entry, limitations: [...entry.limitations].sort() }))
+    .map((entry): AuditCoverage => {
+      const bounded = boundLimitations(entry.limitations);
+      return {
+        ...entry,
+        limitations: bounded.limitations,
+        ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
+        ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+      };
+    })
     .sort((left, right) => {
       const moduleOrder = left.moduleId.localeCompare(right.moduleId);
       return moduleOrder !== 0 ? moduleOrder : left.scope.localeCompare(right.scope);
     });
+  const coverageStatusPriority: Record<AuditCoverage["status"], number> = {
+    failed: 0,
+    partial: 1,
+    unsupported: 2,
+    skipped: 3,
+    "not-selected": 4,
+    completed: 5,
+    "not-applicable": 6,
+  };
+  const prioritizeCoverage = normalizedCoverage.length > MAX_COVERAGE_RECORDS;
+  const boundedCoverage = boundRecords(
+    normalizedCoverage,
+    (entry) => `${prioritizeCoverage ? coverageStatusPriority[entry.status] : 0}\0` +
+      `${entry.moduleId}\0${entry.scope}`,
+  );
+  const coverage = boundedCoverage.records;
   const normalizedAuditScope: AuditScope = {
     mode: auditScope.mode,
     base: auditScope.base === null ? null : { ...auditScope.base },
@@ -147,13 +185,27 @@ export function normalizeScanResult(
         (left.projectId ?? "").localeCompare(right.projectId ?? "")
       ),
       modules: entry.modules
-        .map((module) => ({
-          ...module,
-          scopes: [...new Set(module.scopes)].sort(),
-          limitations: [...new Set(module.limitations)].sort(),
-        }))
+        .map((module) => {
+          const scopes = boundRecords([...new Set(module.scopes)], (scope) => scope);
+          const bounded = boundLimitations(module.limitations);
+          return {
+            ...module,
+            scopes: scopes.records,
+            ...(scopes.summary.omitted === 0 ? {} : { scopeSummary: scopes.summary }),
+            limitations: bounded.limitations,
+            ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
+            ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+          };
+        })
         .sort((left, right) => left.moduleId.localeCompare(right.moduleId)),
-      limitations: [...new Set(entry.limitations)].sort(),
+      ...(() => {
+        const bounded = boundLimitations(entry.limitations);
+        return {
+          limitations: bounded.limitations,
+          ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
+          ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+        };
+      })(),
     }))
     .sort((left, right) =>
       AUDIT_DOMAINS.indexOf(left.domain) - AUDIT_DOMAINS.indexOf(right.domain)
@@ -173,6 +225,9 @@ export function normalizeScanResult(
     findings,
     summary: summarizeFindings(findings),
     ...(coverage.length === 0 ? {} : { coverage }),
+    ...(boundedCoverage.summary.omitted === 0
+      ? {}
+      : { coverageSummary: boundedCoverage.summary }),
     ...(sourceImpact === undefined ? {} : { sourceImpact: normalizeSourceImpact(sourceImpact) }),
   };
 }

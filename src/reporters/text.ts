@@ -1,6 +1,7 @@
 import type { Finding, Severity } from "../core/findings.js";
 import type { ScanResult } from "../core/normalize.js";
 import type { DomainCoverageEvidence } from "../core/domain-coverage.js";
+import type { LimitationGroup } from "../core/bounded-evidence.js";
 
 export interface TextReportOptions {
   color?: boolean;
@@ -17,6 +18,19 @@ const SEVERITY_COLORS: Record<Severity, number> = {
 };
 const MAX_SCOPE_LIST_ITEMS = 20;
 const MAX_SOURCE_IMPACT_ITEMS = 20;
+
+function limitationGroupLines(
+  groups: readonly LimitationGroup[] | undefined,
+  indent: string,
+): string[] {
+  return (groups ?? []).flatMap((group) => [
+    `${indent}Limitation group: ${group.reason} (${group.total} paths)`,
+    ...group.samplePaths.map((path) => `${indent}  Sample path: ${path}`),
+    ...(group.omittedPathCount === 0
+      ? []
+      : [`${indent}  ${group.omittedPathCount} additional paths omitted for this limitation reason.`]),
+  ]);
+}
 
 function severityLabel(
   severity: Severity,
@@ -123,6 +137,7 @@ function sourceImpactLines(result: ScanResult): string[] {
   for (const limitation of impact.limitations) {
     lines.push(`Source impact limitation: ${limitation}`);
   }
+  lines.push(...limitationGroupLines(impact.limitationGroups, ""));
   return lines;
 }
 
@@ -183,14 +198,22 @@ export function renderTextReport(
     for (const module of coverage.modules) {
       const scopes = module.scopes.length === 0 ? "" : `; scopes: ${module.scopes.join(", ")}`;
       lines.push(`  Module: ${module.moduleId} — ${module.status}${scopes}`);
+      if (module.scopeSummary?.omitted) {
+        lines.push(
+          `    Module scopes: ${module.scopeSummary.emitted} of ${module.scopeSummary.total} emitted; ` +
+          `${module.scopeSummary.omitted} omitted.`,
+        );
+      }
       for (const limitation of module.limitations) {
         lines.push(`    Module limitation: ${limitation}`);
       }
+      lines.push(...limitationGroupLines(module.limitationGroups, "    "));
     }
     for (const evidence of coverage.evidence) lines.push(domainEvidenceLine(evidence));
     for (const limitation of coverage.limitations) {
       lines.push(`  Limitation: ${limitation}`);
     }
+    lines.push(...limitationGroupLines(coverage.limitationGroups, "  "));
   }
 
   lines.push("", "Doctor runs");
@@ -210,6 +233,12 @@ export function renderTextReport(
 
   if (result.coverage !== undefined) {
     lines.push("", "Audit coverage");
+    if (result.coverageSummary !== undefined) {
+      lines.push(
+        `Audit coverage records: ${result.coverageSummary.emitted} of ` +
+        `${result.coverageSummary.total} emitted; ${result.coverageSummary.omitted} omitted.`,
+      );
+    }
     for (const coverage of result.coverage) {
       lines.push(
         `${coverage.moduleId}: ${coverage.status} (${coverage.scope}; ` +
@@ -219,6 +248,7 @@ export function renderTextReport(
       for (const limitation of coverage.limitations) {
         lines.push(`  Limitation: ${limitation}`);
       }
+      lines.push(...limitationGroupLines(coverage.limitationGroups, "  "));
     }
   }
 

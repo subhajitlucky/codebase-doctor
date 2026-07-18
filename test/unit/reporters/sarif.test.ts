@@ -210,4 +210,14 @@ describe("SARIF reporter", () => {
     expect(run.properties.auditScope).toEqual(covered.auditScope);
     expect(run.properties.sourceImpact).toEqual(covered.sourceImpact);
   });
+
+  it("stores bounded coverage totals in SARIF run properties", () => {
+    const bounded: ScanResult = {
+      ...result(),
+      coverageSummary: { total: 1_500, emitted: 200, omitted: 1_300 },
+    };
+    const properties = JSON.parse(renderSarifReport(bounded)).runs[0].properties;
+
+    expect(properties.coverageSummary).toEqual({ total: 1_500, emitted: 200, omitted: 1_300 });
+  });
 });

@@ -381,4 +381,34 @@ describe("text reporter", () => {
     expect(report).toContain("database/sql-rls: partial");
     expect(report).toContain("Dynamic SQL was not evaluated.");
   });
+
+  it("renders bounded coverage and limitation omission totals", () => {
+    const covered: ScanResult = {
+      ...result(),
+      coverageSummary: { total: 1_500, emitted: 200, omitted: 1_300 },
+      coverage: [{
+        moduleId: "repository/source-graph",
+        status: "partial",
+        scope: "full",
+        filesExamined: 1_500,
+        statementsExamined: 1_500,
+        statementsRecognized: 0,
+        limitations: [
+          "relative source target is fixture-controlled. 500 paths observed; 495 paths omitted after deterministic sampling.",
+        ],
+        limitationGroups: [{
+          reason: "relative source target is fixture-controlled.",
+          total: 500,
+          samplePaths: ["fixtures/a.ts", "fixtures/b.ts"],
+          omittedPathCount: 498,
+        }],
+        limitationSummary: { total: 500, emitted: 2, omitted: 498 },
+      }],
+    };
+    const report = renderTextReport(covered);
+
+    expect(report).toContain("Audit coverage records: 200 of 1500 emitted; 1300 omitted.");
+    expect(report).toContain("Sample path: fixtures/a.ts");
+    expect(report).toContain("498 additional paths omitted for this limitation reason.");
+  });
 });

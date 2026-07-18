@@ -163,6 +163,31 @@ describe("JSON reporter", () => {
     expect(parsed.domainCoverage).toEqual(result().domainCoverage);
   });
 
+  it("preserves additive bounded-evidence totals under schema version 1", () => {
+    const bounded: ScanResult = {
+      ...result(),
+      coverageSummary: { total: 1_500, emitted: 200, omitted: 1_300 },
+      coverage: [{
+        ...result().coverage![0]!,
+        limitationGroups: [{
+          reason: "relative source target is fixture-controlled.",
+          total: 500,
+          samplePaths: ["fixtures/a.ts"],
+          omittedPathCount: 499,
+        }],
+        limitationSummary: { total: 500, emitted: 1, omitted: 499 },
+      }],
+    };
+    const parsed = JSON.parse(renderJsonReport(bounded));
+
+    expect(parsed.schemaVersion).toBe("1");
+    expect(parsed.coverageSummary).toEqual({ total: 1_500, emitted: 200, omitted: 1_300 });
+    expect(parsed.coverage[0].limitationGroups[0]).toMatchObject({
+      total: 500,
+      omittedPathCount: 499,
+    });
+  });
+
   it("keeps schema version 1 while emitting optional bounded source impact", () => {
     const withImpact: ScanResult = {
       ...result(),

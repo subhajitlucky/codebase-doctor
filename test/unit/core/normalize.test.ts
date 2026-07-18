@@ -154,6 +154,33 @@ describe("scan normalization", () => {
     ]);
   });
 
+  it("bounds large coverage collections while preserving exact omitted counts", () => {
+    const coverage = Array.from({ length: 1_500 }, (_, index) => ({
+      moduleId: "security/dependencies",
+      status: index === 1_499 ? "partial" as const : "not-applicable" as const,
+      scope: `full:project-${index.toString().padStart(4, "0")}`,
+      filesExamined: 0,
+      statementsExamined: 0,
+      statementsRecognized: 0,
+      limitations: [],
+    }));
+    const result = normalizeScanResult("/repo", [], fullAuditScope(), [
+      run("security/dependencies", {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage,
+      }),
+    ]);
+
+    expect(result.coverage).toHaveLength(200);
+    expect(result.coverageSummary).toEqual({ total: 1_500, emitted: 200, omitted: 1_300 });
+    expect(result.coverage).toContainEqual(expect.objectContaining({
+      status: "partial",
+      scope: "full:project-1499",
+    }));
+  });
+
   it("copies and deterministically sorts audit scope without mutating the caller", () => {
     const scope: AuditScope = {
       mode: "changed",

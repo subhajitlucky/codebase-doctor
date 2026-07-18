@@ -1,6 +1,10 @@
 import type { RegisteredDoctorResult } from "./doctor.js";
 import type { CommandPlan } from "../execution/types.js";
 import type { ProjectSnapshot } from "../workspace/types.js";
+import type {
+  LimitationGroup,
+  OmittedRecordSummary,
+} from "./bounded-evidence.js";
 
 export const AUDIT_DOMAINS = [
   "repository",
@@ -38,7 +42,10 @@ export interface DomainModuleCoverage {
   moduleId: string;
   status: DomainCoverageStatus;
   scopes: readonly string[];
+  scopeSummary?: OmittedRecordSummary;
   limitations: readonly string[];
+  limitationGroups?: readonly LimitationGroup[];
+  limitationSummary?: OmittedRecordSummary;
 }
 
 export interface DomainCoverage {
@@ -49,6 +56,8 @@ export interface DomainCoverage {
   evidence: readonly DomainCoverageEvidence[];
   modules: readonly DomainModuleCoverage[];
   limitations: readonly string[];
+  limitationGroups?: readonly LimitationGroup[];
+  limitationSummary?: OmittedRecordSummary;
 }
 
 export interface DomainCoveragePlanningInput {

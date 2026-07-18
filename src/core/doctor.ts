@@ -1,6 +1,10 @@
 import type { Capability } from "./capabilities.js";
 import type { Finding } from "./findings.js";
 import type { ProjectSnapshot } from "../workspace/types.js";
+import type {
+  LimitationGroup,
+  OmittedRecordSummary,
+} from "./bounded-evidence.js";
 
 export interface OperationalError {
   code: string;
@@ -39,6 +43,8 @@ export interface AuditCoverage {
   statementsExamined: number;
   statementsRecognized: number;
   limitations: readonly string[];
+  limitationGroups?: readonly LimitationGroup[];
+  limitationSummary?: OmittedRecordSummary;
 }
 
 export interface DoctorResult {
