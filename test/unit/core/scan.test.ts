@@ -374,7 +374,10 @@ describe("scan orchestration", () => {
     expect(audited.coverage).toContainEqual(expect.objectContaining({
       moduleId: "security/dependencies",
       status: "partial",
-      limitations: ["package.json: valid package manifest is unavailable."],
+      limitations: [
+        ".: npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
+        "package.json: valid package manifest is unavailable.",
+      ],
     }));
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "database/sql-rls",
