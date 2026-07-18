@@ -1,5 +1,7 @@
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { chmod, mkdir, rm, symlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { discoverGitChanges, GitScopeError } from '../../src/scope/git.js';
 import {
@@ -13,6 +15,45 @@ import {
 } from '../helpers/temp-project.js';
 
 const temporaryRoots: string[] = [];
+const repositoryRoot = process.cwd();
+
+function isolatedGitEnvironment(root: string): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    DATABASE_URL: '',
+    SUPABASE_DB_URL: '',
+  };
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith('GIT_CONFIG_')) delete environment[name];
+  }
+  environment.GIT_CONFIG_NOSYSTEM = '1';
+  environment.GIT_CONFIG_GLOBAL = join(root, '.codebase-doctor-empty-global-config');
+  return environment;
+}
+
+function auditCli(root: string, format: 'json' | 'text' | 'sarif') {
+  return spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      resolve(repositoryRoot, 'src', 'cli.ts'),
+      'audit',
+      root,
+      '--changed',
+      '--format',
+      format,
+      '--fail-on',
+      'none',
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      timeout: 15_000,
+      env: isolatedGitEnvironment(root),
+    },
+  );
+}
 
 async function createRepository(
   files?: Readonly<Record<string, string>>,
@@ -200,4 +241,85 @@ describe('discoverGitChanges', () => {
 
     await expect(commitInitialContent(root)).resolves.toMatch(/^[0-9a-f]{40}$/u);
   });
+});
+
+describe('changed source-integrity audit', () => {
+  it.each([
+    ['deleted', async (root: string) => {
+      await rm(join(root, 'src/target.ts'));
+    }],
+    ['renamed', async (root: string) => {
+      await runGitFixtureCommand(root, [
+        'mv', '--', 'src/target.ts', 'src/renamed-target.ts',
+      ]);
+    }],
+  ] as const)(
+    'selects an unchanged importer when its explicit target is %s without reporting an unrelated old miss',
+    async (changeKind, applyChange) => {
+      const { root } = await createRepository({
+        'package.json': JSON.stringify({
+          name: 'changed-source-integrity',
+          private: true,
+        }, null, 2),
+        'src/importer.ts': [
+          'import { value } from "./target.ts";',
+          'export const imported = value;',
+          '',
+        ].join('\n'),
+        'src/target.ts': 'export const value = 1;\n',
+        'src/unrelated.ts': 'import "./unrelated-old-missing.ts";\n',
+      });
+      await applyChange(root);
+      const protectedContents = new Map([
+        ['src/importer.ts', readFileSync(join(root, 'src/importer.ts'))],
+        ['src/unrelated.ts', readFileSync(join(root, 'src/unrelated.ts'))],
+      ]);
+      if (changeKind === 'renamed') {
+        protectedContents.set(
+          'src/renamed-target.ts',
+          readFileSync(join(root, 'src/renamed-target.ts')),
+        );
+      }
+      const before = await captureGitRepositorySnapshot(root);
+
+      const json = auditCli(root, 'json');
+      const text = auditCli(root, 'text');
+      const sarif = auditCli(root, 'sarif');
+      const report = JSON.parse(json.stdout);
+      const sarifReport = JSON.parse(sarif.stdout);
+      const findings = report.findings.filter(
+        ({ doctorId }: { doctorId: string }) => doctorId === 'repository/source-integrity',
+      );
+
+      expect(json.status, json.stderr).toBe(0);
+      expect(text.status, text.stderr).toBe(0);
+      expect(sarif.status, sarif.stderr).toBe(0);
+      expect(report.auditScope.changes).toContainEqual(expect.objectContaining({
+        status: changeKind,
+        path: changeKind === 'renamed' ? 'src/renamed-target.ts' : 'src/target.ts',
+      }));
+      expect(findings).toEqual([
+        expect.objectContaining({
+          ruleId: 'source/import-target-missing',
+          location: expect.objectContaining({ path: 'src/importer.ts' }),
+          evidence: [expect.objectContaining({
+            detail: expect.stringContaining('src/target.ts'),
+          })],
+        }),
+      ]);
+      expect(report.coverage).toContainEqual(expect.objectContaining({
+        moduleId: 'repository/source-integrity',
+        scope: 'changed',
+        statementsRecognized: 1,
+      }));
+      expect(text.stdout.match(/Internal import target is missing/g)).toHaveLength(1);
+      expect(sarifReport.runs[0].results.filter(
+        ({ ruleId }: { ruleId: string }) => ruleId === 'source/import-target-missing',
+      )).toHaveLength(1);
+      expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+      for (const [path, contents] of protectedContents) {
+        expect(readFileSync(join(root, path)), path).toEqual(contents);
+      }
+    },
+  );
 });

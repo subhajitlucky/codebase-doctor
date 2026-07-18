@@ -425,6 +425,158 @@ describe("audit CLI", () => {
     }
   });
 
+  it("reports only provable missing source targets in every format without mutation or disclosure", async () => {
+    const sourceCredential = generatedToken("github_pat_");
+    const privateAlias = `@private/${sourceCredential}`;
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        name: "source-integrity-workspace",
+        private: true,
+        workspaces: ["packages/*"],
+      }, null, 2),
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@single/*": ["src/alias/*.ts"],
+            "@ambiguous/*": ["src/first/*.ts", "src/second/*.ts"],
+            [privateAlias]: ["src/alias/private-missing.ts"],
+          },
+        },
+      }, null, 2),
+      "packages/core/package.json": JSON.stringify({
+        name: "@workspace/core",
+        private: true,
+        module: "src/missing-entry.ts",
+      }, null, 2),
+      "packages/conditional/package.json": JSON.stringify({
+        name: "@workspace/conditional",
+        private: true,
+        exports: {
+          ".": {
+            import: "./src/import.ts",
+            require: "./src/require.ts",
+          },
+        },
+      }, null, 2),
+      "src/existing.ts": "export const existing = true;\n",
+      "src/relative.ts": [
+        'import "./existing.ts";',
+        'import "./relative-missing.ts";',
+        'import "./extensionless-missing";',
+        'import data from "./data.json";',
+        "export { existing } from \"./existing.ts\";",
+        "void data;",
+        "",
+      ].join("\n"),
+      "src/alias.ts": [
+        'import "@single/missing";',
+        'import "@ambiguous/missing";',
+        `import "${privateAlias}";`,
+        "",
+      ].join("\n"),
+      "src/workspace.ts": [
+        'import "@workspace/core";',
+        'import "@workspace/conditional";',
+        'import "external-package";',
+        'import "custom:loader";',
+        `import "https://user:${sourceCredential}@example.invalid/external.js";`,
+        "",
+      ].join("\n"),
+      "src/dynamic.ts": "const path = './dynamic-missing.ts'; void import(path);\n",
+      "src/cycle-a.ts": 'import "./cycle-b.ts"; export const a = true;\n',
+      "src/cycle-b.ts": 'import "./cycle-a.ts"; export const b = true;\n',
+      "src/malformed.ts": "import {\n",
+      "src/data.json": "{}\n",
+    });
+    const protectedPaths = [
+      "package.json",
+      "tsconfig.json",
+      "packages/core/package.json",
+      "packages/conditional/package.json",
+      "src/existing.ts",
+      "src/relative.ts",
+      "src/alias.ts",
+      "src/workspace.ts",
+      "src/dynamic.ts",
+      "src/cycle-a.ts",
+      "src/cycle-b.ts",
+      "src/malformed.ts",
+      "src/data.json",
+    ];
+    const contentsBefore = new Map(protectedPaths.map((path) => [
+      path,
+      readFileSync(join(root, path)),
+    ]));
+    const repositoryBefore = await captureGitRepositorySnapshot(root);
+
+    const json = cli(["audit", root, "--json", "--fail-on", "none"], root);
+    const text = cli(["audit", root, "--format", "text", "--fail-on", "none"], root);
+    const sarif = cli(["audit", root, "--format", "sarif", "--fail-on", "none"], root);
+    const report = JSON.parse(json.stdout);
+    const sarifReport = JSON.parse(sarif.stdout);
+    const integrityFindings = report.findings.filter(
+      ({ doctorId }: { doctorId: string }) => doctorId === "repository/source-integrity",
+    );
+
+    expect(json.status, json.stderr).toBe(0);
+    expect(text.status, text.stderr).toBe(0);
+    expect(sarif.status, sarif.stderr).toBe(0);
+    expect(integrityFindings.map((finding: { location: { path: string } }) =>
+      finding.location.path
+    )).toEqual([
+      "src/alias.ts",
+      "src/alias.ts",
+      "src/relative.ts",
+      "src/workspace.ts",
+    ]);
+    expect(integrityFindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ruleId: "source/import-target-missing",
+        evidence: [expect.objectContaining({ detail: expect.stringContaining(
+          "src/relative-missing.ts",
+        ) })],
+      }),
+      expect.objectContaining({
+        evidence: [expect.objectContaining({ detail: expect.stringContaining(
+          "src/alias/private-missing.ts",
+        ) })],
+      }),
+      expect.objectContaining({
+        evidence: [expect.objectContaining({ detail: expect.stringContaining(
+          "packages/core/src/missing-entry.ts",
+        ) })],
+      }),
+    ]));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "repository/source-integrity",
+      status: "partial",
+      scope: "full",
+      statementsRecognized: 4,
+    }));
+    expect(text.stdout.match(/Internal import target is missing/g)).toHaveLength(4);
+    expect(sarifReport.runs[0].results.filter(
+      ({ ruleId }: { ruleId: string }) => ruleId === "source/import-target-missing",
+    )).toHaveLength(4);
+    for (const output of [
+      json.stdout,
+      json.stderr,
+      text.stdout,
+      text.stderr,
+      sarif.stdout,
+      sarif.stderr,
+      JSON.stringify(report.coverage),
+      JSON.stringify(integrityFindings.map(({ fingerprint }: { fingerprint: string }) => fingerprint)),
+    ]) {
+      expect(output).not.toContain(sourceCredential);
+      expect(output).not.toContain("example.invalid");
+    }
+    expect(await captureGitRepositorySnapshot(root)).toEqual(repositoryBefore);
+    for (const [path, contents] of contentsBefore) {
+      expect(readFileSync(join(root, path)), path).toEqual(contents);
+    }
+  });
+
   it("reports staged, unstaged, and untracked changes from HEAD without mutating the repository", async () => {
     const { root, initialCommit } = await createRepository({
       "staged.txt": "initial\n",
