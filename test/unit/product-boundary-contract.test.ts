@@ -339,12 +339,12 @@ describe("independent auditor product boundary", () => {
     }
 
     const changelog = await readFile("CHANGELOG.md", "utf8");
-    const unreleased = changelog.slice(
-      changelog.indexOf("## [Unreleased]"),
+    const release = changelog.slice(
+      changelog.indexOf("## [0.1.5]"),
       changelog.indexOf("## [0.1.4]"),
     );
-    expect(unreleased).toMatch(/repository\/source-integrity/);
-    expect(unreleased).toMatch(/source\/import-target-missing/);
-    expect(unreleased).toMatch(/not.*0\.1\.4|unreleased.*source/is);
+    expect(release).toMatch(/repository\/source-integrity/);
+    expect(release).toMatch(/source\/import-target-missing/);
+    expect(release).toMatch(/first ships.*0\.1\.5.*not part.*0\.1\.4/is);
   });
 });

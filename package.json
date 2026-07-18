@@ -1,6 +1,6 @@
 {
   "name": "codebase-doctor",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A model-independent CLI for evidence-backed codebase diagnostics.",
   "type": "module",
   "bin": {

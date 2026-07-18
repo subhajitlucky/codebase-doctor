@@ -4,6 +4,8 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-18
+
 ### Added
 
 - Add the capability-free, read-only, offline `repository/source-integrity`
@@ -23,8 +25,8 @@ All notable changes to Codebase Doctor are documented here.
 
 - Keep `repository/source-graph` finding-free, withhold raw import specifiers
   and source text from the new findings and fingerprints, and preserve the
-  permanent external-remediation boundary. This is Unreleased source behavior,
-  not part of the published `0.1.4` package.
+  permanent external-remediation boundary. This behavior first ships in
+  `0.1.5`; it was not part of the published `0.1.4` package.
 
 ## [0.1.4] - 2026-07-18
 

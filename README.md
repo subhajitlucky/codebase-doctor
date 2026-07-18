@@ -58,9 +58,8 @@ source-impact planning, model-oriented finding guidance, static and live RLS
 coverage, repository-shareable secrets analysis, and offline npm dependency
 analysis.
 
-The current Unreleased source also includes the precision-first
-`repository/source-integrity` Doctor described below. It is not part of the
-published `0.1.4` package.
+Version `0.1.5` adds the precision-first `repository/source-integrity` Doctor
+described below. It was not part of the published `0.1.4` package.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
@@ -182,7 +181,7 @@ bounded topology cannot support a completeness claim.
 
 ## Built-in JavaScript and TypeScript source integrity audit
 
-The current Unreleased source automatically runs the read-only, offline
+Version `0.1.5` automatically runs the read-only, offline
 `repository/source-integrity` Doctor after the graph. The
 `repository/source-graph` Doctor remains finding-free; the separate
 `repository/source-integrity` Doctor emits the high-confidence
