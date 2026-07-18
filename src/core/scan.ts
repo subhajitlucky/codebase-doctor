@@ -25,6 +25,7 @@ import { planDomainCoverage } from "./domain-coverage.js";
 import { buildInventoriedSourceGraph } from "../source-graph/builder.js";
 import { planSourceImpact as planSourceImpactInternal } from "../source-graph/impact.js";
 import type { SourceGraph, SourceImpact } from "../source-graph/types.js";
+import { sourceGraphDoctor } from "../source-graph/doctor.js";
 import type {
   FileInventory,
   FileInventoryOptions,
@@ -95,6 +96,7 @@ const defaultDependencies: ScanDependencies = {
   createDoctors: (request, hooks, plans) => {
     const doctors: Doctor[] = [
       projectDoctor,
+      sourceGraphDoctor,
       createCheckDoctor({
         timeoutMs: request.timeoutMs,
         plans,

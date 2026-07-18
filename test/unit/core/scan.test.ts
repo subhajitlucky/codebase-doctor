@@ -342,6 +342,10 @@ describe("scan orchestration", () => {
     }), discovery);
 
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/rls");
+    expect(scanned.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "repository/source-graph",
+      status: "completed",
+    }));
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/sql-rls");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/secrets");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/dependencies");

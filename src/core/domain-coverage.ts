@@ -350,7 +350,10 @@ export function planDomainCoverage(
       applicability: "detected",
       status: repositoryStatus,
       coverageComplete: repositoryStatus === "completed",
-      evidence: [{ type: "module", value: "project" }],
+      evidence: sortEvidence(repositoryModules.map(({ moduleId }) => ({
+        type: "module" as const,
+        value: moduleId,
+      }))),
       modules: repositoryModules,
       limitations: repositoryModules.flatMap(({ limitations }) => limitations),
     },

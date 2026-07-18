@@ -58,6 +58,59 @@ function changedScope(
 }
 
 describe("domain coverage planning", () => {
+  it.each([
+    ["completed", "completed", true],
+    ["partial", "partial", false],
+    ["not-selected", "partial", false],
+    ["not-applicable", "completed", true],
+  ] as const)(
+    "aggregates project plus %s source graph coverage as %s",
+    (graphStatus, expectedStatus, coverageComplete) => {
+      const coverage = planDomainCoverage({
+        snapshot: snapshot(),
+        registeredResults: [
+          result("project"),
+          {
+            doctorId: "repository/source-graph",
+            result: {
+              status: "completed",
+              findings: [],
+              durationMs: 1,
+              coverage: [{
+                moduleId: "repository/source-graph",
+                status: graphStatus,
+                scope: "changed",
+                filesExamined: 2,
+                statementsExamined: 1,
+                statementsRecognized: 1,
+                limitations: graphStatus === "partial" ? ["graph limitation"] : [],
+              }],
+            },
+          },
+        ],
+        plans: [],
+        includeDatabaseAudit: false,
+      });
+      const repository = coverage.find(({ domain }) => domain === "repository");
+
+      expect(repository).toMatchObject({
+        status: expectedStatus,
+        coverageComplete,
+        evidence: [
+          { type: "module", value: "project" },
+          { type: "module", value: "repository/source-graph" },
+        ],
+        modules: [
+          expect.objectContaining({ moduleId: "project", status: "completed" }),
+          expect.objectContaining({
+            moduleId: "repository/source-graph",
+            status: graphStatus,
+          }),
+        ],
+      });
+    },
+  );
+
   it("defines the complete domain checklist in stable order", () => {
     const domains: readonly AuditDomain[] = AUDIT_DOMAINS;
     const applicability: DomainApplicability = "unknown";
