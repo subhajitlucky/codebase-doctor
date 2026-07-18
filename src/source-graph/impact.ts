@@ -15,6 +15,12 @@ export interface SourceImpactOptions {
   readonly maxVisitedFiles?: number;
 }
 
+const completeImpactedPaths = new WeakMap<SourceImpact, ReadonlySet<string>>();
+
+export function impactedSourcePaths(impact: SourceImpact): ReadonlySet<string> {
+  return new Set(completeImpactedPaths.get(impact) ?? []);
+}
+
 function positiveSafeInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive safe integer.`);
@@ -139,7 +145,7 @@ export function planSourceImpact(
     ? "partial"
     : roots.length === 0 ? "not-selected" : "completed";
 
-  return {
+  const result: SourceImpact = {
     mode: "changed",
     status,
     graphNodeCount: graph.nodes.length,
@@ -153,4 +159,6 @@ export function planSourceImpact(
     omittedImpactCount: allRecords.length - impacts.length,
     limitations: [...limitations].sort(),
   };
+  completeImpactedPaths.set(result, new Set(allRecords.map(({ path }) => path)));
+  return result;
 }

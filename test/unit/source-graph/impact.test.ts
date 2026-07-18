@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MAX_IMPACT_VISITS,
   DEFAULT_MAX_REPORTED_IMPACTS,
+  impactedSourcePaths,
   planSourceImpact,
 } from "../../../src/source-graph/impact.js";
 import type { ChangedPath } from "../../../src/scope/types.js";
@@ -160,6 +161,27 @@ describe("source impact planning", () => {
     expect(result.impactedProjectIds).toEqual(["a", "b", "c"]);
     expect(result.impacts).toHaveLength(1);
     expect(result.omittedImpactCount).toBe(2);
+    expect([...impactedSourcePaths(result)]).toEqual([
+      "packages/a.ts",
+      "packages/b.ts",
+      "packages/c.ts",
+    ]);
+  });
+
+  it("keeps private impact paths off full and unrecognized report objects", () => {
+    const full = planSourceImpact("full", [], graph(
+      ["src/a.ts", "src/b.ts"],
+      [edge("src/b.ts", "src/a.ts")],
+    ));
+    const changed = planSourceImpact("changed", [change("modified", "src/a.ts")], graph(
+      ["src/a.ts", "src/b.ts"],
+      [edge("src/b.ts", "src/a.ts")],
+    ));
+    const copied = { ...changed, impacts: [...changed.impacts] };
+
+    expect([...impactedSourcePaths(full)]).toEqual([]);
+    expect([...impactedSourcePaths(copied)]).toEqual([]);
+    expect(JSON.stringify(changed)).not.toContain("impactedSourcePaths");
   });
 
   it("marks traversal ceilings partial without fabricating remaining impact", () => {
