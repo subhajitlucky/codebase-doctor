@@ -282,12 +282,11 @@ function resolveWorkspace(
   return {
     kind: "internal",
     ...resolved,
-    ...(!resolved.targetExists && entry.explicit && isExplicitSupportedTarget(entry.entry)
-      ? { missingTargetProof: "workspace-entry-explicit" as const }
-      : {}),
     limitations: resolved.targetExists
       ? []
-      : [`${importerPath}: workspace source target was not found in the current inventory.`],
+      : [entry.explicit
+          ? `${importerPath}: workspace publication target was not found in the current inventory; the entry may require a build.`
+          : `${importerPath}: workspace source target was not found in the current inventory.`],
   };
 }
 

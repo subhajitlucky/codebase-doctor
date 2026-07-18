@@ -312,12 +312,12 @@ describe("source import resolver", () => {
     ), context)).toMatchObject({ kind: "unsupported" });
   });
 
-  it("classifies only explicit workspace entries as provably missing", () => {
+  it("withholds missing-target proof for explicit workspace publication entries", () => {
     const explicit = {
       files: files(),
       manifests: [manifest("packages/lib/package.json", {
         name: "@workspace/lib",
-        exports: "./src/index.ts",
+        exports: "./dist/index.js",
       })],
       projects: [project("lib", "packages/lib", "@workspace/lib")],
       configs: [],
@@ -333,10 +333,15 @@ describe("source import resolver", () => {
       "src/index.ts", `import "@workspace/lib"`,
     ), explicit)).toMatchObject({
       kind: "internal",
-      targetPath: "packages/lib/src/index.ts",
+      targetPath: "packages/lib/dist/index.js",
       targetExists: false,
-      missingTargetProof: "workspace-entry-explicit",
+      limitations: [
+        "src/index.ts: workspace publication target was not found in the current inventory; the entry may require a build.",
+      ],
     });
+    expect(resolveSourceImport("src/index.ts", reference(
+      "src/index.ts", `import "@workspace/lib"`,
+    ), explicit)).not.toHaveProperty("missingTargetProof");
     const defaultIndex = resolveSourceImport("src/index.ts", reference(
       "src/index.ts", `import "@workspace/lib"`,
     ), implicit);

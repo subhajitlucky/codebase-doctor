@@ -10,8 +10,7 @@ export type SourceImportKind = (typeof SOURCE_IMPORT_KINDS)[number];
 
 export type MissingTargetProof =
   | "relative-explicit"
-  | "alias-explicit"
-  | "workspace-entry-explicit";
+  | "alias-explicit";
 
 export type SourceGraphStatus =
   | "completed"

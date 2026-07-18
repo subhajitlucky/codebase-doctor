@@ -71,7 +71,6 @@ const missingEdges: readonly SourceGraphEdge[] = [
     line: 3,
     column: 9,
     targetExists: false,
-    missingTargetProof: "workspace-entry-explicit",
   },
   {
     importerPath: "src/a.ts",
@@ -107,13 +106,12 @@ describe("source integrity Doctor", () => {
     });
 
     expect(result.status).toBe("completed");
-    expect(result.findings).toHaveLength(3);
+    expect(result.findings).toHaveLength(2);
     expect(result.findings.map(({ location }) => location?.path)).toEqual([
-      "packages/a/src/index.ts",
       "src/a.ts",
       "src/z.ts",
     ]);
-    expect(result.findings[1]).toMatchObject({
+    expect(result.findings[0]).toMatchObject({
       ruleId: "source/import-target-missing",
       doctorId: "repository/source-integrity",
       severity: "high",
@@ -125,21 +123,21 @@ describe("source integrity Doctor", () => {
         command: "codebase-doctor scan --format json",
       },
     });
-    expect(result.findings[1]?.evidence).toEqual([{
+    expect(result.findings[0]?.evidence).toEqual([{
       type: "file",
       path: "src/a.ts",
       detail:
         "Expected internal target src/missing.ts (re-export; proof: relative-explicit), but it is absent from the bounded repository inventory.",
     }]);
-    expect(result.findings[1]?.remediation).toContain("Codebase Doctor does not modify files");
-    expect(new Set(result.findings.map(({ fingerprint }) => fingerprint)).size).toBe(3);
+    expect(result.findings[0]?.remediation).toContain("Codebase Doctor does not modify files");
+    expect(new Set(result.findings.map(({ fingerprint }) => fingerprint)).size).toBe(2);
     expect(result.coverage).toEqual([{
       moduleId: "repository/source-integrity",
       status: "partial",
       scope: "full",
       filesExamined: 3,
       statementsExamined: 3,
-      statementsRecognized: 3,
+      statementsRecognized: 2,
       limitations: ["Source graph is incomplete."],
     }]);
   });
@@ -278,7 +276,7 @@ describe("source integrity Doctor", () => {
     expect(result.findings).toHaveLength(1);
     expect(result.coverage?.[0]?.status).toBe("partial");
     expect(result.coverage?.[0]?.limitations).toContain(
-      "Source integrity findings were limited to 1 of 3 provably missing targets.",
+      "Source integrity findings were limited to 1 of 2 provably missing targets.",
     );
   });
 

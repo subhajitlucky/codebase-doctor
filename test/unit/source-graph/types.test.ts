@@ -20,6 +20,13 @@ describe("source graph contracts", () => {
     expect(invalid.targetExists).toBe(true);
   });
 
+  it("does not classify workspace publication entries as missing-target proof", () => {
+    // @ts-expect-error workspace publication entries may be generated and are not proof
+    const invalid: MissingTargetProof = "workspace-entry-explicit";
+
+    expect(invalid).toBe("workspace-entry-explicit");
+  });
+
   it("represent topology and impact with safe paths and fixed classifications", () => {
     const proof: MissingTargetProof = "relative-explicit";
     const edge: SourceGraphEdge = {
