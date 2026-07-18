@@ -7,6 +7,19 @@ import type {
 } from "../../../src/source-graph/types.js";
 
 describe("source graph contracts", () => {
+  it("forbids missing-target proof on an existing edge", () => {
+    const invalid: SourceGraphEdge = {
+      importerPath: "src/a.ts",
+      targetPath: "src/b.ts",
+      kind: "static",
+      targetExists: true,
+      // @ts-expect-error existing targets cannot carry missing-target proof
+      missingTargetProof: "relative-explicit",
+    };
+
+    expect(invalid.targetExists).toBe(true);
+  });
+
   it("represent topology and impact with safe paths and fixed classifications", () => {
     const proof: MissingTargetProof = "relative-explicit";
     const edge: SourceGraphEdge = {

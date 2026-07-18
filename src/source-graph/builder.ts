@@ -155,17 +155,22 @@ export async function buildSourceGraph(
         continue;
       }
       if (resolution.kind === "unsupported") continue;
-      const edge: SourceGraphEdge = {
+      const edgeBase = {
         importerPath: file.path,
         targetPath: resolution.targetPath,
         kind: reference.kind,
-        targetExists: resolution.targetExists,
-        ...(resolution.missingTargetProof === undefined
-          ? {}
-          : { missingTargetProof: resolution.missingTargetProof }),
         ...(reference.line === undefined ? {} : { line: reference.line }),
         ...(reference.column === undefined ? {} : { column: reference.column }),
       };
+      const edge: SourceGraphEdge = resolution.targetExists
+        ? { ...edgeBase, targetExists: true }
+        : {
+            ...edgeBase,
+            targetExists: false,
+            ...(resolution.missingTargetProof === undefined
+              ? {}
+              : { missingTargetProof: resolution.missingTargetProof }),
+          };
       const key = edgeKey(edge);
       if (edges.has(key)) continue;
       if (edges.size >= maxEdges) {

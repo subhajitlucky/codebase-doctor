@@ -24,15 +24,24 @@ export interface SourceGraphNode {
   readonly projectId?: string;
 }
 
-export interface SourceGraphEdge {
+interface SourceGraphEdgeBase {
   readonly importerPath: string;
   readonly targetPath: string;
   readonly kind: SourceImportKind;
-  readonly targetExists: boolean;
-  readonly missingTargetProof?: MissingTargetProof;
   readonly line?: number;
   readonly column?: number;
 }
+
+export type SourceGraphEdge = SourceGraphEdgeBase & (
+  | {
+      readonly targetExists: true;
+      readonly missingTargetProof?: never;
+    }
+  | {
+      readonly targetExists: false;
+      readonly missingTargetProof?: MissingTargetProof;
+    }
+);
 
 export interface SourceGraph {
   readonly status: Exclude<SourceGraphStatus, "not-selected">;
