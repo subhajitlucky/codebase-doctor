@@ -10,6 +10,6 @@ describe("CLI version", () => {
     );
 
     expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe("0.1.3");
+    expect(result.stdout.trim()).toBe("0.1.4");
   });
 });

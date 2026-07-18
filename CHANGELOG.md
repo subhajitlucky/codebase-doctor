@@ -4,6 +4,8 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-18
+
 ### Added
 
 - Add a bounded, read-only, offline `repository/source-graph` Doctor for
@@ -37,7 +39,7 @@ All notable changes to Codebase Doctor are documented here.
 - Align current and historical product documentation around one unified auditor
   with built-in domain modules, and remove executable direction for the rejected
   external-Doctor architecture.
-- Distinguish shipped `0.1.3` analysis from the full-codebase north star so a
+- Distinguish implemented `0.1.4` analysis from the full-codebase north star so a
   full requested scope is not mistaken for complete analyzer coverage across
   every language, framework, and domain.
 

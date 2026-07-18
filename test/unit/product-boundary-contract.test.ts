@@ -204,7 +204,8 @@ describe("independent auditor product boundary", () => {
 
     expect(readme).toMatch(/## Current coverage versus north star/i);
     expect(readme).toMatch(/\|\s*Domain\s*\|\s*Current source coverage\s*\|\s*North star\s*\|/i);
-    expect(readme).toMatch(/secrets analysis.*Unreleased.*not part.*published `?0\.1\.3`?/is);
+    expect(readme).toMatch(/source-impact graph.*secrets analysis.*dependency analysis.*ship.*`?0\.1\.4`?/is);
+    expect(readme).toMatch(/not part.*historical.*`?0\.1\.3`?/is);
 
     for (const [path, text] of [
       ["README.md", readme],
@@ -272,12 +273,12 @@ describe("independent auditor product boundary", () => {
     }
 
     const changelog = await readFile("CHANGELOG.md", "utf8");
-    const unreleased = changelog.slice(
-      changelog.indexOf("## [Unreleased]"),
+    const release = changelog.slice(
+      changelog.indexOf("## [0.1.4]"),
       changelog.indexOf("## [0.1.3]"),
     );
-    expect(unreleased).toMatch(/security\/dependencies/);
-    expect(unreleased).toMatch(/offline.*read-only|read-only.*offline/is);
+    expect(release).toMatch(/security\/dependencies/);
+    expect(release).toMatch(/offline.*read-only|read-only.*offline/is);
   });
 
   it("documents the bounded source-impact graph without overstating topology", async () => {
@@ -301,11 +302,11 @@ describe("independent auditor product boundary", () => {
     }
 
     const changelog = await readFile("CHANGELOG.md", "utf8");
-    const unreleased = changelog.slice(
-      changelog.indexOf("## [Unreleased]"),
+    const release = changelog.slice(
+      changelog.indexOf("## [0.1.4]"),
       changelog.indexOf("## [0.1.3]"),
     );
-    expect(unreleased).toMatch(/repository\/source-graph/);
-    expect(unreleased).toMatch(/sourceImpact/);
+    expect(release).toMatch(/repository\/source-graph/);
+    expect(release).toMatch(/sourceImpact/);
   });
 });

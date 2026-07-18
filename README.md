@@ -53,9 +53,10 @@ codebase-doctor audit .
 ```
 
 It combines repository audits and visible coverage for optional internal modules.
-Version `0.1.3` is published and includes Git-aware changed audits, conservative
-affected-workspace planning, model-oriented finding guidance, and static SQL/RLS
-migration coverage.
+Version `0.1.4` includes Git-aware changed audits, conservative workspace and
+source-impact planning, model-oriented finding guidance, static and live RLS
+coverage, repository-shareable secrets analysis, and offline npm dependency
+analysis.
 
 > **Status:** Published on npm. The current stable line is `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
 
@@ -82,8 +83,8 @@ The north-star entries are planned internal modules, not separately installed
 Doctor products and not shipped behavior.
 
 The built-in source-impact graph, secrets analysis, and dependency analysis
-described below are current Unreleased source behavior and are not part of the
-already published `0.1.3` package.
+described below ship together in `0.1.4`. They were not part of the historical
+`0.1.3` package.
 
 ## Domain coverage inventory
 
