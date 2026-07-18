@@ -52,6 +52,20 @@ for (const path of paths) {
   assert(!forbidden.some((pattern) => pattern.test(path)), `Forbidden package file included: ${path}`);
 }
 
+for (const path of [
+  "README.md",
+  "docs/architecture.md",
+  ".agents/skills/codebase-doctor/SKILL.md",
+]) {
+  const document = readFileSync(path, "utf8");
+  assert.match(document, /workspace publication.*generated.*fixture.*coverage\s+limitations?/is);
+  assert.match(document, /pnpm.*Yarn.*Bun.*never.*npm-specific findings/is);
+  assert.match(document, /cryptographic match.*localhost-only certificate/is);
+  assert.match(document, /coverageSummary.*total.*emitted.*omitted/is);
+  assert.match(document, /limitationGroups.*sample.*omitted/is);
+  assert.match(document, /never\s+modifies, fixes,\s+or repairs target files/is);
+}
+
 const declarations = readFileSync(new URL("../dist/index.d.ts", import.meta.url), "utf8");
 assert.match(
   declarations,

@@ -196,6 +196,21 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    correct the metadata and rerun the same scope; Doctor never performs that
    remediation.
 
+11. Apply the precision and bounded-report contract. Workspace publication
+    entries, generated targets, and fixture-controlled paths are coverage
+    limitations unless independently proven broken; they are not missing-target
+    findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive
+    npm-specific findings. Only a cryptographic match to an inventoried
+    localhost-only certificate can classify a private key as an intentional
+    local test key; every other matched private key remains a high-severity
+    finding.
+
+    In schema-1 reports, `coverageSummary` preserves exact `total`, `emitted`,
+    and `omitted` record counts. `limitationGroups` preserve each fixed reason,
+    deterministic sample paths, and the number of omitted paths. Treat omitted
+    evidence as bounded output, not absent evidence. Codebase Doctor never
+    modifies, fixes, or repairs target files.
+
 `scan` is the backward-compatible repository-only command. Use `--exclude` or
 `.codebase-doctor.json` for intentional exclusions, `--baseline` to classify
 fingerprints, `--format sarif` for SARIF 2.1.0, `--timeout` for configured check

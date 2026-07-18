@@ -4,6 +4,24 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Treat workspace publication entries, generated targets, and fixture-controlled
+  paths as source-integrity coverage limitations unless independent evidence
+  proves a missing target.
+- Respect governing pnpm, Yarn, and Bun ownership instead of emitting npm-only
+  dependency findings, including inherited workspace ownership.
+- Bound repeated schema-1 coverage and limitation evidence while preserving exact
+  total, emitted, and omitted counts plus deterministic samples.
+- Reuse the immutable source-resolution index across graph edges to reduce audit
+  time without changing findings, coverage, or impact semantics.
+
+### Security
+
+- Suppress a repository-shareable private test key only when offline
+  cryptographic comparison matches an inventoried certificate whose identities
+  are exclusively localhost or loopback. Unmatched keys remain high severity.
+
 ## [0.1.5] - 2026-07-18
 
 ### Added

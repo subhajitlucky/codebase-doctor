@@ -92,6 +92,16 @@ describe("release package", () => {
       expect(packedSkill).toMatch(/Prefer a changed\s+audit after edits/i);
       expect(packedSkill).not.toMatch(/\bnpx\s+codebase-doctor\b/i);
       expect(packedSkill).toMatch(/package acquisition.*pinned.*user-authorized/is);
+      for (const document of [packedReadme, packedArchitecture, packedSkill]) {
+        expect(document).toMatch(
+          /workspace publication.*generated.*fixture.*coverage\s+limitations?/is,
+        );
+        expect(document).toMatch(/pnpm.*Yarn.*Bun.*never.*npm-specific findings/is);
+        expect(document).toMatch(/cryptographic match.*localhost-only certificate/is);
+        expect(document).toMatch(/coverageSummary.*total.*emitted.*omitted/is);
+        expect(document).toMatch(/limitationGroups.*sample.*omitted/is);
+        expect(document).toMatch(/never\s+modifies, fixes,\s+or repairs target files/is);
+      }
 
       const runtimeConsumerPath = join(temporaryRoot, "consumer.mjs");
       await writeFile(runtimeConsumerPath, [

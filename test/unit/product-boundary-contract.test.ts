@@ -281,6 +281,24 @@ describe("independent auditor product boundary", () => {
     expect(release).toMatch(/offline.*read-only|read-only.*offline/is);
   });
 
+  it("documents the real-world precision and bounded-report contracts", async () => {
+    for (const { path, text } of await documents(canonicalDocuments)) {
+      expect(text, path).toMatch(
+        /workspace publication.*generated.*fixture.*coverage\s+limitations?|coverage\s+limitations?.*workspace publication.*generated.*fixture/is,
+      );
+      expect(text, path).toMatch(/unless.*independently proven|independent.*proof/is);
+      expect(text, path).toMatch(
+        /pnpm.*Yarn.*Bun.*(?:never|no).*npm.*finding|npm.*findings?.*(?:never|not).*(?:pnpm|Yarn|Bun)/is,
+      );
+      expect(text, path).toMatch(
+        /cryptograph.*match.*localhost-only.*certificate|localhost-only.*certificate.*cryptograph.*match/is,
+      );
+      expect(text, path).toMatch(/coverageSummary.*total.*emitted.*omitted/is);
+      expect(text, path).toMatch(/limitationGroups.*sample.*omitted/is);
+      expect(text, path).toMatch(/Codebase Doctor (?:never|does not).*(?:modify|repair|fix)/is);
+    }
+  });
+
   it("documents the bounded source-impact graph without overstating topology", async () => {
     for (const { path, text } of await documents(canonicalDocuments)) {
       expect(text, path).toMatch(/repository\/source-graph/);

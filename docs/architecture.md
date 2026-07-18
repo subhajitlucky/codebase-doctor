@@ -337,6 +337,21 @@ remediation. Consumers must inspect both `security/secrets` and
 completed plus partial, unsupported, failed, or not-selected module work is
 conservatively incomplete at the security-domain level.
 
+## Precision and bounded-report contract
+
+Workspace publication entries, generated targets, and fixture-controlled paths
+are coverage limitations unless independently proven broken; they are not
+missing-target findings by themselves. Detected pnpm, Yarn, and Bun scopes never
+receive npm-specific findings. Only a cryptographic match to an inventoried
+localhost-only certificate can classify a private key as an intentional local
+test key; every other matched private key remains a high-severity finding.
+
+Schema-1 reports bound repeated evidence without hiding its size.
+`coverageSummary` preserves exact `total`, `emitted`, and `omitted` record counts.
+`limitationGroups` preserve each fixed reason, deterministic sample paths, and
+the number of omitted paths. These additions do not redefine findings or their
+fingerprints. Codebase Doctor never modifies, fixes, or repairs target files.
+
 ## Normalized report contract
 
 The normalizer copies and deterministically sorts projects, plans, doctor runs,
