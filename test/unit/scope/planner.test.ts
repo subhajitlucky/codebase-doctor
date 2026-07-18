@@ -6,6 +6,7 @@ import type {
   ChangedPath,
 } from "../../../src/scope/types.js";
 import type { DetectedProject } from "../../../src/workspace/types.js";
+import type { SourceImpact } from "../../../src/source-graph/types.js";
 
 const base: AuditBase = {
   kind: "merge-base",
@@ -38,6 +39,57 @@ function change(
 }
 
 describe("planChangedScope", () => {
+  it("adds source-dependent projects without losing truncated impact coverage", () => {
+    const sourceImpact: SourceImpact = {
+      mode: "changed",
+      status: "partial",
+      graphNodeCount: 4,
+      graphEdgeCount: 3,
+      externalBoundaryCount: 0,
+      dynamicBoundaryCount: 0,
+      changedSourcePaths: ["packages/core/src/value.ts"],
+      impactedFileCount: 2,
+      impactedProjectIds: ["project:apps/hidden", "project:apps/web"],
+      impacts: [{
+        path: "apps/web/src/page.ts",
+        projectId: "project:apps/web",
+        dependencyPath: [
+          "packages/core/src/value.ts",
+          "apps/web/src/page.ts",
+        ],
+      }],
+      omittedImpactCount: 1,
+      limitations: ["Source impact stopped at a fixture ceiling."],
+    };
+    const scope = planChangedScope(
+      base,
+      [change("packages/core/src/value.ts")],
+      [
+        project("packages/core", { packageName: "core", dependencyNames: [] }),
+        project("apps/web", { packageName: "web", dependencyNames: [] }),
+        project("apps/hidden", { packageName: "hidden", dependencyNames: [] }),
+      ],
+      sourceImpact,
+    );
+
+    expect(scope.affectedProjectIds).toEqual([
+      "project:apps/hidden",
+      "project:apps/web",
+      "project:packages/core",
+    ]);
+    expect(scope.reasons).toContainEqual({
+      projectId: "project:apps/web",
+      reason: "source-dependent",
+      source: "packages/core/src/value.ts -> apps/web/src/page.ts",
+    });
+    expect(scope.reasons).toContainEqual({
+      projectId: "project:apps/hidden",
+      reason: "source-dependent",
+      source: "bounded source impact",
+    });
+    expect(scope.limitations).toContain("Source impact stopped at a fixture ceiling.");
+  });
+
   it("assigns exact-root and nested paths to the deepest containing project", () => {
     const projects = [project("."), project("apps"), project("apps/web")];
     const scope = planChangedScope(base, [

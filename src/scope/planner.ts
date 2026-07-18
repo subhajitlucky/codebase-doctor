@@ -1,5 +1,6 @@
 import type { AuditBase, AuditScope, ChangedPath, ScopeReason } from "./types.js";
 import type { DetectedProject } from "../workspace/types.js";
+import type { SourceImpact } from "../source-graph/types.js";
 
 const ROOT_CONTEXT_FILES = new Set([
   ".codebase-doctor.json",
@@ -178,6 +179,7 @@ export function planChangedScope(
   base: AuditBase,
   changes: readonly ChangedPath[],
   projects: readonly DetectedProject[],
+  sourceImpact?: SourceImpact,
 ): AuditScope {
   const orderedChanges = normalizeChanges(changes);
   if (orderedChanges.length === 0) {
@@ -251,6 +253,25 @@ export function planChangedScope(
     }
   }
 
+  const sourceByProject = new Map<string, string>();
+  for (const impact of sourceImpact?.impacts ?? []) {
+    if (impact.projectId === undefined || sourceByProject.has(impact.projectId)) continue;
+    sourceByProject.set(impact.projectId, impact.dependencyPath.join(" -> "));
+  }
+  const knownProjectIds = new Set(orderedProjects.map(({ id }) => id));
+  const sourceLimitations: string[] = [];
+  for (const projectId of sourceImpact?.impactedProjectIds ?? []) {
+    if (!knownProjectIds.has(projectId)) {
+      sourceLimitations.push("Source impact referenced an unavailable project identifier.");
+      continue;
+    }
+    addReason({
+      projectId,
+      reason: "source-dependent",
+      source: sourceByProject.get(projectId) ?? "bounded source impact",
+    });
+  }
+
   return {
     mode: "changed",
     base: { ...base },
@@ -259,6 +280,8 @@ export function planChangedScope(
     reasons: [...reasons.values()].sort(compareReasons),
     limitations: [...new Set([
       ...graph.limitations,
+      ...(sourceImpact?.limitations ?? []),
+      ...sourceLimitations,
       ...changedManifestPaths.map((path) =>
         `${path}: previous Node package identity and dependency metadata are unavailable; Node workspace scope was conservatively expanded.`,
       ),

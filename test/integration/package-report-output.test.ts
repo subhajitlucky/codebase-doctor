@@ -169,11 +169,7 @@ describe("package report output", () => {
     expect(comparisonOptions.includeResolved).toBe(false);
     expect(error.code).toBe("GIT_INVALID_BASE_REF");
     expectTypeOf(discoverGitChanges).parameters.toEqualTypeOf<[DiscoverChangesOptions]>();
-    expectTypeOf(planChangedScope).parameters.toEqualTypeOf<[
-      AuditBase,
-      readonly ChangedPath[],
-      readonly DetectedProject[],
-    ]>();
+    expectTypeOf(planChangedScope).toBeCallableWith(base, [change], [project], sourceImpact);
     expect(project.id).toBe(reason.projectId);
     expect(sourceImpact.status).toBe("completed");
   });

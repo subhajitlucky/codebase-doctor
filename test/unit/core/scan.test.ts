@@ -3,6 +3,7 @@ import type { Doctor, DoctorContext, DoctorResult } from "../../../src/core/doct
 import { createFingerprint, type Finding } from "../../../src/core/findings.js";
 import { scanCodebase, type ScanDependencies, type ScanRequest } from "../../../src/core/scan.js";
 import type { FileInventory, ProjectDetection } from "../../../src/workspace/types.js";
+import type { SourceGraph, SourceImpact } from "../../../src/source-graph/types.js";
 
 const inventory: FileInventory = { root: "/repo", files: [] };
 const detection: ProjectDetection = {
@@ -18,6 +19,34 @@ const detection: ProjectDetection = {
   }],
   workspaces: [],
 };
+
+const emptyGraph: SourceGraph = {
+  status: "not-applicable",
+  nodes: [],
+  edges: [],
+  filesExamined: 0,
+  bytesExamined: 0,
+  externalBoundaryCount: 0,
+  dynamicBoundaryCount: 0,
+  limitations: [],
+};
+
+function emptyImpact(mode: "full" | "changed"): SourceImpact {
+  return {
+    mode,
+    status: "not-applicable",
+    graphNodeCount: 0,
+    graphEdgeCount: 0,
+    externalBoundaryCount: 0,
+    dynamicBoundaryCount: 0,
+    changedSourcePaths: [],
+    impactedFileCount: 0,
+    impactedProjectIds: [],
+    impacts: [],
+    omittedImpactCount: 0,
+    limitations: [],
+  };
+}
 
 function finding(): Finding {
   return {
@@ -70,6 +99,8 @@ function dependencies(doctors: readonly Doctor[]): ScanDependencies {
     inventoryWorkspace: vi.fn(async () => inventory),
     loadManifests: vi.fn(async () => []),
     detectWorkspaceProjects: vi.fn(async () => detection),
+    buildSourceGraph: vi.fn(async () => emptyGraph),
+    planSourceImpact: vi.fn((mode) => emptyImpact(mode)),
     discoverRepositoryFiles: vi.fn(async () => ({
       availability: "available" as const,
       paths: ["package.json"],
@@ -175,6 +206,10 @@ describe("scan orchestration", () => {
       events.push("projects");
       return detection;
     });
+    changed.buildSourceGraph = vi.fn(async () => {
+      events.push("source-graph");
+      return emptyGraph;
+    });
     changed.discoverChanges = vi.fn(async () => {
       events.push("changes");
       return {
@@ -185,6 +220,10 @@ describe("scan orchestration", () => {
         },
         changes: [{ status: "modified" as const, path: "src/index.ts" }],
       };
+    });
+    changed.planSourceImpact = vi.fn((mode) => {
+      events.push("source-impact");
+      return emptyImpact(mode);
     });
     const seen: DoctorContext[] = [];
     const makeDoctor = (id: string): Doctor => doctor(id, ["filesystem:read"], async (context) => {
@@ -198,7 +237,14 @@ describe("scan orchestration", () => {
       baseRef: "origin/main",
     }), changed);
 
-    expect(events).toEqual(["inventory", "manifests", "projects", "changes"]);
+    expect(events).toEqual([
+      "inventory",
+      "manifests",
+      "projects",
+      "source-graph",
+      "changes",
+      "source-impact",
+    ]);
     expect(changed.discoverChanges).toHaveBeenCalledOnce();
     expect(changed.discoverChanges).toHaveBeenCalledWith({
       root: "/repo",
@@ -207,6 +253,9 @@ describe("scan orchestration", () => {
     expect(seen).toHaveLength(2);
     expect(seen.every(({ snapshot }) => snapshot.auditScope === seen[0]?.snapshot.auditScope)).toBe(true);
     expect(seen[0]?.snapshot.projects).toEqual(detection.projects);
+    expect(seen[0]?.snapshot.sourceGraph).toBe(emptyGraph);
+    expect(seen[0]?.snapshot.sourceImpact).toEqual(emptyImpact("changed"));
+    expect(result.sourceImpact).toEqual(emptyImpact("changed"));
     expect(result.auditScope).toMatchObject({
       mode: "changed",
       affectedProjectIds: ["root"],

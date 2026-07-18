@@ -22,6 +22,9 @@ import {
 import { discoverRepositoryFiles } from "../scope/repository-files.js";
 import { fullAuditScope, planChangedScope } from "../scope/planner.js";
 import { planDomainCoverage } from "./domain-coverage.js";
+import { buildInventoriedSourceGraph } from "../source-graph/builder.js";
+import { planSourceImpact as planSourceImpactInternal } from "../source-graph/impact.js";
+import type { SourceGraph, SourceImpact } from "../source-graph/types.js";
 import type {
   FileInventory,
   FileInventoryOptions,
@@ -58,6 +61,16 @@ export interface ScanDependencies {
     inventory: FileInventory,
     manifests: readonly ManifestRecord[],
   ): Promise<ProjectDetection>;
+  buildSourceGraph(
+    inventory: FileInventory,
+    manifests: readonly ManifestRecord[],
+    projects: ProjectDetection["projects"],
+  ): Promise<SourceGraph>;
+  planSourceImpact(
+    mode: "full" | "changed",
+    changes: DiscoveredChanges["changes"],
+    graph: SourceGraph,
+  ): SourceImpact;
   discoverChanges(options: DiscoverChangesOptions): Promise<DiscoveredChanges>;
   discoverRepositoryFiles(root: string): ReturnType<typeof discoverRepositoryFiles>;
   createDoctors(
@@ -75,6 +88,8 @@ const defaultDependencies: ScanDependencies = {
   inventoryWorkspace: inventoryFiles,
   loadManifests: loadPackageManifests,
   detectWorkspaceProjects: detectProjects,
+  buildSourceGraph: buildInventoriedSourceGraph,
+  planSourceImpact: planSourceImpactInternal,
   discoverChanges: discoverGitChanges,
   discoverRepositoryFiles,
   createDoctors: (request, hooks, plans) => {
@@ -115,16 +130,25 @@ export async function scanCodebase(
   });
   const manifests = await dependencies.loadManifests(inventory);
   const detection = await dependencies.detectWorkspaceProjects(inventory, manifests);
+  const sourceGraph = await dependencies.buildSourceGraph(
+    inventory,
+    manifests,
+    detection.projects,
+  );
   const repositoryFiles = request.includeSecurityAudit === true && request.changed !== true
     ? await dependencies.discoverRepositoryFiles(inventory.root)
     : undefined;
   let auditScope = fullAuditScope();
+  let sourceImpact: SourceImpact;
   if (request.changed === true) {
     const { base, changes } = await dependencies.discoverChanges({
       root: inventory.root,
       ...(request.baseRef === undefined ? {} : { baseRef: request.baseRef }),
     });
-    auditScope = planChangedScope(base, changes, detection.projects);
+    sourceImpact = dependencies.planSourceImpact("changed", changes, sourceGraph);
+    auditScope = planChangedScope(base, changes, detection.projects, sourceImpact);
+  } else {
+    sourceImpact = dependencies.planSourceImpact("full", [], sourceGraph);
   }
   const snapshot: ProjectSnapshot = {
     root: inventory.root,
@@ -133,6 +157,8 @@ export async function scanCodebase(
     projects: detection.projects,
     workspaces: detection.workspaces,
     auditScope,
+    sourceGraph,
+    sourceImpact,
     ...(repositoryFiles === undefined ? {} : { repositoryFiles }),
   };
   const plans = planChecks(snapshot, request.timeoutMs);
@@ -163,6 +189,7 @@ export async function scanCodebase(
       command: displayCommand(plan),
     })),
     domainCoverage,
+    sourceImpact,
   );
 }
 

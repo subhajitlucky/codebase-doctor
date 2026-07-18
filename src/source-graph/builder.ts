@@ -182,3 +182,32 @@ export async function buildSourceGraph(
     limitations: [...limitations].sort(),
   };
 }
+
+export async function buildInventoriedSourceGraph(
+  inventory: FileInventory,
+  manifests: readonly ManifestRecord[],
+  projects: readonly DetectedProject[],
+  options: SourceGraphBuildOptions = {},
+): Promise<SourceGraph> {
+  const root = resolve(inventory.root);
+  return buildSourceGraph(
+    inventory,
+    manifests,
+    projects,
+    async (path) => {
+      const target = resolve(root, path);
+      const repositoryRelative = relative(root, target);
+      if (
+        repositoryRelative === ".." ||
+        repositoryRelative.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
+        isAbsolute(repositoryRelative)
+      ) {
+        throw new Error("Inventoried source path escapes the repository.");
+      }
+      return readFile(target, "utf8");
+    },
+    options,
+  );
+}
+import { readFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
