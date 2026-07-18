@@ -26,8 +26,10 @@ import {
   fullAuditScope,
   GitScopeError,
   type GitScopeErrorCode,
+  type MissingTargetProof,
   planChangedScope,
   type ScopeReason,
+  type SourceGraphEdge,
   type SourceGraphStatus,
   type SourceImpact,
 } from "../../src/index.js";
@@ -35,6 +37,29 @@ import {
 const repositoryRoot = process.cwd();
 
 describe("package report output", () => {
+  it("exports the safe additive missing-target edge contract", () => {
+    const proof: MissingTargetProof = "relative-explicit";
+    const missing: SourceGraphEdge = {
+      importerPath: "src/importer.ts",
+      targetPath: "src/missing.ts",
+      kind: "static",
+      line: 1,
+      column: 1,
+      targetExists: false,
+      missingTargetProof: proof,
+    };
+    const existing: SourceGraphEdge = {
+      importerPath: "src/importer.ts",
+      targetPath: "src/existing.ts",
+      kind: "static",
+      targetExists: true,
+    };
+
+    expect(missing.missingTargetProof).toBe("relative-explicit");
+    expect(existing.targetExists).toBe(true);
+    expectTypeOf(missing).toMatchTypeOf<SourceGraphEdge>();
+  });
+
   it("exports unified audit and database evidence contracts", () => {
     const request: AuditRequest = {
       root: "/repo",

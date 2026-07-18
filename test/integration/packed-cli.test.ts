@@ -376,6 +376,53 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
       expect(await readFile(join(dependencyRepository, "package-lock.json"), "utf8"))
         .toBe(unsafeLock);
 
+      const sourceIntegrityRepository = join(temporaryRoot, "source-integrity-repository");
+      await mkdir(join(sourceIntegrityRepository, "src"), { recursive: true });
+      const sourceIntegrityCredential = generatedToken("github_pat_");
+      const sourceIntegrityFiles = {
+        "package.json": JSON.stringify({
+          name: "packed-source-integrity-fixture",
+          private: true,
+        }, null, 2),
+        "src/importer.ts": [
+          'import "./missing.ts";',
+          'import "./uncertain-extensionless";',
+          `import "https://user:${sourceIntegrityCredential}@example.invalid/external.js";`,
+          "",
+        ].join("\n"),
+      };
+      for (const [path, contents] of Object.entries(sourceIntegrityFiles)) {
+        await writeFile(join(sourceIntegrityRepository, ...path.split("/")), contents);
+      }
+
+      const packedSourceIntegrity = run(binary, [
+        "audit", sourceIntegrityRepository, "--json", "--fail-on", "none",
+      ], temporaryRoot);
+      expect(packedSourceIntegrity.status, packedSourceIntegrity.stderr).toBe(0);
+      expect(packedSourceIntegrity.stdout).not.toContain(sourceIntegrityCredential);
+      expect(packedSourceIntegrity.stderr).not.toContain(sourceIntegrityCredential);
+      expect(packedSourceIntegrity.stdout).not.toContain("example.invalid");
+      const packedIntegrityReport = JSON.parse(packedSourceIntegrity.stdout);
+      expect(packedIntegrityReport.findings.filter(
+        ({ doctorId }: { doctorId: string }) => doctorId === "repository/source-integrity",
+      )).toEqual([expect.objectContaining({
+        ruleId: "source/import-target-missing",
+        location: expect.objectContaining({ path: "src/importer.ts", line: 1 }),
+        evidence: [expect.objectContaining({
+          detail: expect.stringContaining("src/missing.ts"),
+        })],
+      })]);
+      expect(packedIntegrityReport.coverage).toContainEqual(expect.objectContaining({
+        moduleId: "repository/source-integrity",
+        status: "partial",
+        scope: "full",
+        statementsRecognized: 1,
+      }));
+      for (const [path, contents] of Object.entries(sourceIntegrityFiles)) {
+        expect(await readFile(join(sourceIntegrityRepository, ...path.split("/")), "utf8"), path)
+          .toBe(contents);
+      }
+
       const unsupportedRepository = join(temporaryRoot, "unsupported-dependency-repository");
       await mkdir(unsupportedRepository);
       await writeFile(join(unsupportedRepository, "package.json"), JSON.stringify({

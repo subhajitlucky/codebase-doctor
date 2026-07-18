@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { parseNpmPackJson } from "./npm-pack-json.mjs";
 
 const packed = spawnSync(
@@ -49,6 +50,30 @@ const forbidden = [
 ];
 for (const path of paths) {
   assert(!forbidden.some((pattern) => pattern.test(path)), `Forbidden package file included: ${path}`);
+}
+
+const declarations = readFileSync(new URL("../dist/index.d.ts", import.meta.url), "utf8");
+assert.match(
+  declarations,
+  /MissingTargetProof/,
+  "Public declarations must include the safe missing-target proof type.",
+);
+assert.match(
+  declarations,
+  /SourceGraphEdge/,
+  "Public declarations must include the safe source graph edge type.",
+);
+for (const privateName of [
+  "impactedSourcePaths",
+  "completeImpactedPaths",
+  "runDoctors",
+  "CommandRunner",
+]) {
+  assert.doesNotMatch(
+    declarations,
+    new RegExp(`\\b${privateName}\\b`),
+    `Private implementation leaked through package declarations: ${privateName}`,
+  );
 }
 
 console.log(`Verified ${report.id}: ${paths.size} files, ${report.size} packed bytes.`);
