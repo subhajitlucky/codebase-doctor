@@ -205,6 +205,24 @@ describe("text reporter", () => {
       findings: [],
       summary: { total: 0, counts: { info: 0, low: 0, medium: 0, high: 0, critical: 0 }, highestSeverity: null },
       coverage: [{ moduleId: "database/sql-rls", status: "skipped", scope: "changed", filesExamined: 0, statementsExamined: 0, statementsRecognized: 0, limitations: ["No changed SQL stream was selected."] }],
+      sourceImpact: {
+        mode: "changed",
+        status: "partial",
+        graphNodeCount: 4,
+        graphEdgeCount: 3,
+        externalBoundaryCount: 2,
+        dynamicBoundaryCount: 1,
+        changedSourcePaths: ["src/old.ts", "src/new.ts"],
+        impactedFileCount: 2,
+        impactedProjectIds: ["root"],
+        impacts: [{
+          path: "src/consumer.ts",
+          projectId: "root",
+          dependencyPath: ["src/new.ts", "src/consumer.ts"],
+        }],
+        omittedImpactCount: 1,
+        limitations: ["A source graph boundary was unsupported."],
+      },
     };
 
     const report = renderTextReport(changed);
@@ -214,11 +232,46 @@ describe("text reporter", () => {
     expect(report).toContain("renamed: src/new.ts (previous: src/old.ts)");
     expect(report).toContain("Scope reason: root — direct-change from package.json");
     expect(report).toContain("Scope limitation: Unchanged files were not independently re-audited.");
+    expect(report).toContain("Source impact");
+    expect(report).toContain(
+      "Source graph: partial; nodes 4; internal edges 3; external boundaries 2; dynamic boundaries 1",
+    );
+    expect(report).toContain("Changed source roots: 2; impacted files: 2; impacted projects: 1");
+    expect(report).toContain("Impact: src/new.ts -> src/consumer.ts (project root)");
+    expect(report).toContain("1 additional source impact record omitted.");
+    expect(report).toContain("Source impact limitation: A source graph boundary was unsupported.");
     expect(report).toContain(
       "No findings in the selected changed scope; review the selected scope, Doctor runs, and Audit coverage.",
     );
     expect(report).not.toContain("Clean scan");
     expect(report.indexOf("Audit scope")).toBeLessThan(report.indexOf("Projects"));
+    expect(report.indexOf("Source impact")).toBeLessThan(report.indexOf("Projects"));
+  });
+
+  it("renders compact full source graph counts without changed impact paths", () => {
+    const full: ScanResult = {
+      ...result(),
+      sourceImpact: {
+        mode: "full",
+        status: "completed",
+        graphNodeCount: 12,
+        graphEdgeCount: 8,
+        externalBoundaryCount: 4,
+        dynamicBoundaryCount: 1,
+        changedSourcePaths: [],
+        impactedFileCount: 0,
+        impactedProjectIds: [],
+        impacts: [],
+        omittedImpactCount: 0,
+        limitations: [],
+      },
+    };
+
+    const report = renderTextReport(full);
+    expect(report).toContain(
+      "Source graph: completed; nodes 12; internal edges 8; external boundaries 4; dynamic boundaries 1",
+    );
+    expect(report).not.toContain("Changed source roots:");
   });
 
   it("does not reference an Audit coverage section when changed scope has no module coverage", () => {

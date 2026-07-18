@@ -101,6 +101,7 @@ export function renderSarifReport(result: ScanResult): string {
         auditScope: result.auditScope,
         domainCoverage: result.domainCoverage,
         ...(result.coverage === undefined ? {} : { coverage: result.coverage }),
+        ...(result.sourceImpact === undefined ? {} : { sourceImpact: result.sourceImpact }),
       },
     }],
   };

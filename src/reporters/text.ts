@@ -16,6 +16,7 @@ const SEVERITY_COLORS: Record<Severity, number> = {
   critical: 35,
 };
 const MAX_SCOPE_LIST_ITEMS = 20;
+const MAX_SOURCE_IMPACT_ITEMS = 20;
 
 function severityLabel(
   severity: Severity,
@@ -92,6 +93,39 @@ function auditScopeLines(result: ScanResult): string[] {
   return lines;
 }
 
+function sourceImpactLines(result: ScanResult): string[] {
+  const impact = result.sourceImpact;
+  if (impact === undefined) return [];
+  const lines = [
+    "Source impact",
+    `Source graph: ${impact.status}; nodes ${impact.graphNodeCount}; ` +
+    `internal edges ${impact.graphEdgeCount}; external boundaries ${impact.externalBoundaryCount}; ` +
+    `dynamic boundaries ${impact.dynamicBoundaryCount}`,
+  ];
+  if (impact.mode === "changed") {
+    lines.push(
+      `Changed source roots: ${impact.changedSourcePaths.length}; ` +
+      `impacted files: ${impact.impactedFileCount}; ` +
+      `impacted projects: ${impact.impactedProjectIds.length}`,
+    );
+    for (const record of impact.impacts.slice(0, MAX_SOURCE_IMPACT_ITEMS)) {
+      const project = record.projectId === undefined ? "" : ` (project ${record.projectId})`;
+      lines.push(`Impact: ${record.dependencyPath.join(" -> ")}${project}`);
+    }
+    const omitted = impact.omittedImpactCount +
+      Math.max(0, impact.impacts.length - MAX_SOURCE_IMPACT_ITEMS);
+    if (omitted > 0) {
+      lines.push(
+        `${omitted} additional source impact ${omitted === 1 ? "record" : "records"} omitted.`,
+      );
+    }
+  }
+  for (const limitation of impact.limitations) {
+    lines.push(`Source impact limitation: ${limitation}`);
+  }
+  return lines;
+}
+
 function domainEvidenceLine(evidence: DomainCoverageEvidence): string {
   const project = evidence.projectId === undefined ? "" : ` (project ${evidence.projectId})`;
   const path = evidence.path === undefined ? "" : ` — ${evidence.path}`;
@@ -108,6 +142,7 @@ export function renderTextReport(
     `Repository: ${result.repository.root}`,
     "",
     ...auditScopeLines(result),
+    ...(result.sourceImpact === undefined ? [] : ["", ...sourceImpactLines(result)]),
     "",
     "Projects",
   ];

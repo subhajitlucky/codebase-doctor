@@ -138,6 +138,24 @@ describe("SARIF reporter", () => {
         statementsRecognized: 1,
         limitations: ["Dynamic SQL was not evaluated."],
       }],
+      sourceImpact: {
+        mode: "changed",
+        status: "completed",
+        graphNodeCount: 2,
+        graphEdgeCount: 1,
+        externalBoundaryCount: 0,
+        dynamicBoundaryCount: 0,
+        changedSourcePaths: ["src/new.ts", "src/old.ts"],
+        impactedFileCount: 1,
+        impactedProjectIds: ["root"],
+        impacts: [{
+          path: "src/consumer.ts",
+          projectId: "root",
+          dependencyPath: ["src/new.ts", "src/consumer.ts"],
+        }],
+        omittedImpactCount: 0,
+        limitations: [],
+      },
     };
 
     const run = JSON.parse(renderSarifReport(covered)).runs[0];
@@ -145,5 +163,6 @@ describe("SARIF reporter", () => {
     expect(run.results).toEqual([]);
     expect(run.properties.coverage).toEqual(covered.coverage);
     expect(run.properties.auditScope).toEqual(covered.auditScope);
+    expect(run.properties.sourceImpact).toEqual(covered.sourceImpact);
   });
 });

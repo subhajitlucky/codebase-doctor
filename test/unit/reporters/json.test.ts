@@ -131,6 +131,34 @@ describe("JSON reporter", () => {
     expect(parsed.domainCoverage).toEqual(result().domainCoverage);
   });
 
+  it("keeps schema version 1 while emitting optional bounded source impact", () => {
+    const withImpact: ScanResult = {
+      ...result(),
+      sourceImpact: {
+        mode: "changed",
+        status: "completed",
+        graphNodeCount: 2,
+        graphEdgeCount: 1,
+        externalBoundaryCount: 0,
+        dynamicBoundaryCount: 0,
+        changedSourcePaths: ["src/a.ts"],
+        impactedFileCount: 1,
+        impactedProjectIds: ["root"],
+        impacts: [{
+          path: "src/b.ts",
+          projectId: "root",
+          dependencyPath: ["src/a.ts", "src/b.ts"],
+        }],
+        omittedImpactCount: 0,
+        limitations: [],
+      },
+    };
+
+    const parsed = JSON.parse(renderJsonReport(withImpact));
+    expect(parsed.schemaVersion).toBe("1");
+    expect(parsed.sourceImpact).toEqual(withImpact.sourceImpact);
+  });
+
   it("preserves structured guidance and audit scope without custom serialization loss", () => {
     const scoped: ScanResult = {
       ...result(),
