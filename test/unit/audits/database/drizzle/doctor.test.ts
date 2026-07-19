@@ -147,19 +147,33 @@ describe("Drizzle Doctor", () => {
     );
   });
 
-  it("does not flag typed comparisons or explicit encoders", async () => {
+  it("does not flag typed comparisons or fresh inline explicit encoders", async () => {
     const contents = new Map([["src/query.ts", [
       'import { sql, lte } from "drizzle-orm";',
       "const cutoff = new Date();",
-      "const encoder = { mapToDriverValue: (value: Date) => value.toISOString() };",
       "db.select().where(lte(table.availableAt, cutoff));",
-      "sql`available_at <= ${sql.param(cutoff, encoder)}`;",
+      "sql`available_at <= ${sql.param(cutoff, { mapToDriverValue: (value: Date) => value.toISOString() })}`;",
     ].join("\n")]]);
     const { result } = await diagnose(contents);
     expect(result.findings).toEqual([]);
     expect(result.coverage).toEqual([expect.objectContaining({
       status: "completed",
       statementsRecognized: 0,
+    })]);
+  });
+
+  it("reports partial coverage for a const explicit encoder", async () => {
+    const contents = new Map([["src/query.ts", [
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "const encoder = { mapToDriverValue: (value: Date) => value.toISOString() };",
+      "sql`available_at <= ${sql.param(cutoff, encoder)}`;",
+    ].join("\n")]]);
+    const { result } = await diagnose(contents);
+    expect(result.findings).toEqual([]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      limitations: [expect.stringMatching(/raw Drizzle value interpolation could not be classified/iu)],
     })]);
   });
 

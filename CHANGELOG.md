@@ -15,9 +15,10 @@ All notable changes to Codebase Doctor are documented here.
 
 - Keep raw SQL, source expressions, Date values, and secrets out of findings,
   fingerprints, and every reporter. The module provides external-only typed
-  comparison or statically proven explicit-encoder guidance and never applies
-  a repair. Unknown encoder arguments remain partial coverage rather than
-  assumed safety.
+  comparison or explicit-encoder guidance and never applies a repair. Static
+  safety proof is limited to a fresh inline, spread-free encoder object with a
+  callable `mapToDriverValue`; identifiers, aliases, members, calls, and other
+  encoder arguments remain partial coverage rather than assumed safety.
 
 ## [0.1.6] - 2026-07-18
 

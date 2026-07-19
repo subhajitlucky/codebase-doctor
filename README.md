@@ -170,10 +170,11 @@ stable typed or constant propagation. It does not infer from a variable name.
 
 The following are not findings: `Date()`, `Date.now()`, an already encoded
 `toISOString()` string, typed comparisons such as `lte(column, date)`, and a
-statically proven explicit encoder such as an immutable encoder object with a
-callable `mapToDriverValue` passed to `sql.param(value, encoder)`. Merely
-supplying an unknown second argument does not prove an encoder; that
-interpolation becomes a partial coverage limitation. Unsupported syntax and unresolved or
+fresh inline encoder object with no spreads and a callable
+`mapToDriverValue` passed directly to `sql.param(value, encoder)`. Encoder
+identifiers, aliases, member accesses, and calls are not statically proven safe,
+even when declared with `const`, because their objects may be mutated elsewhere;
+those interpolations become partial coverage limitations. Unsupported syntax and unresolved or
 unclassified value flows likewise become partial coverage limitations rather
 than guessed findings. Partial coverage is not a clean Drizzle audit.
 

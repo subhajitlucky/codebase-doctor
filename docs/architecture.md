@@ -242,9 +242,11 @@ value: a JavaScript `Date` interpolated into raw Drizzle SQL. That path can bypa
 the column's timestamp encoder, after which postgres-js may throw
 `ERR_INVALID_ARG_TYPE`; equivalent SQL may work in psql because it does not use
 the unencoded JavaScript parameter. `Date()`, `Date.now()`, `toISOString()`,
-name-based guesses, `lte(column, date)`, and a statically proven explicit
-encoder with a callable `mapToDriverValue` are not findings. An unknown encoder
-argument is partial coverage rather than assumed safety. Unsupported or
+name-based guesses, `lte(column, date)`, and a fresh inline encoder object with
+no spreads and a callable `mapToDriverValue` passed directly to `sql.param` are
+not findings. Encoder identifiers, aliases, member accesses, and calls—including
+objects held by `const` bindings—are partial coverage rather than assumed
+safety. Unsupported or
 unclassified Date flows are partial coverage limitations, not guesses.
 
 Findings are medium severity and high confidence: the static proof is narrow,
@@ -254,9 +256,10 @@ expressions, Date values, and secrets are withheld. Fingerprint identity uses
 only safe normalized metadata; redaction does not depend on a reporter.
 
 The remediation guidance points an external authorized human or coding agent
-toward a typed comparison such as `lte(column, date)` or a statically proven
-explicit encoder. The external actor must preserve timezone semantics and
-rerun the same scope. Doctor supplies evidence and verification guidance; it
+toward a typed comparison such as `lte(column, date)` or an explicit encoder.
+Only a fresh inline callable encoder object is recognized as safe by the current
+static coverage; other encoder forms remain partial. The external actor must
+preserve timezone semantics and rerun the same scope. Doctor supplies evidence and verification guidance; it
 never performs the repair or receives target-write authority. This permanent
 separation keeps Codebase Doctor a model-independent auditor even as builder
 models become more capable.

@@ -12,8 +12,8 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/postgres-js.*ERR_INVALID_ARG_TYPE|ERR_INVALID_ARG_TYPE.*postgres-js/is);
     expect(skill).toMatch(/Date\(\).*Date\.now\(\).*toISOString|toISOString.*Date\.now\(\).*Date\(\)/is);
     expect(skill).toMatch(/lte\(column, date\)/);
-    expect(skill).toMatch(/statically proven.*explicit.*encoder|explicit.*encoder.*statically proven/is);
-    expect(skill).toMatch(/unknown.*encoder.*partial|partial.*unknown.*encoder/is);
+    expect(skill).toMatch(/fresh inline.*encoder|encoder.*fresh inline/is);
+    expect(skill).toMatch(/(?:identifier|alias).*(?:const)?.*partial|partial.*(?:identifier|alias)/is);
     expect(skill).toMatch(/external.*(?:human|agent).*(?:repair|change|remediat).*rerun.*same.*scope/is);
     expect(skill).toMatch(/never.*(?:ask|grant).*Codebase Doctor.*target[- ]write/is);
     expect(skill).toMatch(/never.*(?:copy|request|reveal).*raw SQL|raw SQL.*(?:withheld|never.*copy)/is);

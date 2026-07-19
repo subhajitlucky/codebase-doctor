@@ -250,7 +250,7 @@ describe("analyzeDrizzleRawSqlDates", () => {
     expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
   });
 
-  it("exempts only a sql.param wrapper with a statically proven encoder", () => {
+  it("keeps a const encoder partial because its object can be mutated through an alias", () => {
     const result = analyze([
       'import { sql } from "drizzle-orm";',
       "const cutoff = new Date();",
@@ -260,6 +260,9 @@ describe("analyzeDrizzleRawSqlDates", () => {
 
     expect(result.matches).toEqual([
       { line: 4, column: 37, evidenceClass: "immutable-date-binding", sqlBinding: "sql" },
+    ]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 4, column: 7 },
     ]);
   });
 
@@ -293,7 +296,7 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ]);
   });
 
-  it("proves direct and bounded immutable-const encoder objects", () => {
+  it("proves only a fresh inline callable encoder object", () => {
     const result = analyze([
       'import { sql } from "drizzle-orm";',
       "const cutoff = new Date();",
@@ -302,7 +305,41 @@ describe("analyzeDrizzleRawSqlDates", () => {
       "sql`${sql.param(cutoff, { mapToDriverValue: (value: Date) => value.toISOString() })} ${sql.param(cutoff, encoder)}`;",
     ].join("\n"));
 
-    expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 5, column: 88 },
+    ]);
+  });
+
+  it("does not trust an encoder mutated through an alias", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "const encoder = { mapToDriverValue: (value: Date) => value.toISOString() };",
+      "const alias = encoder;",
+      "alias.mapToDriverValue = undefined;",
+      "sql`${sql.param(cutoff, encoder)}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 6, column: 7 },
+    ]);
+  });
+
+  it("rejects fresh inline encoder lookalikes without a callable map function", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "sql`${sql.param(cutoff, {})} ${sql.param(cutoff, { mapToDriverValue: undefined })} ${sql.param(cutoff, { ...base, mapToDriverValue() {} })}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 3, column: 7 },
+      { code: "unresolved-interpolation", line: 3, column: 32 },
+      { code: "unresolved-interpolation", line: 3, column: 86 },
+    ]);
   });
 
   it("does not prove a const encoder object whose callable property is overwritten", () => {
@@ -336,6 +373,63 @@ describe("analyzeDrizzleRawSqlDates", () => {
     expect(result.status).toBe("partial");
     expect(result.limitations).toHaveLength(2);
     expect(result.limitations.every(({ code }) => code === "unresolved-interpolation")).toBe(true);
+  });
+
+  it("shadows imported sql inside a named class expression", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const Wrapper = class sql extends sql`${new Date()}` {",
+      "  field = sql`${new Date()}`;",
+      "  static computed = sql`${new Date()}`;",
+      "  method() { return sql`${new Date()}`; }",
+      "  static { sql`${new Date()}`; }",
+      "};",
+      "sql`${new Date()}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 8, column: 7, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+    ]);
+  });
+
+  it("shadows global Date inside a named class expression, including nested methods", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const Wrapper = class Date extends Date {",
+      "  field = sql`${new Date()}`;",
+      "  [sql`${new Date()}`]() {}",
+      "  method() { return sql`${new Date()}`; }",
+      "  static { sql`${new Date()}`; }",
+      "};",
+      "sql`${new Date()}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 8, column: 7, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+    ]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 3, column: 17 },
+      { code: "unresolved-interpolation", line: 4, column: 10 },
+      { code: "unresolved-interpolation", line: 5, column: 27 },
+      { code: "unresolved-interpolation", line: 6, column: 18 },
+    ]);
+  });
+
+  it("does not invent a class-name shadow for anonymous class expressions", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const Wrapper = class {",
+      "  field = sql`${new Date()}`;",
+      "  [sql`${new Date()}`]() {}",
+      "  method() { return sql`${new Date()}`; }",
+      "};",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 3, column: 17, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+      { line: 4, column: 10, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+      { line: 5, column: 27, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+    ]);
   });
 
   it("does not trust a shadowed sql.param lookalike", () => {

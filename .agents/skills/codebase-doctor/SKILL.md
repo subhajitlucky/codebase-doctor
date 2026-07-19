@@ -155,18 +155,20 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    Applicability requires an exact `drizzle-orm/postgres-js` adapter import or
    scoped owning/workspace dependencies on both `drizzle-orm` and `postgres`.
    `Date()`, `Date.now()`, `toISOString()`, name-based guesses,
-   `lte(column, date)`, and a statically proven explicit encoder with a callable
-   `mapToDriverValue` are not findings. An unknown encoder argument is partial
-   coverage, not assumed safety. Unsupported syntax or unresolved and
-   unclassified Date flow is also a partial coverage limitation; partial
+   `lte(column, date)`, and a fresh inline encoder object with no spreads and a
+   callable `mapToDriverValue` passed directly to `sql.param` are not findings.
+   Encoder identifiers, aliases, member accesses, and calls—including `const`
+   objects—are partial coverage, not assumed safety. Unsupported syntax or
+   unresolved and unclassified Date flow is also a partial coverage limitation; partial
    coverage is not clean.
 
    The finding is medium severity and high confidence. Treat it as evidence,
    not automatic truth. Raw SQL, raw expressions, Date values, and secrets are
    withheld; never copy or request them from Doctor. Ask an external authorized
    human or coding agent to preserve timestamp semantics and repair the query
-   with a typed comparison such as `lte(column, date)` or a statically proven
-   explicit encoder, then rerun the same scope. Never ask for or grant
+   with a typed comparison such as `lte(column, date)` or an explicit encoder,
+   then rerun the same scope. Only a fresh inline callable encoder is recognized
+   as safe by this static audit; all other encoder forms remain partial. Never ask for or grant
    Codebase Doctor target-write authority. Doctor never performs the change.
 
 9. Static `database/sql-rls` coverage runs automatically and offline for

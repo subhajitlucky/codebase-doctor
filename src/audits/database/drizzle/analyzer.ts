@@ -495,7 +495,7 @@ function isCallableNode(node: Node | undefined): boolean {
   return ["ArrowFunctionExpression", "FunctionExpression", "ObjectMethod"].includes(nodeType(node) ?? "");
 }
 
-function objectHasProvenEncoder(object: Node): boolean {
+function isFreshInlineEncoder(object: Node): boolean {
   if (nodeType(object) !== "ObjectExpression" || !Array.isArray(object.properties)) return false;
   if (object.properties.some((property) => nodeType(objectNode(property)) === "SpreadElement")) return false;
   let mapProperty: Node | undefined;
@@ -510,26 +510,6 @@ function objectHasProvenEncoder(object: Node): boolean {
   }
   if (nodeType(mapProperty) === "ObjectMethod") return mapProperty?.kind === "method";
   return nodeType(mapProperty) === "ObjectProperty" && isCallableNode(objectNode(mapProperty?.value));
-}
-
-function proveEncoder(
-  expression: Node,
-  scope: Scope,
-  useOffset: number,
-  seen: Set<Binding> = new Set(),
-  remainingDepth = DATE_PROOF_MAX_DEPTH,
-): boolean {
-  if (remainingDepth <= 0) return false;
-  if (objectHasProvenEncoder(expression)) return true;
-  const name = identifierName(expression);
-  if (name === undefined) return false;
-  const binding = resolve(scope, name);
-  if (binding?.kind !== "const" || binding.init === undefined || binding.duplicate ||
-      binding.declarationOffset >= useOffset || binding.writes.length > 0 || seen.has(binding)) {
-    return false;
-  }
-  seen.add(binding);
-  return proveEncoder(binding.init, scope, binding.declarationOffset, seen, remainingDepth - 1);
 }
 
 function definitelyInvalidEncoder(expression: Node | undefined, scope: Scope): boolean {
@@ -562,7 +542,9 @@ function classifySqlParameter(
   if (args.length < 2 || definitelyInvalidEncoder(encoder, scope)) {
     return { kind: "invalid", ...(value === undefined ? {} : { value }) };
   }
-  if (args.length === 2 && encoder !== undefined && proveEncoder(encoder, scope, offset(expression))) {
+  // An object held in any binding can be mutated through an alias without a
+  // write to that binding. Only a fresh inline object is locally provable.
+  if (args.length === 2 && encoder !== undefined && isFreshInlineEncoder(encoder)) {
     return { kind: "safe" };
   }
   return { kind: "unknown" };
@@ -780,10 +762,35 @@ export function analyzeDrizzleRawSqlDates(
       return;
     }
 
+    if (type === "ClassExpression" || type === "ClassDeclaration") {
+      const classScope: Scope = { parent: scope, bindings: new Map() };
+      const className = identifierName(objectNode(node.id));
+      if (className !== undefined) {
+        declare(classScope, {
+          name: className,
+          kind: "local",
+          declarationOffset: offset(node),
+          exactDateType: false,
+          writes: [],
+          duplicate: false,
+        });
+      }
+      // A named class binding is active while its heritage and body are
+      // evaluated. Methods and static blocks create their own child scopes.
+      visit(node.superClass, classScope, depth + 1);
+      visit(node.body, classScope, depth + 1);
+      return;
+    }
+
     if ([
       "FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression",
       "ObjectMethod", "ClassMethod", "ClassPrivateMethod",
     ].includes(type ?? "")) {
+      if (["ObjectMethod", "ClassMethod", "ClassPrivateMethod"].includes(type ?? "") &&
+          node.computed === true) {
+        visit(node.key, scope, depth + 1);
+        if (budgetExceeded) return;
+      }
       const functionScope: Scope = { parent: scope, bindings: new Map() };
       const functionName = identifierName(objectNode(node.id));
       if (functionName !== undefined) {
