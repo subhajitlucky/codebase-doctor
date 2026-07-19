@@ -100,6 +100,38 @@ function aggregateStatuses(statuses: readonly DomainCoverageStatus[]): DomainCov
   return [...statuses].sort((left, right) => STATUS_PRIORITY[right] - STATUS_PRIORITY[left])[0]!;
 }
 
+function aggregateLimitationMetadata(
+  entries: readonly {
+    limitationGroups?: readonly LimitationGroup[];
+    limitationSummary?: OmittedRecordSummary;
+  }[],
+): {
+  limitationGroups?: readonly LimitationGroup[];
+  limitationSummary?: OmittedRecordSummary;
+} {
+  const groups = entries
+    .flatMap(({ limitationGroups }) => limitationGroups ?? [])
+    .map((group) => ({ ...group, samplePaths: [...group.samplePaths] }))
+    .sort((left, right) =>
+      left.reason.localeCompare(right.reason) ||
+      left.samplePaths.join("\0").localeCompare(right.samplePaths.join("\0"))
+    );
+  const summaries = entries.flatMap(({ limitationSummary }) =>
+    limitationSummary === undefined ? [] : [limitationSummary]
+  );
+  const limitationSummary = summaries.length === 0
+    ? undefined
+    : summaries.reduce<OmittedRecordSummary>((total, summary) => ({
+      total: total.total + summary.total,
+      emitted: total.emitted + summary.emitted,
+      omitted: total.omitted + summary.omitted,
+    }), { total: 0, emitted: 0, omitted: 0 });
+  return {
+    ...(groups.length === 0 ? {} : { limitationGroups: groups }),
+    ...(limitationSummary === undefined ? {} : { limitationSummary }),
+  };
+}
+
 function moduleCoverage(entry: RegisteredDoctorResult): DomainModuleCoverage {
   const coverage = entry.result.coverage ?? [];
   const status = entry.result.status === "failed"
@@ -115,7 +147,13 @@ function moduleCoverage(entry: RegisteredDoctorResult): DomainModuleCoverage {
     ...(entry.result.skipReason === undefined ? [] : [entry.result.skipReason]),
     ...(entry.result.error === undefined ? [] : [entry.result.error.message]),
   ])].sort();
-  return { moduleId: entry.doctorId, status, scopes, limitations };
+  return {
+    moduleId: entry.doctorId,
+    status,
+    scopes,
+    limitations,
+    ...aggregateLimitationMetadata(coverage),
+  };
 }
 
 function evidenceKey(evidence: DomainCoverageEvidence): string {
@@ -352,6 +390,7 @@ export function planDomainCoverage(
   const databaseDetected = databaseModules.some((module) =>
     module.status === "completed" || module.status === "partial" || module.status === "failed"
   );
+  const databaseLimitationMetadata = aggregateLimitationMetadata(databaseModules);
 
   const coverage: DomainCoverage[] = [
     {
@@ -396,6 +435,7 @@ export function planDomainCoverage(
       limitations: input.includeDatabaseAudit
         ? databaseModules.flatMap(({ limitations }) => limitations)
         : ["The repository-only scan command does not select database audit modules."],
+      ...(input.includeDatabaseAudit ? databaseLimitationMetadata : {}),
     },
     securityCoverage(securityModules, input.snapshot),
     infrastructure,
