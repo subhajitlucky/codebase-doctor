@@ -273,6 +273,25 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ]);
   });
 
+  it("bounds Date proof across a long acyclic const chain", () => {
+    const aliases = Array.from(
+      { length: 96 },
+      (_, index) => `const date${index + 1} = date${index};`,
+    );
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const date0 = new Date();",
+      ...aliases,
+      "sql`${date96}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.status).toBe("partial");
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 99, column: 7 },
+    ]);
+  });
+
   it("reports unknown value-position interpolation without exposing its value", () => {
     const result = analyze([
       'import { sql } from "drizzle-orm";',

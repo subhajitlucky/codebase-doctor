@@ -50,6 +50,7 @@ const DEFAULT_BOUNDS: Bounds = {
   maxDepth: 256,
   maxLimitations: 64,
 };
+const DATE_PROOF_MAX_DEPTH = 64;
 
 const structuralSqlCalls = new Set([
   "and", "asc", "between", "desc", "eq", "exists", "gt", "gte", "ilike",
@@ -272,7 +273,9 @@ function proveDate(
   scope: Scope,
   useOffset: number,
   seen: Set<Binding> = new Set(),
+  remainingDepth = DATE_PROOF_MAX_DEPTH,
 ): DrizzleDateEvidenceClass | undefined {
+  if (remainingDepth <= 0) return undefined;
   if (isDateAssertion(expression, scope)) return "date-type-assertion";
   if (nodeType(expression) === "NewExpression" && isGlobalDate(scope, objectNode(expression.callee))) {
     return "direct-date-construction";
@@ -287,7 +290,7 @@ function proveDate(
     return undefined;
   }
   seen.add(binding);
-  return proveDate(binding.init, scope, binding.declarationOffset, seen) === undefined
+  return proveDate(binding.init, scope, binding.declarationOffset, seen, remainingDepth - 1) === undefined
     ? undefined
     : "immutable-date-binding";
 }
