@@ -41,36 +41,98 @@ function supportsSource(path: string): boolean {
   return SUPPORTED_SOURCE_EXTENSION.test(path);
 }
 
-function containsPath(project: DetectedProject, path: string): boolean {
-  return project.root === "." || path === project.root || path.startsWith(`${project.root}/`);
+interface ProjectIndex {
+  readonly byId: ReadonlyMap<string, DetectedProject>;
+  readonly deepestOwners: (path: string) => readonly DetectedProject[];
+  readonly descendantProjects: (project: DetectedProject) => readonly DetectedProject[];
+  readonly workspaceContextProjectIds: (project: DetectedProject) => ReadonlySet<string>;
 }
 
-function projectDepth(project: DetectedProject): number {
-  return project.root === "." ? 0 : project.root.split("/").length;
-}
+function buildProjectIndex(snapshot: ProjectSnapshot): ProjectIndex {
+  const byId = new Map(snapshot.projects.map((project) => [project.id, project]));
+  const projectsByRoot = new Map<string, DetectedProject[]>();
+  for (const project of snapshot.projects) {
+    const projects = projectsByRoot.get(project.root) ?? [];
+    projects.push(project);
+    projectsByRoot.set(project.root, projects);
+  }
+  for (const projects of projectsByRoot.values()) {
+    projects.sort((left, right) => left.id.localeCompare(right.id));
+  }
 
-function deepestOwners(
-  path: string,
-  projects: readonly DetectedProject[],
-): readonly DetectedProject[] {
-  const candidates = projects
-    .filter((project) => containsPath(project, path))
-    .sort((left, right) =>
-      projectDepth(right) - projectDepth(left) ||
-      left.root.localeCompare(right.root) ||
-      left.id.localeCompare(right.id)
-    );
-  const deepestCandidate = candidates[0];
-  if (deepestCandidate === undefined) return [];
-  const depth = projectDepth(deepestCandidate);
-  return candidates.filter((project) => projectDepth(project) === depth);
+  const descendantsByProjectId = new Map<string, DetectedProject[]>();
+  for (const candidate of snapshot.projects) {
+    const ancestorRoots = new Set<string>(["."]);
+    if (candidate.root !== ".") {
+      let prefix = candidate.root;
+      while (prefix.length > 0) {
+        ancestorRoots.add(prefix);
+        const separator = prefix.lastIndexOf("/");
+        if (separator < 0) break;
+        prefix = prefix.slice(0, separator);
+      }
+    }
+    for (const root of ancestorRoots) {
+      for (const ancestor of projectsByRoot.get(root) ?? []) {
+        const descendants = descendantsByProjectId.get(ancestor.id) ?? [];
+        descendants.push(candidate);
+        descendantsByProjectId.set(ancestor.id, descendants);
+      }
+    }
+  }
+
+  const supportedOwnersByMemberRoot = new Map<string, string[]>();
+  for (const workspace of snapshot.workspaces) {
+    if (!workspace.supported) continue;
+    for (const root of workspace.matchedProjectRoots) {
+      const owners = supportedOwnersByMemberRoot.get(root) ?? [];
+      owners.push(workspace.ownerProjectId);
+      supportedOwnersByMemberRoot.set(root, owners);
+    }
+  }
+
+  return {
+    byId,
+    deepestOwners(path) {
+      let prefix = path;
+      while (prefix.length > 0) {
+        const exact = projectsByRoot.get(prefix);
+        if (exact !== undefined) return exact;
+        const separator = prefix.lastIndexOf("/");
+        if (separator < 0) break;
+        prefix = prefix.slice(0, separator);
+      }
+      return projectsByRoot.get(".") ?? [];
+    },
+    descendantProjects(project) {
+      return descendantsByProjectId.get(project.id) ?? [];
+    },
+    workspaceContextProjectIds(project) {
+      const context = new Set([project.id]);
+      const visitedRoots = new Set<string>();
+      const queue = [project.root];
+      for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const root = queue[cursor]!;
+        if (visitedRoots.has(root)) continue;
+        visitedRoots.add(root);
+        for (const ownerId of supportedOwnersByMemberRoot.get(root) ?? []) {
+          if (context.has(ownerId)) continue;
+          const owner = byId.get(ownerId);
+          if (owner === undefined) continue;
+          context.add(owner.id);
+          queue.push(owner.root);
+        }
+      }
+      return context;
+    },
+  };
 }
 
 function uniqueOwner(
   path: string,
-  projects: readonly DetectedProject[],
+  index: ProjectIndex,
 ): DetectedProject | "ambiguous" | undefined {
-  const candidates = deepestOwners(path, projects);
+  const candidates = index.deepestOwners(path);
   if (candidates.length === 0) return undefined;
   return candidates.length === 1 ? candidates[0] : "ambiguous";
 }
@@ -91,51 +153,115 @@ function manifestDependencyNames(manifest: ManifestRecord): readonly string[] {
   return [...names];
 }
 
-function dependencyIndex(snapshot: ProjectSnapshot): ReadonlyMap<string, ReadonlySet<string>> {
+interface DependencyEvidence {
+  readonly names: ReadonlySet<string>;
+  readonly invalidManifestPaths: readonly string[];
+  readonly known: boolean;
+}
+
+function dependencyIndex(snapshot: ProjectSnapshot): ReadonlyMap<string, DependencyEvidence> {
   const manifestsByPath = new Map(snapshot.manifests.map((manifest) => [manifest.path, manifest]));
   return new Map(snapshot.projects.map((project) => {
     const names = new Set(project.dependencyNames ?? []);
+    const invalidManifestPaths: string[] = [];
+    let hasUsableManifest = false;
     for (const path of project.manifestPaths) {
       const manifest = manifestsByPath.get(path);
       if (manifest === undefined) continue;
+      if (manifest.status === "invalid") {
+        invalidManifestPaths.push(path);
+        continue;
+      }
+      hasUsableManifest = true;
       for (const name of manifestDependencyNames(manifest)) names.add(name);
     }
-    return [project.id, names] as const;
+    return [project.id, {
+      names,
+      invalidManifestPaths: invalidManifestPaths.sort(),
+      known:
+        invalidManifestPaths.length === 0 &&
+        (project.dependencyNames !== undefined || hasUsableManifest),
+    }] as const;
   }));
-}
-
-function workspaceContextProjectIds(
-  project: DetectedProject,
-  snapshot: ProjectSnapshot,
-): ReadonlySet<string> {
-  const projectsById = new Map(snapshot.projects.map((candidate) => [candidate.id, candidate]));
-  const context = new Set([project.id]);
-  const queue = [project.root];
-  while (queue.length > 0) {
-    const root = queue.shift();
-    if (root === undefined) break;
-    for (const workspace of snapshot.workspaces) {
-      if (!workspace.supported || !workspace.matchedProjectRoots.includes(root)) continue;
-      if (context.has(workspace.ownerProjectId)) continue;
-      const owner = projectsById.get(workspace.ownerProjectId);
-      if (owner === undefined) continue;
-      context.add(owner.id);
-      queue.push(owner.root);
-    }
-  }
-  return context;
 }
 
 function dependencyApplicable(
   project: DetectedProject,
-  snapshot: ProjectSnapshot,
-  dependencies: ReadonlyMap<string, ReadonlySet<string>>,
+  index: ProjectIndex,
+  dependencies: ReadonlyMap<string, DependencyEvidence>,
 ): boolean {
+  const ownEvidence = dependencies.get(project.id);
+  if (
+    ownEvidence?.names.has(DRIZZLE_DEPENDENCY) &&
+    ownEvidence.names.has(POSTGRES_JS_DEPENDENCY)
+  ) {
+    return ownEvidence.known;
+  }
   const combined = new Set<string>();
-  for (const projectId of workspaceContextProjectIds(project, snapshot)) {
-    for (const dependency of dependencies.get(projectId) ?? []) combined.add(dependency);
+  for (const projectId of index.workspaceContextProjectIds(project)) {
+    const evidence = dependencies.get(projectId);
+    if (evidence === undefined || !evidence.known) return false;
+    for (const dependency of evidence.names) combined.add(dependency);
   }
   return combined.has(DRIZZLE_DEPENDENCY) && combined.has(POSTGRES_JS_DEPENDENCY);
+}
+
+class BoundedFileSelection {
+  readonly #files: FileRecord[] = [];
+  #candidateCount = 0;
+
+  constructor(readonly maxFiles: number) {}
+
+  admit(file: FileRecord): void {
+    this.#candidateCount += 1;
+    if (this.#files.length < this.maxFiles) {
+      this.#files.push(file);
+      this.#bubbleUp(this.#files.length - 1);
+      return;
+    }
+    const latest = this.#files[0];
+    if (latest === undefined || file.path.localeCompare(latest.path) >= 0) return;
+    this.#files[0] = file;
+    this.#sinkDown(0);
+  }
+
+  orderedFiles(): readonly FileRecord[] {
+    return [...this.#files].sort((left, right) => left.path.localeCompare(right.path));
+  }
+
+  omittedCount(): number {
+    return this.#candidateCount - this.#files.length;
+  }
+
+  #bubbleUp(start: number): void {
+    let index = start;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.#files[parent]!.path.localeCompare(this.#files[index]!.path) >= 0) return;
+      [this.#files[parent], this.#files[index]] = [this.#files[index]!, this.#files[parent]!];
+      index = parent;
+    }
+  }
+
+  #sinkDown(start: number): void {
+    let index = start;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let latest = index;
+      if (
+        left < this.#files.length &&
+        this.#files[left]!.path.localeCompare(this.#files[latest]!.path) > 0
+      ) latest = left;
+      if (
+        right < this.#files.length &&
+        this.#files[right]!.path.localeCompare(this.#files[latest]!.path) > 0
+      ) latest = right;
+      if (latest === index) return;
+      [this.#files[index], this.#files[latest]] = [this.#files[latest]!, this.#files[index]!];
+      index = latest;
+    }
+  }
 }
 
 function boundedLimitations(values: ReadonlySet<string>, max: number): readonly string[] {
@@ -164,6 +290,7 @@ export function selectDrizzleAuditFiles(
   const scope = snapshot.auditScope.mode;
   const limitations = new Set<string>();
   const filesByPath = new Map(snapshot.files.map((entry) => [entry.path, entry]));
+  const projectIndex = buildProjectIndex(snapshot);
   const dependencies = dependencyIndex(snapshot);
   const affected = new Set(snapshot.auditScope.affectedProjectIds);
   const sourceProvenProjectIds = new Set<string>();
@@ -178,7 +305,7 @@ export function selectDrizzleAuditFiles(
       limitations.add(`${path}: postgres-js import evidence is outside supported source selection.`);
       continue;
     }
-    const owner = uniqueOwner(path, snapshot.projects);
+    const owner = uniqueOwner(path, projectIndex);
     if (owner === undefined || owner === "ambiguous") {
       limitations.add(`${path}: postgres-js import evidence has no unambiguous project owner.`);
       continue;
@@ -190,7 +317,7 @@ export function selectDrizzleAuditFiles(
     .filter((project) => scope === "full" || affected.has(project.id))
     .filter((project) =>
       sourceProvenProjectIds.has(project.id) ||
-      dependencyApplicable(project, snapshot, dependencies)
+      dependencyApplicable(project, projectIndex, dependencies)
     )
     .sort((left, right) => left.id.localeCompare(right.id));
   const applicableProjectIds = new Set(applicableProjects.map(({ id }) => id));
@@ -198,27 +325,46 @@ export function selectDrizzleAuditFiles(
   const consideredProjects = snapshot.projects.filter((project) =>
     scope === "full" || affected.has(project.id)
   );
-  const projectsById = new Map(snapshot.projects.map((project) => [project.id, project]));
+  const consideredProjectIds = new Set(consideredProjects.map((project) => project.id));
+  const unknownDependencyProjectIds = new Set<string>();
+  for (const project of consideredProjects) {
+    if (!project.ecosystems.includes("node") || sourceProvenProjectIds.has(project.id)) continue;
+    const evidence = dependencies.get(project.id);
+    if (evidence?.known) continue;
+    unknownDependencyProjectIds.add(project.id);
+    if (evidence !== undefined && evidence.invalidManifestPaths.length > 0) {
+      for (const path of evidence.invalidManifestPaths) {
+        limitations.add(
+          `${path}: invalid dependency manifest prevents complete Drizzle applicability analysis for project ${project.id}.`,
+        );
+      }
+      continue;
+    }
+    limitations.add(
+      `${project.root}: dependency metadata is unavailable; Drizzle applicability is unknown for project ${project.id}.`,
+    );
+  }
+
   for (const workspace of snapshot.workspaces) {
     if (workspace.supported) continue;
-    const owner = projectsById.get(workspace.ownerProjectId);
+    const owner = projectIndex.byId.get(workspace.ownerProjectId);
     if (owner === undefined) continue;
-    const inScopeBoundaryProjects = consideredProjects.filter((project) =>
-      containsPath(owner, project.root)
-    );
+    const inScopeBoundaryProjects = projectIndex
+      .descendantProjects(owner)
+      .filter((project) => consideredProjectIds.has(project.id));
     if (inScopeBoundaryProjects.length === 0) continue;
     const boundaryProjects = scope === "full"
       ? inScopeBoundaryProjects
       : [...new Map([owner, ...inScopeBoundaryProjects].map((project) => [project.id, project])).values()];
     const boundaryDependencies = new Set<string>();
     for (const project of boundaryProjects) {
-      for (const dependency of dependencies.get(project.id) ?? []) {
+      for (const dependency of dependencies.get(project.id)?.names ?? []) {
         boundaryDependencies.add(dependency);
       }
     }
     const hasUnresolvedRelevantProject = boundaryProjects.some((project) => {
       if (applicableProjectIds.has(project.id)) return false;
-      const ownDependencies = dependencies.get(project.id) ?? new Set<string>();
+      const ownDependencies = dependencies.get(project.id)?.names ?? new Set<string>();
       return ownDependencies.has(DRIZZLE_DEPENDENCY) || ownDependencies.has(POSTGRES_JS_DEPENDENCY);
     });
     if (
@@ -232,15 +378,15 @@ export function selectDrizzleAuditFiles(
     }
   }
 
-  const selected: FileRecord[] = [];
+  const selected = new BoundedFileSelection(maxFiles);
   if (scope === "full") {
     for (const file of snapshot.files) {
       if (file.kind !== "file" || !supportsSource(file.path)) continue;
-      const owner = uniqueOwner(file.path, snapshot.projects);
+      const owner = uniqueOwner(file.path, projectIndex);
       if (owner === "ambiguous") {
-        const candidates = snapshot.projects.filter((project) =>
-          containsPath(project, file.path) && applicableProjectIds.has(project.id)
-        );
+        const candidates = projectIndex
+          .deepestOwners(file.path)
+          .filter((project) => applicableProjectIds.has(project.id));
         if (candidates.length > 0) {
           limitations.add(
             `${file.path}: source ownership is ambiguous; Drizzle analysis was withheld.`,
@@ -248,12 +394,12 @@ export function selectDrizzleAuditFiles(
         }
         continue;
       }
-      if (owner !== undefined && applicableProjectIds.has(owner.id)) selected.push(file);
+      if (owner !== undefined && applicableProjectIds.has(owner.id)) selected.admit(file);
     }
   } else {
     function recordUnavailablePreviousSource(path: string, kind: "deleted" | "renamed"): void {
       if (!supportsSource(path)) return;
-      const owners = deepestOwners(path, snapshot.projects);
+      const owners = projectIndex.deepestOwners(path);
       const applicableOwners = owners.filter((owner) => applicableProjectIds.has(owner.id));
       if (applicableOwners.length === 0) return;
       if (owners.length > 1) {
@@ -279,6 +425,19 @@ export function selectDrizzleAuditFiles(
       ) {
         recordUnavailablePreviousSource(change.previousPath, "renamed");
       }
+      const owner = uniqueOwner(change.path, projectIndex);
+      if (owner === undefined || owner === "ambiguous") {
+        limitations.add(`${change.path}: changed source has no unambiguous project owner.`);
+        continue;
+      }
+      if (
+        affected.has(owner.id) &&
+        !applicableProjectIds.has(owner.id) &&
+        !unknownDependencyProjectIds.has(owner.id)
+      ) {
+        continue;
+      }
+      if (affected.has(owner.id) && unknownDependencyProjectIds.has(owner.id)) continue;
       const file = filesByPath.get(change.path);
       if (file?.kind !== "file") {
         limitations.add(`${change.path}: changed path is not an inventoried regular file.`);
@@ -290,24 +449,18 @@ export function selectDrizzleAuditFiles(
         );
         continue;
       }
-      const owner = uniqueOwner(change.path, snapshot.projects);
-      if (owner === undefined || owner === "ambiguous") {
-        limitations.add(`${change.path}: changed source has no unambiguous project owner.`);
-        continue;
-      }
       if (!applicableProjectIds.has(owner.id)) {
         limitations.add(
           `${change.path}: changed source is outside an applicable affected Drizzle project.`,
         );
         continue;
       }
-      selected.push(file);
+      selected.admit(file);
     }
   }
 
-  const orderedFiles = [...new Map(selected.map((file) => [file.path, file])).values()]
-    .sort((left, right) => left.path.localeCompare(right.path));
-  const omittedFiles = Math.max(orderedFiles.length - maxFiles, 0);
+  const orderedFiles = selected.orderedFiles();
+  const omittedFiles = selected.omittedCount();
   if (omittedFiles > 0) {
     limitations.add(
       `Drizzle source selection stopped at the ${maxFiles}-file limit; ${omittedFiles} file${omittedFiles === 1 ? " was" : "s were"} omitted.`,
@@ -317,7 +470,7 @@ export function selectDrizzleAuditFiles(
   return {
     scope,
     applicableProjectIds: [...applicableProjectIds].sort(),
-    files: orderedFiles.slice(0, maxFiles),
+    files: orderedFiles,
     limitations: boundedLimitations(limitations, maxLimitations),
   };
 }

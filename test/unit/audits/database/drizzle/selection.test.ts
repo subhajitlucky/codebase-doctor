@@ -250,6 +250,75 @@ describe("Drizzle audit file selection", () => {
     ]);
   });
 
+  it("silently skips ordinary changed source owned by a definitively non-Drizzle project", () => {
+    const selection = select(snapshot({
+      files: [
+        file("apps/web/src/view.ts"),
+        file("apps/web/src/link.ts", "symlink"),
+        file("apps/web/README.md"),
+      ],
+      projects: [project("web", "apps/web", ["react"])],
+      auditScope: changedScope(["web"], [
+        { status: "modified", path: "apps/web/src/view.ts" },
+        { status: "modified", path: "apps/web/src/missing.ts" },
+        { status: "modified", path: "apps/web/src/link.ts" },
+        { status: "modified", path: "apps/web/README.md" },
+      ]),
+    }));
+
+    expect(selection).toMatchObject({
+      applicableProjectIds: [],
+      files: [],
+      limitations: [],
+    });
+  });
+
+  it("reports unknown dependency evidence only for in-scope Node projects", () => {
+    const missing = project("missing", "apps/missing", undefined);
+    const invalid = project("invalid", "apps/invalid", undefined);
+    const outOfScope = project("out", "apps/out", undefined);
+    const nonNode: DetectedProject = {
+      ...project("python", "services/python", undefined),
+      ecosystems: ["python"],
+      languages: ["python"],
+    };
+    const selection = select(snapshot({
+      projects: [missing, invalid, outOfScope, nonNode],
+      manifests: [{
+        kind: "package-json",
+        path: "apps/invalid/package.json",
+        status: "invalid",
+        error: "invalid JSON",
+      }],
+      auditScope: changedScope(["missing", "invalid", "python"], []),
+    }));
+
+    expect(selection.limitations).toEqual([
+      "apps/invalid/package.json: invalid dependency manifest prevents complete Drizzle applicability analysis for project invalid.",
+      "apps/missing: dependency metadata is unavailable; Drizzle applicability is unknown for project missing.",
+    ]);
+  });
+
+  it("treats explicit empty dependencies or a usable empty manifest as known non-applicable", () => {
+    const explicit = project("explicit", "apps/explicit", []);
+    const manifestBacked = project("manifest", "apps/manifest", undefined);
+    const selection = select(snapshot({
+      projects: [explicit, manifestBacked],
+      manifests: [{
+        kind: "package-json",
+        path: "apps/manifest/package.json",
+        status: "valid",
+        data: { name: "manifest-backed" },
+      }],
+    }));
+
+    expect(selection).toMatchObject({
+      applicableProjectIds: [],
+      files: [],
+      limitations: [],
+    });
+  });
+
   it("reports deleted, missing, symlink, unsupported, and unowned changed paths without selecting them", () => {
     const selection = select(snapshot({
       files: [
@@ -341,7 +410,6 @@ describe("Drizzle audit file selection", () => {
     expect(selection.files.map(({ path }) => path)).toEqual(["apps/api/new.ts"]);
     expect(selection.limitations).toEqual([
       "apps/api/old.ts: previous renamed source could not be examined.",
-      "apps/web/new.ts: changed source is outside an applicable affected Drizzle project.",
     ]);
   });
 
@@ -376,6 +444,25 @@ describe("Drizzle audit file selection", () => {
     expect(() => select(value, { maxFiles: 0 })).toThrow(
       "maxFiles must be a positive safe integer.",
     );
+  });
+
+  it("retains the lexicographically earliest files and exactly counts a large overflow", () => {
+    const files = Array.from({ length: 12_005 }, (_, index) =>
+      file(`src/file-${String(12_004 - index).padStart(5, "0")}.ts`)
+    );
+    const selection = select(snapshot({
+      files,
+      projects: [project("root", ".", ["drizzle-orm", "postgres"])],
+    }), { maxFiles: 3 });
+
+    expect(selection.files.map(({ path }) => path)).toEqual([
+      "src/file-00000.ts",
+      "src/file-00001.ts",
+      "src/file-00002.ts",
+    ]);
+    expect(selection.limitations).toEqual([
+      "Drizzle source selection stopped at the 3-file limit; 12002 files were omitted.",
+    ]);
   });
 
   it("bounds and deterministically sorts limitations", () => {
