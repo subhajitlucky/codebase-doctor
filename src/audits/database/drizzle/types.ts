@@ -13,6 +13,7 @@ export interface DrizzleDateMatch {
   readonly line: number;
   readonly column: number;
   readonly evidenceClass: DrizzleDateEvidenceClass;
+  readonly sqlBinding: string;
 }
 
 export interface DrizzleAnalysisLimitation {

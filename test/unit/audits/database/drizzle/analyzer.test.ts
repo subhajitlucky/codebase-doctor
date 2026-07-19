@@ -14,7 +14,12 @@ describe("analyzeDrizzleRawSqlDates", () => {
 
     expect(result).toEqual({
       status: "completed",
-      matches: [{ line: 2, column: 35, evidenceClass: "direct-date-construction" }],
+      matches: [{
+        line: 2,
+        column: 35,
+        evidenceClass: "direct-date-construction",
+        sqlBinding: "sql",
+      }],
       limitations: [],
     });
   });
@@ -27,7 +32,12 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ].join("\n"));
 
     expect(result.matches).toEqual([
-      { line: 3, column: 28, evidenceClass: "immutable-date-binding" },
+      {
+        line: 3,
+        column: 28,
+        evidenceClass: "immutable-date-binding",
+        sqlBinding: "drizzleSql",
+      },
     ]);
   });
 
@@ -41,8 +51,8 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ].join("\n"));
 
     expect(result.matches).toEqual([
-      { line: 4, column: 16, evidenceClass: "declared-date-type" },
-      { line: 4, column: 25, evidenceClass: "declared-date-type" },
+      { line: 4, column: 16, evidenceClass: "declared-date-type", sqlBinding: "sql" },
+      { line: 4, column: 25, evidenceClass: "declared-date-type", sqlBinding: "sql" },
     ]);
   });
 
@@ -102,7 +112,7 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ].join("\n"));
 
     expect(result.matches).toEqual([
-      { line: 2, column: 7, evidenceClass: "direct-date-construction" },
+      { line: 2, column: 7, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
     ]);
   });
 
@@ -112,6 +122,16 @@ describe("analyzeDrizzleRawSqlDates", () => {
       "try {} catch (sql) { sql`${new Date()}`; }",
       "class Queries { run(sql: (parts: TemplateStringsArray) => unknown) { sql`${new Date()}`; } }",
       "for (const sql of []) { sql`${new Date()}`; }",
+    ].join("\n"));
+
+    expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
+  });
+
+  it("respects switch and static-block lexical shadowing of sql", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "switch (kind) { case 1: const sql = localTag; sql`${new Date()}`; break; }",
+      "class Queries { static { const sql = localTag; sql`${new Date()}`; } }",
     ].join("\n"));
 
     expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
@@ -149,6 +169,19 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ]);
   });
 
+  it("does not prove a Date binding used in its temporal dead zone", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "sql`${cutoff}`;",
+      "const cutoff = new Date();",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 2, column: 7 },
+    ]);
+  });
+
   it("ignores sql tags imported from unrelated packages", () => {
     const result = analyze([
       'import { sql } from "another-package";',
@@ -167,7 +200,7 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ].join("\n"));
 
     expect(result.matches).toEqual([
-      { line: 4, column: 37, evidenceClass: "immutable-date-binding" },
+      { line: 4, column: 37, evidenceClass: "immutable-date-binding", sqlBinding: "sql" },
     ]);
   });
 
@@ -192,6 +225,52 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ].join("\n"));
 
     expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
+  });
+
+  it("recognizes structure only when operators and columns have proven bindings", () => {
+    const result = analyze([
+      'import { lte, pgTable, sql } from "drizzle-orm";',
+      'import { users } from "./schema.js";',
+      'const localTable = pgTable("local", {});',
+      "sql`${lte(users.createdAt, new Date())} ${localTable.createdAt}`;",
+    ].join("\n"));
+
+    expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
+  });
+
+  it("keeps value-like member access and local operator lookalikes unresolved", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "function lte(value: unknown) { return value; }",
+      "function pgTable(name: string) { return { name }; }",
+      'const impostorTable = pgTable("local");',
+      "function query(params: { cutoff: unknown }) {",
+      "  return sql`${params.cutoff} ${lte(params.cutoff)} ${impostorTable.createdAt}`;",
+      "}",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 6, column: 16 },
+      { code: "unresolved-interpolation", line: 6, column: 33 },
+      { code: "unresolved-interpolation", line: 6, column: 55 },
+    ]);
+  });
+
+  it("bounds scalar alias following for self and cyclic aliases", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const self = self;",
+      "const first = second;",
+      "const second = first;",
+      "sql`${self} ${first}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 5, column: 7 },
+      { code: "unresolved-interpolation", line: 5, column: 15 },
+    ]);
   });
 
   it("reports unknown value-position interpolation without exposing its value", () => {

@@ -12,7 +12,15 @@ type Node = Record<string, unknown>;
 
 interface Binding {
   readonly name: string;
-  readonly kind: "import-sql" | "import-other" | "const" | "local" | "parameter";
+  readonly kind:
+    | "import-sql"
+    | "import-drizzle"
+    | "import-schema"
+    | "import-other"
+    | "const"
+    | "local"
+    | "parameter";
+  readonly importedName?: string;
   readonly declarationOffset: number;
   readonly init?: Node;
   readonly exactDateType: boolean;
@@ -34,6 +42,7 @@ interface Bounds {
 interface PendingInterpolation {
   readonly expression: Node;
   readonly scope: Scope;
+  readonly sqlBinding: string;
 }
 
 const DEFAULT_BOUNDS: Bounds = {
@@ -146,6 +155,8 @@ function predeclareStatement(scope: Scope, statement: Node): void {
   if (type === "ImportDeclaration") {
     const source = objectNode(statement.source);
     const fromDrizzle = source?.value === "drizzle-orm";
+    const fromSchema = typeof source?.value === "string" &&
+      /(?:^|[/.-])schema(?:[/.-]|$)/i.test(source.value);
     if (!Array.isArray(statement.specifiers)) return;
     for (const rawSpecifier of statement.specifiers) {
       const specifier = objectNode(rawSpecifier);
@@ -156,7 +167,10 @@ function predeclareStatement(scope: Scope, statement: Node): void {
         imported === "sql" && specifier?.importKind !== "type" && statement.importKind !== "type";
       declare(scope, {
         name: local,
-        kind: importedSql ? "import-sql" : "import-other",
+        kind: importedSql
+          ? "import-sql"
+          : fromDrizzle ? "import-drizzle" : fromSchema ? "import-schema" : "import-other",
+        ...(imported === undefined ? {} : { importedName: imported }),
         declarationOffset: offset(specifier),
         exactDateType: false,
         writes: [],
@@ -266,7 +280,8 @@ function proveDate(
   const name = identifierName(expression);
   if (name === undefined) return undefined;
   const binding = resolve(scope, name);
-  if (binding === undefined || binding.duplicate || writeBefore(binding, useOffset)) return undefined;
+  if (binding === undefined || binding.duplicate || binding.declarationOffset >= useOffset ||
+      writeBefore(binding, useOffset)) return undefined;
   if (binding.exactDateType && resolve(scope, "Date") === undefined) return "declared-date-type";
   if (binding.kind !== "const" || binding.init === undefined || binding.writes.length > 0 || seen.has(binding)) {
     return undefined;
@@ -304,7 +319,14 @@ function unencodedSqlParameterValue(expression: Node, scope: Scope): Node | unde
   return args.length === 2 ? undefined : objectNode(args[0]);
 }
 
-function isLiteralOrKnownScalar(expression: Node, scope: Scope, useOffset: number): boolean {
+function isLiteralOrKnownScalar(
+  expression: Node,
+  scope: Scope,
+  useOffset: number,
+  seen: Set<Binding> = new Set(),
+  remainingDepth = 64,
+): boolean {
+  if (remainingDepth <= 0) return false;
   const type = nodeType(expression);
   if (["StringLiteral", "NumericLiteral", "BooleanLiteral", "NullLiteral", "BigIntLiteral"].includes(type ?? "")) {
     return true;
@@ -326,30 +348,60 @@ function isLiteralOrKnownScalar(expression: Node, scope: Scope, useOffset: numbe
   if (name === undefined) return false;
   const binding = resolve(scope, name);
   if (binding?.kind === "const" && binding.init !== undefined && !binding.duplicate &&
-      binding.writes.length === 0 && !writeBefore(binding, useOffset)) {
-    return isLiteralOrKnownScalar(binding.init, scope, binding.declarationOffset);
+      binding.declarationOffset < useOffset && binding.writes.length === 0 &&
+      !writeBefore(binding, useOffset) && !seen.has(binding)) {
+    seen.add(binding);
+    return isLiteralOrKnownScalar(
+      binding.init,
+      scope,
+      binding.declarationOffset,
+      seen,
+      remainingDepth - 1,
+    );
   }
   return false;
 }
 
-// Conservative structural heuristic: imports, property references, known Drizzle
-// predicate calls, and table-factory bindings are SQL structure rather than values.
+function tableFactoryBinding(binding: Binding | undefined, scope: Scope): boolean {
+  const init = binding?.init;
+  if (nodeType(init) !== "CallExpression") return false;
+  const factory = identifierName(objectNode(init?.callee));
+  if (factory === undefined) return false;
+  const factoryBinding = resolve(scope, factory);
+  return factoryBinding?.kind === "import-drizzle" &&
+    /(?:pg|mysql|sqlite)?Table$/.test(factoryBinding.importedName ?? factory);
+}
+
+function structuralRootBinding(expression: Node, scope: Scope): Binding | undefined {
+  let current: Node | undefined = expression;
+  while (current !== undefined && nodeType(current) === "MemberExpression" && current.computed !== true) {
+    current = objectNode(current.object);
+  }
+  const name = identifierName(current);
+  return name === undefined ? undefined : resolve(scope, name);
+}
+
+// Conservative structural heuristic: only bindings tied to Drizzle, a schema
+// module, or a recognized table factory are treated as SQL structure.
 function isObviousSqlStructure(expression: Node, scope: Scope): boolean {
-  if (nodeType(expression) === "MemberExpression" && expression.computed !== true) return true;
+  if (nodeType(expression) === "MemberExpression" && expression.computed !== true) {
+    const binding = structuralRootBinding(expression, scope);
+    return binding?.kind === "import-drizzle" || binding?.kind === "import-schema" ||
+      tableFactoryBinding(binding, scope);
+  }
   const name = identifierName(expression);
   if (name !== undefined) {
     const binding = resolve(scope, name);
-    if (binding?.kind === "import-other") return true;
-    const init = binding?.init;
-    if (nodeType(init) === "CallExpression") {
-      const factory = identifierName(objectNode(init?.callee));
-      if (factory !== undefined && /(?:pg|mysql|sqlite)?Table$/.test(factory)) return true;
-    }
+    if (binding?.kind === "import-drizzle" || binding?.kind === "import-schema") return true;
+    if (tableFactoryBinding(binding, scope)) return true;
   }
   if (nodeType(expression) === "CallExpression") {
     const callee = objectNode(expression.callee);
     const calleeName = identifierName(callee);
-    return calleeName !== undefined && structuralSqlCalls.has(calleeName);
+    if (calleeName === undefined) return false;
+    const binding = resolve(scope, calleeName);
+    return binding?.kind === "import-drizzle" &&
+      structuralSqlCalls.has(binding.importedName ?? calleeName);
   }
   return false;
 }
@@ -490,6 +542,33 @@ export function analyzeDrizzleRawSqlDates(
       return;
     }
 
+    if (type === "SwitchStatement") {
+      const switchScope: Scope = { parent: scope, bindings: new Map() };
+      visit(node.discriminant, scope, depth + 1);
+      const cases = Array.isArray(node.cases) ? node.cases : [];
+      for (const rawCase of cases) {
+        const caseNode = objectNode(rawCase);
+        predeclareBody(switchScope, caseNode?.consequent);
+      }
+      for (const rawCase of cases) {
+        const caseNode = objectNode(rawCase);
+        visit(caseNode?.test, switchScope, depth + 1);
+        for (const statement of Array.isArray(caseNode?.consequent) ? caseNode.consequent : []) {
+          visit(statement, switchScope, depth + 1);
+        }
+      }
+      return;
+    }
+
+    if (type === "StaticBlock") {
+      const staticScope: Scope = { parent: scope, bindings: new Map() };
+      predeclareBody(staticScope, node.body);
+      for (const statement of Array.isArray(node.body) ? node.body : []) {
+        visit(statement, staticScope, depth + 1);
+      }
+      return;
+    }
+
     if (["ForStatement", "ForInStatement", "ForOfStatement"].includes(type ?? "")) {
       const loopScope: Scope = { parent: scope, bindings: new Map() };
       const declaration = objectNode(type === "ForStatement" ? node.init : node.left);
@@ -505,10 +584,12 @@ export function analyzeDrizzleRawSqlDates(
 
     if (type === "TaggedTemplateExpression" && importedSqlBinding(scope, objectNode(node.tag))) {
       const quasi = objectNode(node.quasi);
+      const sqlBinding = identifierName(objectNode(node.tag));
       for (const rawExpression of Array.isArray(quasi?.expressions) ? quasi.expressions : []) {
         const expression = objectNode(rawExpression);
-        if (expression === undefined || isEncodedSqlParameter(expression, scope)) continue;
-        pendingInterpolations.push({ expression, scope });
+        if (expression === undefined || sqlBinding === undefined ||
+            isEncodedSqlParameter(expression, scope)) continue;
+        pendingInterpolations.push({ expression, scope, sqlBinding });
       }
     }
 
@@ -520,12 +601,17 @@ export function analyzeDrizzleRawSqlDates(
 
   visit(program, rootScope, 0);
   if (!budgetExceeded) {
-    for (const { expression, scope } of pendingInterpolations) {
+    for (const { expression, scope, sqlBinding } of pendingInterpolations) {
       const parameterValue = unencodedSqlParameterValue(expression, scope);
       const evidenceClass = proveDate(parameterValue ?? expression, scope, offset(expression));
       const safeLocation = location(expression);
       if (evidenceClass !== undefined && safeLocation !== undefined) {
-        matches.push({ ...safeLocation, evidenceClass, offset: offset(expression) });
+        matches.push({
+          ...safeLocation,
+          evidenceClass,
+          sqlBinding: sqlBinding.length <= 128 ? sqlBinding : "alias-over-limit",
+          offset: offset(expression),
+        });
       } else if (!isLiteralOrKnownScalar(expression, scope, offset(expression)) &&
           !isObviousSqlStructure(expression, scope)) {
         addLimitation({ code: "unresolved-interpolation", ...safeLocation }, expression);
