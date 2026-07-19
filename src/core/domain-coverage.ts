@@ -5,6 +5,12 @@ import type {
   LimitationGroup,
   OmittedRecordSummary,
 } from "./bounded-evidence.js";
+import {
+  MAX_COVERAGE_RECORDS,
+  MAX_LIMITATION_SAMPLE_PATHS,
+  mergeOmittedRecordSummaries,
+  saturatingAddCount,
+} from "./bounded-evidence.js";
 
 export const AUDIT_DOMAINS = [
   "repository",
@@ -109,23 +115,71 @@ function aggregateLimitationMetadata(
   limitationGroups?: readonly LimitationGroup[];
   limitationSummary?: OmittedRecordSummary;
 } {
-  const groups = entries
-    .flatMap(({ limitationGroups }) => limitationGroups ?? [])
-    .map((group) => ({ ...group, samplePaths: [...group.samplePaths] }))
-    .sort((left, right) =>
-      left.reason.localeCompare(right.reason) ||
-      left.samplePaths.join("\0").localeCompare(right.samplePaths.join("\0"))
+  interface MutableGroup {
+    reason: string;
+    total: number;
+    samplePaths: string[];
+    omittedPathCount: number;
+  }
+  const groupsByReason = new Map<string, MutableGroup>();
+  let limitationSummary: OmittedRecordSummary | undefined;
+
+  const admitSample = (samples: string[], path: string): void => {
+    if (samples.includes(path)) return;
+    const insertion = samples.findIndex((sample) => path.localeCompare(sample) < 0);
+    if (insertion < 0) samples.push(path);
+    else samples.splice(insertion, 0, path);
+    if (samples.length > MAX_LIMITATION_SAMPLE_PATHS) samples.pop();
+  };
+
+  for (const entry of entries) {
+    limitationSummary = mergeOmittedRecordSummaries(
+      limitationSummary,
+      entry.limitationSummary,
     );
-  const summaries = entries.flatMap(({ limitationSummary }) =>
-    limitationSummary === undefined ? [] : [limitationSummary]
-  );
-  const limitationSummary = summaries.length === 0
-    ? undefined
-    : summaries.reduce<OmittedRecordSummary>((total, summary) => ({
-      total: total.total + summary.total,
-      emitted: total.emitted + summary.emitted,
-      omitted: total.omitted + summary.omitted,
-    }), { total: 0, emitted: 0, omitted: 0 });
+    for (const incoming of entry.limitationGroups ?? []) {
+      if (typeof incoming.reason !== "string") continue;
+      let group = groupsByReason.get(incoming.reason);
+      if (group === undefined) {
+        if (groupsByReason.size >= MAX_COVERAGE_RECORDS) {
+          let greatestReason: string | undefined;
+          for (const reason of groupsByReason.keys()) {
+            if (greatestReason === undefined || reason.localeCompare(greatestReason) > 0) {
+              greatestReason = reason;
+            }
+          }
+          if (greatestReason !== undefined && incoming.reason.localeCompare(greatestReason) >= 0) {
+            continue;
+          }
+          if (greatestReason !== undefined) groupsByReason.delete(greatestReason);
+        }
+        group = {
+          reason: incoming.reason,
+          total: 0,
+          samplePaths: [],
+          omittedPathCount: 0,
+        };
+        groupsByReason.set(incoming.reason, group);
+      }
+      group.total = saturatingAddCount(group.total, incoming.total);
+      group.omittedPathCount = saturatingAddCount(
+        group.omittedPathCount,
+        incoming.omittedPathCount,
+      );
+      for (const path of incoming.samplePaths) {
+        if (typeof path === "string") admitSample(group.samplePaths, path);
+      }
+    }
+  }
+  const groups = [...groupsByReason.values()]
+    .sort((left, right) => left.reason.localeCompare(right.reason))
+    .map((group): LimitationGroup => ({
+      ...group,
+      omittedPathCount: Math.max(
+        group.omittedPathCount,
+        Math.max(0, group.total - group.samplePaths.length),
+      ),
+    }));
   return {
     ...(groups.length === 0 ? {} : { limitationGroups: groups }),
     ...(limitationSummary === undefined ? {} : { limitationSummary }),
@@ -388,7 +442,7 @@ export function planDomainCoverage(
     ? aggregateStatuses(databaseModules.map(({ status }) => status))
     : "not-selected";
   const databaseDetected = databaseModules.some((module) =>
-    module.status === "completed" || module.status === "partial" || module.status === "failed"
+    module.status === "completed" || module.status === "partial"
   );
   const databaseLimitationMetadata = aggregateLimitationMetadata(databaseModules);
 

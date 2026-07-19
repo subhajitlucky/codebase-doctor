@@ -21,6 +21,53 @@ export interface BoundedLimitations {
   readonly summary: OmittedRecordSummary;
 }
 
+function safeCount(value: number): number {
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+export function saturatingAddCount(left: number, right: number): number {
+  const normalizedLeft = safeCount(left);
+  const normalizedRight = safeCount(right);
+  if (normalizedLeft > Number.MAX_SAFE_INTEGER - normalizedRight) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return normalizedLeft + normalizedRight;
+}
+
+export function mergeOmittedRecordSummaries(
+  left: OmittedRecordSummary | undefined,
+  right: OmittedRecordSummary | undefined,
+): OmittedRecordSummary | undefined {
+  if (left === undefined) return right === undefined ? undefined : {
+    total: safeCount(right.total),
+    emitted: safeCount(right.emitted),
+    omitted: safeCount(right.omitted),
+  };
+  if (right === undefined) return {
+    total: safeCount(left.total),
+    emitted: safeCount(left.emitted),
+    omitted: safeCount(left.omitted),
+  };
+  return {
+    total: saturatingAddCount(left.total, right.total),
+    emitted: saturatingAddCount(left.emitted, right.emitted),
+    omitted: saturatingAddCount(left.omitted, right.omitted),
+  };
+}
+
+export function preserveSummaryWithAdditionalOmissions(
+  existing: OmittedRecordSummary | undefined,
+  normalized: OmittedRecordSummary,
+): OmittedRecordSummary | undefined {
+  if (normalized.omitted === 0) return mergeOmittedRecordSummaries(existing, undefined);
+  if (existing === undefined) return mergeOmittedRecordSummaries(undefined, normalized);
+  return {
+    total: saturatingAddCount(existing.total, normalized.omitted),
+    emitted: safeCount(existing.emitted),
+    omitted: saturatingAddCount(existing.omitted, normalized.omitted),
+  };
+}
+
 const PATH_SCOPED_REASONS = new Set([
   "npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
   "private key matched an inventoried localhost-only test certificate; no finding was emitted.",

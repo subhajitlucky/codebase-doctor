@@ -183,6 +183,65 @@ describe("audit CLI", () => {
     }));
   });
 
+  it("reports an unsafe changed Drizzle Date with changed verification and redaction", async () => {
+    const sensitiveDate = "2044-02-03T04:05:06.000Z";
+    const sensitiveSql = "select private_payload from recovery where locked_at <= ";
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        private: true,
+        dependencies: { "drizzle-orm": "1.0.0", postgres: "3.4.0" },
+      }),
+      "src/recovery.ts": [
+        'import { sql } from "drizzle-orm";',
+        `const cutoff = new Date("${sensitiveDate}");`,
+        `export const recovery = sql\`${sensitiveSql}\${cutoff}\`;`,
+        "",
+      ].join("\n"),
+    });
+    await writeProjectFile(root, "src/recovery.ts", [
+      'import { sql } from "drizzle-orm";',
+      `const cutoff = new Date("${sensitiveDate}");`,
+      "// changed query path",
+      `export const recovery = sql\`${sensitiveSql}\${cutoff}\`;`,
+      "",
+    ].join("\n"));
+
+    const result = cli([
+      "audit", root, "--changed", "--json", "--fail-on", "medium",
+    ], root);
+    const report = JSON.parse(result.stdout);
+    const finding = report.findings.find(({ doctorId }: { doctorId: string }) =>
+      doctorId === "database/drizzle"
+    );
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(finding).toMatchObject({
+      ruleId: "database/drizzle/raw-sql-date-parameter",
+      location: { path: "src/recovery.ts", line: 4, column: expect.any(Number) },
+      remediation: expect.stringMatching(/lte\(column, date\)/),
+      verification: {
+        command: "codebase-doctor audit . --changed --json",
+        expected: expect.stringMatching(/database\/drizzle coverage completed/i),
+      },
+    });
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/drizzle",
+      status: "completed",
+      scope: "changed",
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/unchanged files were not independently re-audited/i),
+      ]),
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "database",
+      applicability: "detected",
+      status: "partial",
+      coverageComplete: false,
+    }));
+    expect(result.stdout).not.toContain(sensitiveDate);
+    expect(result.stdout).not.toContain(sensitiveSql);
+  });
+
   it("reports tracked env credentials but ignores a Git-ignored local env file", async () => {
     const trackedSecret = generatedToken("ghp_");
     const ignoredSecret = generatedToken("glpat-");
@@ -1096,6 +1155,12 @@ describe("audit CLI", () => {
       doctorId: "database/rls",
       status: "failed",
       error: expect.objectContaining({ message: expect.stringMatching(/DATABASE_URL/) }),
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "database",
+      applicability: "unknown",
+      status: "failed",
+      coverageComplete: false,
     }));
   });
 

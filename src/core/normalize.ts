@@ -26,6 +26,7 @@ import {
   boundLimitations,
   boundRecords,
   MAX_COVERAGE_RECORDS,
+  preserveSummaryWithAdditionalOmissions,
   type OmittedRecordSummary,
 } from "./bounded-evidence.js";
 
@@ -129,7 +130,13 @@ export function normalizeScanResult(
         ...entry,
         limitations: bounded.limitations,
         ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
-        ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+        ...(() => {
+          const summary = preserveSummaryWithAdditionalOmissions(
+            entry.limitationSummary,
+            bounded.summary,
+          );
+          return summary === undefined ? {} : { limitationSummary: summary };
+        })(),
       };
     })
     .sort((left, right) => {
@@ -194,7 +201,13 @@ export function normalizeScanResult(
             ...(scopes.summary.omitted === 0 ? {} : { scopeSummary: scopes.summary }),
             limitations: bounded.limitations,
             ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
-            ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+            ...(() => {
+              const summary = preserveSummaryWithAdditionalOmissions(
+                module.limitationSummary,
+                bounded.summary,
+              );
+              return summary === undefined ? {} : { limitationSummary: summary };
+            })(),
           };
         })
         .sort((left, right) => left.moduleId.localeCompare(right.moduleId)),
@@ -203,7 +216,13 @@ export function normalizeScanResult(
         return {
           limitations: bounded.limitations,
           ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
-          ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+          ...(() => {
+            const summary = preserveSummaryWithAdditionalOmissions(
+              entry.limitationSummary,
+              bounded.summary,
+            );
+            return summary === undefined ? {} : { limitationSummary: summary };
+          })(),
         };
       })(),
     }))

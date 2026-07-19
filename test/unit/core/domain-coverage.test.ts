@@ -7,6 +7,8 @@ import {
   type DomainCoverage,
   type DomainCoverageStatus,
 } from "../../../src/core/domain-coverage.js";
+import { MAX_COVERAGE_RECORDS, MAX_LIMITATION_SAMPLE_PATHS } from "../../../src/core/bounded-evidence.js";
+import { normalizeScanResult } from "../../../src/core/normalize.js";
 import type { RegisteredDoctorResult } from "../../../src/core/doctor.js";
 import type { CommandPlan } from "../../../src/execution/types.js";
 import { fullAuditScope } from "../../../src/scope/planner.js";
@@ -422,6 +424,164 @@ describe("domain coverage planning", () => {
         limitationGroups: [limitationGroup],
         limitationSummary,
       })],
+    });
+  });
+
+  it("merges adversarial database limitation metadata deterministically within strict bounds", () => {
+    const groups = Array.from({ length: MAX_COVERAGE_RECORDS + 60 }, (_, index) => ({
+      reason: `reason-${String(index).padStart(4, "0")}`,
+      total: 20,
+      samplePaths: Array.from({ length: MAX_LIMITATION_SAMPLE_PATHS + 15 }, (_, pathIndex) =>
+        `src/${String(index).padStart(4, "0")}-${String(pathIndex).padStart(2, "0")}.ts`
+      ),
+      omittedPathCount: 0,
+    }));
+    const module = (
+      doctorId: string,
+      limitationGroups: typeof groups,
+      offset: number,
+    ): RegisteredDoctorResult => ({
+      doctorId,
+      result: {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage: [{
+          moduleId: doctorId,
+          status: "partial",
+          scope: "full",
+          filesExamined: 1,
+          statementsExamined: 0,
+          statementsRecognized: 0,
+          limitations: Array.from({ length: 120 }, (_, index) =>
+            `${doctorId} limitation ${offset + index}`
+          ),
+          limitationGroups,
+          limitationSummary: {
+            total: Number.MAX_SAFE_INTEGER - offset,
+            emitted: Number.MAX_SAFE_INTEGER - offset,
+            omitted: Number.MAX_SAFE_INTEGER - offset,
+          },
+        }],
+      },
+    });
+    const forwardResults = [
+      module("database/drizzle", groups, 1),
+      module("database/sql-rls", [...groups].reverse(), 2),
+    ];
+    const plan = (registeredResults: RegisteredDoctorResult[]) => planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults,
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database")!;
+
+    const forward = plan(forwardResults);
+    const reverse = plan([
+      module("database/sql-rls", groups, 2),
+      module("database/drizzle", [...groups].reverse(), 1),
+    ]);
+
+    expect(forward).toEqual(reverse);
+    expect(forward.limitationGroups).toHaveLength(MAX_COVERAGE_RECORDS);
+    expect(forward.limitationGroups?.every(({ samplePaths }) =>
+      samplePaths.length <= MAX_LIMITATION_SAMPLE_PATHS
+    )).toBe(true);
+    expect(forward.modules.every(({ limitationGroups }) =>
+      (limitationGroups?.length ?? 0) <= MAX_COVERAGE_RECORDS &&
+      (limitationGroups ?? []).every(({ samplePaths }) =>
+        samplePaths.length <= MAX_LIMITATION_SAMPLE_PATHS
+      )
+    )).toBe(true);
+    expect(forward.limitationSummary).toEqual({
+      total: Number.MAX_SAFE_INTEGER,
+      emitted: Number.MAX_SAFE_INTEGER,
+      omitted: Number.MAX_SAFE_INTEGER,
+    });
+
+    const normalized = normalizeScanResult(
+      "/repo",
+      [],
+      fullAuditScope(),
+      [],
+      [],
+      [forward],
+    ).domainCoverage[0]!;
+    expect(normalized.limitationSummary?.omitted).toBe(Number.MAX_SAFE_INTEGER);
+    expect(Number.isSafeInteger(normalized.limitationSummary?.total)).toBe(true);
+    expect(normalized.modules.every(({ limitationSummary }) =>
+      limitationSummary === undefined ||
+      Object.values(limitationSummary).every(Number.isSafeInteger)
+    )).toBe(true);
+  });
+
+  it.each([
+    ["failed", "unknown"],
+    ["completed", "detected"],
+    ["partial", "detected"],
+    ["not-applicable", "unknown"],
+    ["skipped", "unknown"],
+    ["not-selected", "unknown"],
+  ] as const)("maps a lone %s database module to %s applicability", (status, applicability) => {
+    const registered: RegisteredDoctorResult = status === "failed" || status === "skipped"
+      ? result("database/rls", status)
+      : {
+        doctorId: "database/drizzle",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "database/drizzle",
+            status,
+            scope: "full",
+            filesExamined: 0,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [],
+          }],
+        },
+      };
+    const database = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [registered],
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database");
+
+    expect(database?.applicability).toBe(applicability);
+  });
+
+  it("keeps failed database coverage unknown until an applicable sibling establishes detection", () => {
+    const failed = result("database/rls", "failed");
+    const applicable: RegisteredDoctorResult = {
+      doctorId: "database/drizzle",
+      result: {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage: [{
+          moduleId: "database/drizzle",
+          status: "partial",
+          scope: "full",
+          filesExamined: 1,
+          statementsExamined: 1,
+          statementsRecognized: 0,
+          limitations: ["bounded analysis was incomplete."],
+        }],
+      },
+    };
+    const database = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [failed, applicable],
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database");
+
+    expect(database).toMatchObject({
+      applicability: "detected",
+      status: "failed",
+      coverageComplete: false,
     });
   });
 
