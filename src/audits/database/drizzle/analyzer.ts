@@ -39,6 +39,14 @@ interface Bounds {
   readonly maxLimitations: number;
 }
 
+interface BindingDiscoveryBudget {
+  readonly maxNodes: number;
+  readonly maxDepth: number;
+  readonly visited: WeakSet<object>;
+  nodes: number;
+  exceeded: boolean;
+}
+
 interface PendingInterpolation {
   readonly expression: Node;
   readonly scope: Scope;
@@ -124,20 +132,47 @@ function exactDateType(annotationContainer: Node | undefined): boolean {
     identifierName(objectNode(annotation?.typeName)) === "Date";
 }
 
-function bindingNames(pattern: Node | undefined): string[] {
+function enterBindingDiscovery(
+  node: Node | undefined,
+  budget: BindingDiscoveryBudget,
+  depth: number,
+): node is Node {
+  if (node === undefined || budget.visited.has(node)) return false;
+  if (depth > budget.maxDepth || budget.nodes >= budget.maxNodes) {
+    budget.exceeded = true;
+    return false;
+  }
+  budget.visited.add(node);
+  budget.nodes += 1;
+  return true;
+}
+
+function bindingNames(
+  pattern: Node | undefined,
+  budget: BindingDiscoveryBudget,
+  depth: number,
+): string[] {
+  if (!enterBindingDiscovery(pattern, budget, depth)) return [];
   const name = identifierName(pattern);
   if (name !== undefined) return [name];
   const type = nodeType(pattern);
-  if (type === "RestElement") return bindingNames(objectNode(pattern?.argument));
-  if (type === "AssignmentPattern") return bindingNames(objectNode(pattern?.left));
+  if (type === "RestElement") return bindingNames(objectNode(pattern.argument), budget, depth + 1);
+  if (type === "AssignmentPattern") return bindingNames(objectNode(pattern.left), budget, depth + 1);
   if (type === "ObjectPattern" || type === "ArrayPattern") {
-    const values = type === "ObjectPattern" ? pattern?.properties : pattern?.elements;
+    const values = type === "ObjectPattern" ? pattern.properties : pattern.elements;
     if (!Array.isArray(values)) return [];
-    return values.flatMap((entry) => {
+    const names: string[] = [];
+    for (const entry of values) {
+      if (budget.exceeded) break;
       const node = objectNode(entry);
-      if (nodeType(node) === "ObjectProperty") return bindingNames(objectNode(node?.value));
-      return bindingNames(node);
-    });
+      if (nodeType(node) === "ObjectProperty") {
+        if (!enterBindingDiscovery(node, budget, depth + 1)) continue;
+        names.push(...bindingNames(objectNode(node.value), budget, depth + 2));
+      } else {
+        names.push(...bindingNames(node, budget, depth + 1));
+      }
+    }
+    return names;
   }
   return [];
 }
@@ -151,7 +186,13 @@ function declare(scope: Scope, binding: Binding): void {
   scope.bindings.set(binding.name, binding);
 }
 
-function predeclareStatement(scope: Scope, statement: Node): void {
+function predeclareStatement(
+  scope: Scope,
+  statement: Node,
+  budget: BindingDiscoveryBudget,
+  depth: number,
+): void {
+  if (!enterBindingDiscovery(statement, budget, depth)) return;
   const type = nodeType(statement);
   if (type === "ImportDeclaration") {
     const source = objectNode(statement.source);
@@ -160,7 +201,9 @@ function predeclareStatement(scope: Scope, statement: Node): void {
       /(?:^|[/.-])schema(?:[/.-]|$)/i.test(source.value);
     if (!Array.isArray(statement.specifiers)) return;
     for (const rawSpecifier of statement.specifiers) {
+      if (budget.exceeded) break;
       const specifier = objectNode(rawSpecifier);
+      if (!enterBindingDiscovery(specifier, budget, depth + 1)) continue;
       const local = identifierName(objectNode(specifier?.local));
       if (local === undefined) continue;
       const imported = identifierName(objectNode(specifier?.imported));
@@ -182,10 +225,12 @@ function predeclareStatement(scope: Scope, statement: Node): void {
   }
   if (type === "VariableDeclaration" && Array.isArray(statement.declarations)) {
     for (const rawDeclaration of statement.declarations) {
+      if (budget.exceeded) break;
       const declaration = objectNode(rawDeclaration);
+      if (!enterBindingDiscovery(declaration, budget, depth + 1)) continue;
       const id = objectNode(declaration?.id);
       const init = objectNode(declaration?.init);
-      for (const name of bindingNames(id)) {
+      for (const name of bindingNames(id, budget, depth + 2)) {
         declare(scope, {
           name,
           kind: statement.kind === "const" ? "const" : "local",
@@ -228,19 +273,31 @@ function predeclareStatement(scope: Scope, statement: Node): void {
   }
 }
 
-function predeclareBody(scope: Scope, body: unknown): void {
+function predeclareBody(
+  scope: Scope,
+  body: unknown,
+  budget: BindingDiscoveryBudget,
+  depth: number,
+): void {
   if (!Array.isArray(body)) return;
   for (const rawStatement of body) {
+    if (budget.exceeded) break;
     const statement = objectNode(rawStatement);
-    if (statement !== undefined) predeclareStatement(scope, statement);
+    if (statement !== undefined) predeclareStatement(scope, statement, budget, depth + 1);
   }
 }
 
-function addParameters(scope: Scope, params: unknown): void {
+function addParameters(
+  scope: Scope,
+  params: unknown,
+  budget: BindingDiscoveryBudget,
+  depth: number,
+): void {
   if (!Array.isArray(params)) return;
   for (const rawParam of params) {
+    if (budget.exceeded) break;
     const param = objectNode(rawParam);
-    for (const name of bindingNames(param)) {
+    for (const name of bindingNames(param, budget, depth + 1)) {
       declare(scope, {
         name,
         kind: "parameter",
@@ -284,7 +341,7 @@ function proveDate(
   if (name === undefined) return undefined;
   const binding = resolve(scope, name);
   if (binding === undefined || binding.duplicate || binding.declarationOffset >= useOffset ||
-      writeBefore(binding, useOffset)) return undefined;
+      binding.writes.length > 0 || writeBefore(binding, useOffset)) return undefined;
   if (binding.exactDateType && resolve(scope, "Date") === undefined) return "declared-date-type";
   if (binding.kind !== "const" || binding.init === undefined || binding.writes.length > 0 || seen.has(binding)) {
     return undefined;
@@ -409,10 +466,14 @@ function isObviousSqlStructure(expression: Node, scope: Scope): boolean {
   return false;
 }
 
-function assignmentNames(node: Node): string[] {
+function assignmentNames(
+  node: Node,
+  budget: BindingDiscoveryBudget,
+  depth: number,
+): string[] {
   const type = nodeType(node);
-  if (type === "AssignmentExpression") return bindingNames(objectNode(node.left));
-  if (type === "UpdateExpression") return bindingNames(objectNode(node.argument));
+  if (type === "AssignmentExpression") return bindingNames(objectNode(node.left), budget, depth + 1);
+  if (type === "UpdateExpression") return bindingNames(objectNode(node.argument), budget, depth + 1);
   return [];
 }
 
@@ -440,6 +501,13 @@ export function analyzeDrizzleRawSqlDates(
   const limitations: Array<DrizzleAnalysisLimitation & { offset?: number }> = [];
   const pendingInterpolations: PendingInterpolation[] = [];
   const visited = new WeakSet<object>();
+  const bindingBudget: BindingDiscoveryBudget = {
+    maxNodes: bounds.maxNodes,
+    maxDepth: bounds.maxDepth,
+    visited: new WeakSet(),
+    nodes: 0,
+    exceeded: false,
+  };
   let nodes = 0;
   let budgetExceeded = false;
 
@@ -456,7 +524,8 @@ export function analyzeDrizzleRawSqlDates(
 
   const rootScope: Scope = { bindings: new Map() };
   const program = objectNode(objectNode(ast)?.program);
-  predeclareBody(rootScope, program?.body);
+  predeclareBody(rootScope, program?.body, bindingBudget, 0);
+  if (bindingBudget.exceeded) exceedBudget();
 
   const visit = (value: unknown, scope: Scope, depth: number): void => {
     if (budgetExceeded) return;
@@ -478,9 +547,13 @@ export function analyzeDrizzleRawSqlDates(
     }
 
     const type = nodeType(node);
-    for (const name of assignmentNames(node)) {
+    for (const name of assignmentNames(node, bindingBudget, depth)) {
       const binding = resolve(scope, name);
       if (binding !== undefined) binding.writes.push(offset(node));
+    }
+    if (bindingBudget.exceeded) {
+      exceedBudget();
+      return;
     }
 
     if (type === "Program") {
@@ -490,7 +563,11 @@ export function analyzeDrizzleRawSqlDates(
 
     if (type === "BlockStatement") {
       const block: Scope = { parent: scope, bindings: new Map() };
-      predeclareBody(block, node.body);
+      predeclareBody(block, node.body, bindingBudget, depth);
+      if (bindingBudget.exceeded) {
+        exceedBudget();
+        return;
+      }
       for (const statement of Array.isArray(node.body) ? node.body : []) visit(statement, block, depth + 1);
       return;
     }
@@ -511,10 +588,14 @@ export function analyzeDrizzleRawSqlDates(
           duplicate: false,
         });
       }
-      addParameters(functionScope, node.params);
+      addParameters(functionScope, node.params, bindingBudget, depth);
       const body = objectNode(node.body);
       if (nodeType(body) === "BlockStatement") {
-        predeclareBody(functionScope, body?.body);
+        predeclareBody(functionScope, body?.body, bindingBudget, depth);
+        if (bindingBudget.exceeded) {
+          exceedBudget();
+          return;
+        }
         for (const statement of Array.isArray(body?.body) ? body.body : []) {
           visit(statement, functionScope, depth + 1);
         }
@@ -527,7 +608,7 @@ export function analyzeDrizzleRawSqlDates(
     if (type === "CatchClause") {
       const catchScope: Scope = { parent: scope, bindings: new Map() };
       const param = objectNode(node.param);
-      for (const name of bindingNames(param)) {
+      for (const name of bindingNames(param, bindingBudget, depth + 1)) {
         declare(catchScope, {
           name,
           kind: "parameter",
@@ -538,7 +619,11 @@ export function analyzeDrizzleRawSqlDates(
         });
       }
       const body = objectNode(node.body);
-      predeclareBody(catchScope, body?.body);
+      predeclareBody(catchScope, body?.body, bindingBudget, depth);
+      if (bindingBudget.exceeded) {
+        exceedBudget();
+        return;
+      }
       for (const statement of Array.isArray(body?.body) ? body.body : []) {
         visit(statement, catchScope, depth + 1);
       }
@@ -550,8 +635,13 @@ export function analyzeDrizzleRawSqlDates(
       visit(node.discriminant, scope, depth + 1);
       const cases = Array.isArray(node.cases) ? node.cases : [];
       for (const rawCase of cases) {
+        if (bindingBudget.exceeded) break;
         const caseNode = objectNode(rawCase);
-        predeclareBody(switchScope, caseNode?.consequent);
+        predeclareBody(switchScope, caseNode?.consequent, bindingBudget, depth);
+      }
+      if (bindingBudget.exceeded) {
+        exceedBudget();
+        return;
       }
       for (const rawCase of cases) {
         const caseNode = objectNode(rawCase);
@@ -565,7 +655,11 @@ export function analyzeDrizzleRawSqlDates(
 
     if (type === "StaticBlock") {
       const staticScope: Scope = { parent: scope, bindings: new Map() };
-      predeclareBody(staticScope, node.body);
+      predeclareBody(staticScope, node.body, bindingBudget, depth);
+      if (bindingBudget.exceeded) {
+        exceedBudget();
+        return;
+      }
       for (const statement of Array.isArray(node.body) ? node.body : []) {
         visit(statement, staticScope, depth + 1);
       }
@@ -576,7 +670,16 @@ export function analyzeDrizzleRawSqlDates(
       const loopScope: Scope = { parent: scope, bindings: new Map() };
       const declaration = objectNode(type === "ForStatement" ? node.init : node.left);
       if (declaration !== undefined && nodeType(declaration) === "VariableDeclaration") {
-        predeclareStatement(loopScope, declaration);
+        predeclareStatement(loopScope, declaration, bindingBudget, depth + 1);
+      } else if ((type === "ForInStatement" || type === "ForOfStatement") && declaration !== undefined) {
+        for (const name of bindingNames(declaration, bindingBudget, depth + 1)) {
+          const binding = resolve(scope, name);
+          if (binding !== undefined) binding.writes.push(offset(node));
+        }
+      }
+      if (bindingBudget.exceeded) {
+        exceedBudget();
+        return;
       }
       for (const [key, child] of Object.entries(node)) {
         if (["loc", "comments", "errors", "tokens"].includes(key)) continue;

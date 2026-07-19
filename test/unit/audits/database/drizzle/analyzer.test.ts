@@ -169,6 +169,37 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ]);
   });
 
+  it("rejects typed Date proof when a later nested function can reassign it", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "let cutoff: Date = new Date();",
+      "sql`${cutoff}`;",
+      "function replaceCutoff() { cutoff = new Date(1); }",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 3, column: 7 },
+    ]);
+  });
+
+  it("records non-declaration for-of and for-in targets as writes", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "let cutoff: Date = new Date();",
+      "let second: Date = new Date();",
+      "for (cutoff of values) {}",
+      "for (second in values) {}",
+      "sql`${cutoff} ${second}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 6, column: 7 },
+      { code: "unresolved-interpolation", line: 6, column: 17 },
+    ]);
+  });
+
   it("does not prove a Date binding used in its temporal dead zone", () => {
     const result = analyze([
       'import { sql } from "drizzle-orm";',
@@ -342,5 +373,38 @@ describe("analyzeDrizzleRawSqlDates", () => {
     expect(result.status).toBe("partial");
     expect(result.limitations).toContainEqual({ code: "analysis-budget-exceeded" });
     expect(result.limitations.length).toBeLessThanOrEqual(2);
+  });
+
+  it("bounds deeply nested binding-pattern predeclaration", () => {
+    const pattern = `${"[".repeat(96)}value${"]".repeat(96)}`;
+    const result = analyzeDrizzleRawSqlDates(
+      "src/deep-pattern.ts",
+      ['import { sql } from "drizzle-orm";', `const ${pattern} = input;`, "sql`${new Date()}`;"].join("\n"),
+      { maxNodes: 1_000, maxDepth: 24, maxLimitations: 2 },
+    );
+
+    expect(result).toEqual({
+      status: "partial",
+      matches: [],
+      limitations: [{ code: "analysis-budget-exceeded" }],
+    });
+  });
+
+  it("bounds large declaration predeclaration using the analysis budget", () => {
+    const declarations = Array.from(
+      { length: 80 },
+      (_, index) => `const value${index} = ${index};`,
+    );
+    const result = analyzeDrizzleRawSqlDates(
+      "src/wide-declarations.ts",
+      ['import { sql } from "drizzle-orm";', ...declarations, "sql`${new Date()}`;"].join("\n"),
+      { maxNodes: 32, maxDepth: 128, maxLimitations: 2 },
+    );
+
+    expect(result).toEqual({
+      status: "partial",
+      matches: [],
+      limitations: [{ code: "analysis-budget-exceeded" }],
+    });
   });
 });
