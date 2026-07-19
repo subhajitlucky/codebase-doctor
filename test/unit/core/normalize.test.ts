@@ -273,6 +273,48 @@ describe("scan normalization", () => {
     expect(result.domainCoverage[0]?.modules[0]?.scopes).toEqual(["a", "z"]);
   });
 
+  it("keeps raw and domain limitation summaries sparse when nothing was omitted", () => {
+    const domainCoverage: DomainCoverage = {
+      domain: "database",
+      applicability: "detected",
+      status: "completed",
+      coverageComplete: true,
+      evidence: [{ type: "module", value: "database/drizzle" }],
+      modules: [{
+        moduleId: "database/drizzle",
+        status: "completed",
+        scopes: ["full"],
+        limitations: ["informational changed-scope boundary"],
+      }],
+      limitations: ["informational changed-scope boundary"],
+    };
+    const result = normalizeScanResult(
+      "/repo",
+      [],
+      fullAuditScope(),
+      [run("database/drizzle", {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage: [{
+          moduleId: "database/drizzle",
+          status: "completed",
+          scope: "full",
+          filesExamined: 1,
+          statementsExamined: 1,
+          statementsRecognized: 0,
+          limitations: ["informational changed-scope boundary"],
+        }],
+      })],
+      [],
+      [domainCoverage],
+    );
+
+    expect(result.coverage?.[0]).not.toHaveProperty("limitationSummary");
+    expect(result.domainCoverage[0]).not.toHaveProperty("limitationSummary");
+    expect(result.domainCoverage[0]?.modules[0]).not.toHaveProperty("limitationSummary");
+  });
+
   it("maps thresholds and operational failure to stable exit classifications", () => {
     const healthy = normalizeScanResult("/repo", [], fullAuditScope(), [
       run("doctor", {

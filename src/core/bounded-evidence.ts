@@ -66,7 +66,9 @@ export function preserveSummaryWithAdditionalOmissions(
   normalized: OmittedRecordSummary,
 ): OmittedRecordSummary | undefined {
   const normalizedSummary = coherentSummary(normalized);
-  if (existing === undefined) return normalizedSummary;
+  if (existing === undefined) {
+    return normalizedSummary.omitted === 0 ? undefined : normalizedSummary;
+  }
   const existingSummary = coherentSummary(existing);
   const additionalMaterialized = Math.max(
     0,

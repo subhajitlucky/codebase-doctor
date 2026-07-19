@@ -74,4 +74,11 @@ describe("bounded report evidence", () => {
   ])("reclassifies bounded evidence without inventing totals", (existing, normalized, expected) => {
     expect(preserveSummaryWithAdditionalOmissions(existing, normalized)).toEqual(expected);
   });
+
+  it.each([
+    { total: 0, emitted: 0, omitted: 0 },
+    { total: 7, emitted: 7, omitted: 0 },
+  ])("keeps a no-omission summary absent when no upstream summary exists", (normalized) => {
+    expect(preserveSummaryWithAdditionalOmissions(undefined, normalized)).toBeUndefined();
+  });
 });
