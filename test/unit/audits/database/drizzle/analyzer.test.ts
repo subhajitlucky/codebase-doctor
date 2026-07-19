@@ -183,6 +183,31 @@ describe("analyzeDrizzleRawSqlDates", () => {
     ]);
   });
 
+  it("records writes inside default-parameter initializers", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "let cutoff: Date = new Date();",
+      "function mutate(value = cutoff = getUnknown()) {}",
+      "sql`${cutoff}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 4, column: 7 },
+    ]);
+  });
+
+  it("analyzes Drizzle sql tags inside default-parameter initializers", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "function query(value = sql`${new Date()}`) {}",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 2, column: 30, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+    ]);
+  });
+
   it("records non-declaration for-of and for-in targets as writes", () => {
     const result = analyze([
       'import { sql } from "drizzle-orm";',

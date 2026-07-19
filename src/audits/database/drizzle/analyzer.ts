@@ -151,13 +151,23 @@ function bindingNames(
   pattern: Node | undefined,
   budget: BindingDiscoveryBudget,
   depth: number,
+  initializers?: Node[],
 ): string[] {
   if (!enterBindingDiscovery(pattern, budget, depth)) return [];
   const name = identifierName(pattern);
   if (name !== undefined) return [name];
   const type = nodeType(pattern);
-  if (type === "RestElement") return bindingNames(objectNode(pattern.argument), budget, depth + 1);
-  if (type === "AssignmentPattern") return bindingNames(objectNode(pattern.left), budget, depth + 1);
+  if (type === "RestElement") {
+    return bindingNames(objectNode(pattern.argument), budget, depth + 1, initializers);
+  }
+  if (type === "TSParameterProperty") {
+    return bindingNames(objectNode(pattern.parameter), budget, depth + 1, initializers);
+  }
+  if (type === "AssignmentPattern") {
+    const initializer = objectNode(pattern.right);
+    if (initializer !== undefined) initializers?.push(initializer);
+    return bindingNames(objectNode(pattern.left), budget, depth + 1, initializers);
+  }
   if (type === "ObjectPattern" || type === "ArrayPattern") {
     const values = type === "ObjectPattern" ? pattern.properties : pattern.elements;
     if (!Array.isArray(values)) return [];
@@ -167,9 +177,9 @@ function bindingNames(
       const node = objectNode(entry);
       if (nodeType(node) === "ObjectProperty") {
         if (!enterBindingDiscovery(node, budget, depth + 1)) continue;
-        names.push(...bindingNames(objectNode(node.value), budget, depth + 2));
+        names.push(...bindingNames(objectNode(node.value), budget, depth + 2, initializers));
       } else {
-        names.push(...bindingNames(node, budget, depth + 1));
+        names.push(...bindingNames(node, budget, depth + 1, initializers));
       }
     }
     return names;
@@ -292,12 +302,13 @@ function addParameters(
   params: unknown,
   budget: BindingDiscoveryBudget,
   depth: number,
-): void {
-  if (!Array.isArray(params)) return;
+): Node[] {
+  const initializers: Node[] = [];
+  if (!Array.isArray(params)) return initializers;
   for (const rawParam of params) {
     if (budget.exceeded) break;
     const param = objectNode(rawParam);
-    for (const name of bindingNames(param, budget, depth + 1)) {
+    for (const name of bindingNames(param, budget, depth + 1, initializers)) {
       declare(scope, {
         name,
         kind: "parameter",
@@ -308,6 +319,7 @@ function addParameters(
       });
     }
   }
+  return initializers;
 }
 
 function isGlobalDate(scope: Scope, callee: Node | undefined): boolean {
@@ -588,7 +600,15 @@ export function analyzeDrizzleRawSqlDates(
           duplicate: false,
         });
       }
-      addParameters(functionScope, node.params, bindingBudget, depth);
+      const parameterInitializers = addParameters(functionScope, node.params, bindingBudget, depth);
+      if (bindingBudget.exceeded) {
+        exceedBudget();
+        return;
+      }
+      for (const initializer of parameterInitializers) {
+        visit(initializer, functionScope, depth + 1);
+        if (budgetExceeded) return;
+      }
       const body = objectNode(node.body);
       if (nodeType(body) === "BlockStatement") {
         predeclareBody(functionScope, body?.body, bindingBudget, depth);
