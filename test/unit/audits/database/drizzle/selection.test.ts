@@ -126,7 +126,7 @@ describe("Drizzle audit file selection", () => {
     expect(selection.files.map(({ path }) => path)).toEqual(["apps/api/src/query.ts"]);
   });
 
-  it("does not combine unrelated projects or unsupported workspace evidence", () => {
+  it("does not invent unsupported workspace matches and exposes the unresolved boundary", () => {
     const root = project("root", ".", ["postgres"]);
     const api = project("api", "apps/api", ["drizzle-orm"]);
     const selection = select(snapshot({
@@ -137,15 +137,47 @@ describe("Drizzle audit file selection", () => {
         sourcePath: "package.json",
         pattern: "apps/**/api",
         supported: false,
-        matchedProjectRoots: ["apps/api"],
+        matchedProjectRoots: [],
       }],
     }));
 
     expect(selection.applicableProjectIds).toEqual([]);
     expect(selection.files).toEqual([]);
     expect(selection.limitations).toEqual([
-      "apps/api: unsupported workspace ownership prevents complete Drizzle applicability analysis.",
+      "package.json: unsupported workspace boundary prevents complete Drizzle applicability analysis.",
     ]);
+  });
+
+  it("limits unsupported workspace warnings to relevant in-scope dependency evidence", () => {
+    const root = project("root", ".", ["postgres"]);
+    const api = project("api", "apps/api", ["drizzle-orm"]);
+    const workspace = {
+      ownerProjectId: "root",
+      sourcePath: "package.json",
+      pattern: "apps/**",
+      supported: false,
+      matchedProjectRoots: [],
+    } as const;
+    const value = snapshot({ projects: [root, api], workspaces: [workspace] });
+
+    expect(select(value).limitations).toEqual([
+      "package.json: unsupported workspace boundary prevents complete Drizzle applicability analysis.",
+    ]);
+    expect(select({
+      ...value,
+      auditScope: changedScope(["root"], []),
+    }).limitations).toEqual([]);
+    expect(select({
+      ...value,
+      auditScope: changedScope(["api"], []),
+    }).limitations).toEqual([
+      "package.json: unsupported workspace boundary prevents complete Drizzle applicability analysis.",
+    ]);
+    const unrelated = select(snapshot({
+      projects: [root, project("api", "apps/api", ["unrelated"])],
+      workspaces: [workspace],
+    }));
+    expect(unrelated).toMatchObject({ limitations: [] });
   });
 
   it("accepts parser-proven drizzle-orm/postgres-js import evidence for its owner", () => {
@@ -245,6 +277,92 @@ describe("Drizzle audit file selection", () => {
     ]);
   });
 
+  it("reports deletions only when an applicable affected owner loses auditable source", () => {
+    const selection = select(snapshot({
+      projects: [
+        project("api", "apps/api", ["drizzle-orm", "postgres"]),
+        project("web", "apps/web", ["react"]),
+        project("worker", "apps/worker", ["drizzle-orm", "postgres"]),
+      ],
+      auditScope: changedScope(["api", "web"], [
+        { status: "deleted", path: "apps/api/query.ts" },
+        { status: "deleted", path: "apps/web/view.ts" },
+        { status: "deleted", path: "apps/worker/job.ts" },
+        { status: "deleted", path: "orphan.ts" },
+      ]),
+    }));
+
+    expect(selection.applicableProjectIds).toEqual(["api"]);
+    expect(selection.limitations).toEqual([
+      "apps/api/query.ts: deleted changed source could not be examined.",
+    ]);
+  });
+
+  it("reports an ambiguous deletion only when a deepest candidate is applicable", () => {
+    const selection = select(snapshot({
+      projects: [
+        project("api-a", "apps/api", ["drizzle-orm", "postgres"]),
+        project("api-b", "apps/api", ["react"]),
+        project("web-a", "apps/web", ["react"]),
+        project("web-b", "apps/web", ["react"]),
+      ],
+      auditScope: changedScope(["api-a", "api-b", "web-a", "web-b"], [
+        { status: "deleted", path: "apps/api/query.ts" },
+        { status: "deleted", path: "apps/web/view.ts" },
+      ]),
+    }));
+
+    expect(selection.limitations).toEqual([
+      "apps/api/query.ts: deleted changed source has ambiguous applicable ownership; analysis was withheld.",
+    ]);
+  });
+
+  it("selects a rename under its current applicable affected owner and records loss from the old owner", () => {
+    const selection = select(snapshot({
+      files: [file("apps/api/new.ts"), file("apps/web/new.ts")],
+      projects: [
+        project("api", "apps/api", ["drizzle-orm", "postgres"]),
+        project("web", "apps/web", ["react"]),
+      ],
+      auditScope: changedScope(["api", "web"], [
+        {
+          status: "renamed",
+          path: "apps/api/new.ts",
+          previousPath: "apps/web/old.ts",
+        },
+        {
+          status: "renamed",
+          path: "apps/web/new.ts",
+          previousPath: "apps/api/old.ts",
+        },
+      ]),
+    }));
+
+    expect(selection.files.map(({ path }) => path)).toEqual(["apps/api/new.ts"]);
+    expect(selection.limitations).toEqual([
+      "apps/api/old.ts: previous renamed source could not be examined.",
+      "apps/web/new.ts: changed source is outside an applicable affected Drizzle project.",
+    ]);
+  });
+
+  it("does not report a previous rename path from a non-applicable or non-affected owner", () => {
+    const selection = select(snapshot({
+      files: [file("apps/api/new.ts")],
+      projects: [
+        project("api", "apps/api", ["drizzle-orm", "postgres"]),
+        project("web", "apps/web", ["drizzle-orm", "postgres"]),
+      ],
+      auditScope: changedScope(["api"], [{
+        status: "renamed",
+        path: "apps/api/new.ts",
+        previousPath: "apps/web/old.ts",
+      }]),
+    }));
+
+    expect(selection.files.map(({ path }) => path)).toEqual(["apps/api/new.ts"]);
+    expect(selection.limitations).toEqual([]);
+  });
+
   it("applies a validated deterministic file ceiling", () => {
     const value = snapshot({
       files: [file("z.ts"), file("a.ts"), file("m.ts")],
@@ -272,8 +390,13 @@ describe("Drizzle audit file selection", () => {
 
     expect(selection.limitations).toEqual([
       "a.md: changed path is not an inventoried regular file.",
-      "b.md: changed path is not an inventoried regular file.",
-      "Drizzle source selection omitted 1 additional limitation.",
+      "Drizzle source selection omitted 2 additional limitations.",
+    ]);
+    expect(select(snapshot({
+      projects: [project("root", ".", ["drizzle-orm", "postgres"])],
+      auditScope: changedScope(["root"], changes),
+    }), { maxLimitations: 1 }).limitations).toEqual([
+      "Drizzle source selection omitted 3 additional limitations.",
     ]);
   });
 });

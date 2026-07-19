@@ -49,23 +49,30 @@ function projectDepth(project: DetectedProject): number {
   return project.root === "." ? 0 : project.root.split("/").length;
 }
 
-function uniqueOwner(
+function deepestOwners(
   path: string,
   projects: readonly DetectedProject[],
-): DetectedProject | "ambiguous" | undefined {
+): readonly DetectedProject[] {
   const candidates = projects
     .filter((project) => containsPath(project, path))
     .sort((left, right) =>
       projectDepth(right) - projectDepth(left) ||
       left.root.localeCompare(right.root) ||
       left.id.localeCompare(right.id)
-  );
-  if (candidates.length === 0) return undefined;
+    );
   const deepestCandidate = candidates[0];
-  if (deepestCandidate === undefined) return undefined;
+  if (deepestCandidate === undefined) return [];
   const depth = projectDepth(deepestCandidate);
-  const deepest = candidates.filter((project) => projectDepth(project) === depth);
-  return deepest.length === 1 ? deepest[0] : "ambiguous";
+  return candidates.filter((project) => projectDepth(project) === depth);
+}
+
+function uniqueOwner(
+  path: string,
+  projects: readonly DetectedProject[],
+): DetectedProject | "ambiguous" | undefined {
+  const candidates = deepestOwners(path, projects);
+  if (candidates.length === 0) return undefined;
+  return candidates.length === 1 ? candidates[0] : "ambiguous";
 }
 
 function manifestDependencyNames(manifest: ManifestRecord): readonly string[] {
@@ -134,9 +141,10 @@ function dependencyApplicable(
 function boundedLimitations(values: ReadonlySet<string>, max: number): readonly string[] {
   const ordered = [...values].sort();
   if (ordered.length <= max) return ordered;
-  const omitted = ordered.length - max;
+  const retainedCount = Math.max(max - 1, 0);
+  const omitted = ordered.length - retainedCount;
   return [
-    ...ordered.slice(0, max),
+    ...ordered.slice(0, retainedCount),
     `Drizzle source selection omitted ${omitted} additional limitation${omitted === 1 ? "" : "s"}.`,
   ];
 }
@@ -187,21 +195,40 @@ export function selectDrizzleAuditFiles(
     .sort((left, right) => left.id.localeCompare(right.id));
   const applicableProjectIds = new Set(applicableProjects.map(({ id }) => id));
 
+  const consideredProjects = snapshot.projects.filter((project) =>
+    scope === "full" || affected.has(project.id)
+  );
+  const projectsById = new Map(snapshot.projects.map((project) => [project.id, project]));
   for (const workspace of snapshot.workspaces) {
     if (workspace.supported) continue;
-    for (const matchedRoot of workspace.matchedProjectRoots) {
-      const project = snapshot.projects.find((candidate) => candidate.root === matchedRoot);
-      if (project === undefined || (scope === "changed" && !affected.has(project.id))) continue;
-      if (applicableProjectIds.has(project.id)) continue;
-      const ownDependencies = dependencies.get(project.id) ?? new Set<string>();
-      if (
-        ownDependencies.has(DRIZZLE_DEPENDENCY) ||
-        ownDependencies.has(POSTGRES_JS_DEPENDENCY)
-      ) {
-        limitations.add(
-          `${project.root}: unsupported workspace ownership prevents complete Drizzle applicability analysis.`,
-        );
+    const owner = projectsById.get(workspace.ownerProjectId);
+    if (owner === undefined) continue;
+    const inScopeBoundaryProjects = consideredProjects.filter((project) =>
+      containsPath(owner, project.root)
+    );
+    if (inScopeBoundaryProjects.length === 0) continue;
+    const boundaryProjects = scope === "full"
+      ? inScopeBoundaryProjects
+      : [...new Map([owner, ...inScopeBoundaryProjects].map((project) => [project.id, project])).values()];
+    const boundaryDependencies = new Set<string>();
+    for (const project of boundaryProjects) {
+      for (const dependency of dependencies.get(project.id) ?? []) {
+        boundaryDependencies.add(dependency);
       }
+    }
+    const hasUnresolvedRelevantProject = boundaryProjects.some((project) => {
+      if (applicableProjectIds.has(project.id)) return false;
+      const ownDependencies = dependencies.get(project.id) ?? new Set<string>();
+      return ownDependencies.has(DRIZZLE_DEPENDENCY) || ownDependencies.has(POSTGRES_JS_DEPENDENCY);
+    });
+    if (
+      hasUnresolvedRelevantProject &&
+      boundaryDependencies.has(DRIZZLE_DEPENDENCY) &&
+      boundaryDependencies.has(POSTGRES_JS_DEPENDENCY)
+    ) {
+      limitations.add(
+        `${workspace.sourcePath}: unsupported workspace boundary prevents complete Drizzle applicability analysis.`,
+      );
     }
   }
 
@@ -224,12 +251,33 @@ export function selectDrizzleAuditFiles(
       if (owner !== undefined && applicableProjectIds.has(owner.id)) selected.push(file);
     }
   } else {
+    function recordUnavailablePreviousSource(path: string, kind: "deleted" | "renamed"): void {
+      if (!supportsSource(path)) return;
+      const owners = deepestOwners(path, snapshot.projects);
+      const applicableOwners = owners.filter((owner) => applicableProjectIds.has(owner.id));
+      if (applicableOwners.length === 0) return;
+      if (owners.length > 1) {
+        limitations.add(
+          `${path}: ${kind === "deleted" ? "deleted changed" : "previous renamed"} source has ambiguous applicable ownership; analysis was withheld.`,
+        );
+        return;
+      }
+      limitations.add(
+        `${path}: ${kind === "deleted" ? "deleted changed" : "previous renamed"} source could not be examined.`,
+      );
+    }
+
     for (const change of snapshot.auditScope.changes) {
       if (change.status === "deleted") {
-        if (supportsSource(change.path)) {
-          limitations.add(`${change.path}: deleted changed source could not be examined.`);
-        }
+        recordUnavailablePreviousSource(change.path, "deleted");
         continue;
+      }
+      if (
+        change.status === "renamed" &&
+        change.previousPath !== undefined &&
+        change.previousPath !== change.path
+      ) {
+        recordUnavailablePreviousSource(change.previousPath, "renamed");
       }
       const file = filesByPath.get(change.path);
       if (file?.kind !== "file") {
