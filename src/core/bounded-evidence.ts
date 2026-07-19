@@ -25,6 +25,13 @@ function safeCount(value: number): number {
   return Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
+function coherentSummary(summary: OmittedRecordSummary): OmittedRecordSummary {
+  const total = safeCount(summary.total);
+  const omitted = Math.min(safeCount(summary.omitted), total);
+  const emitted = Math.min(safeCount(summary.emitted), total - omitted);
+  return { total, emitted, omitted };
+}
+
 export function saturatingAddCount(left: number, right: number): number {
   const normalizedLeft = safeCount(left);
   const normalizedRight = safeCount(right);
@@ -38,34 +45,45 @@ export function mergeOmittedRecordSummaries(
   left: OmittedRecordSummary | undefined,
   right: OmittedRecordSummary | undefined,
 ): OmittedRecordSummary | undefined {
-  if (left === undefined) return right === undefined ? undefined : {
-    total: safeCount(right.total),
-    emitted: safeCount(right.emitted),
-    omitted: safeCount(right.omitted),
-  };
-  if (right === undefined) return {
-    total: safeCount(left.total),
-    emitted: safeCount(left.emitted),
-    omitted: safeCount(left.omitted),
-  };
-  return {
-    total: saturatingAddCount(left.total, right.total),
-    emitted: saturatingAddCount(left.emitted, right.emitted),
-    omitted: saturatingAddCount(left.omitted, right.omitted),
-  };
+  if (left === undefined) return right === undefined ? undefined : coherentSummary(right);
+  if (right === undefined) return coherentSummary(left);
+  const normalizedLeft = coherentSummary(left);
+  const normalizedRight = coherentSummary(right);
+  const total = saturatingAddCount(normalizedLeft.total, normalizedRight.total);
+  const omitted = Math.min(
+    saturatingAddCount(normalizedLeft.omitted, normalizedRight.omitted),
+    total,
+  );
+  const emitted = Math.min(
+    saturatingAddCount(normalizedLeft.emitted, normalizedRight.emitted),
+    total - omitted,
+  );
+  return { total, emitted, omitted };
 }
 
 export function preserveSummaryWithAdditionalOmissions(
   existing: OmittedRecordSummary | undefined,
   normalized: OmittedRecordSummary,
 ): OmittedRecordSummary | undefined {
-  if (normalized.omitted === 0) return mergeOmittedRecordSummaries(existing, undefined);
-  if (existing === undefined) return mergeOmittedRecordSummaries(undefined, normalized);
-  return {
-    total: saturatingAddCount(existing.total, normalized.omitted),
-    emitted: safeCount(existing.emitted),
-    omitted: saturatingAddCount(existing.omitted, normalized.omitted),
-  };
+  const normalizedSummary = coherentSummary(normalized);
+  if (existing === undefined) return normalizedSummary;
+  const existingSummary = coherentSummary(existing);
+  const additionalMaterialized = Math.max(
+    0,
+    normalizedSummary.total - existingSummary.emitted,
+  );
+  const total = saturatingAddCount(existingSummary.total, additionalMaterialized);
+  const materialized = saturatingAddCount(
+    existingSummary.emitted,
+    additionalMaterialized,
+  );
+  const newlyOmitted = Math.min(normalizedSummary.omitted, materialized);
+  const omitted = Math.min(
+    saturatingAddCount(existingSummary.omitted, newlyOmitted),
+    total,
+  );
+  const emitted = Math.min(materialized - newlyOmitted, total - omitted);
+  return { total, emitted, omitted };
 }
 
 const PATH_SCOPED_REASONS = new Set([

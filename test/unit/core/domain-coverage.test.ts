@@ -493,11 +493,15 @@ describe("domain coverage planning", () => {
         samplePaths.length <= MAX_LIMITATION_SAMPLE_PATHS
       )
     )).toBe(true);
-    expect(forward.limitationSummary).toEqual({
+    expect(forward.limitationSummary).toMatchObject({
       total: Number.MAX_SAFE_INTEGER,
-      emitted: Number.MAX_SAFE_INTEGER,
       omitted: Number.MAX_SAFE_INTEGER,
     });
+    expect(forward.limitationSummary?.emitted).toBe(0);
+    expect((forward.limitationSummary?.emitted ?? 0) +
+      (forward.limitationSummary?.omitted ?? 0)).toBe(
+        forward.limitationSummary?.total,
+      );
 
     const normalized = normalizeScanResult(
       "/repo",
@@ -513,6 +517,59 @@ describe("domain coverage planning", () => {
       limitationSummary === undefined ||
       Object.values(limitationSummary).every(Number.isSafeInteger)
     )).toBe(true);
+  });
+
+  it("accounts for summary-less limitation groups even when excess reasons are dropped", () => {
+    const groups = Array.from({ length: MAX_COVERAGE_RECORDS + 60 }, (_, index) => ({
+      reason: `summaryless-${String(index).padStart(4, "0")}`,
+      total: 20,
+      samplePaths: Array.from({ length: 20 }, (_, pathIndex) =>
+        `src/${String(index).padStart(4, "0")}-${String(pathIndex).padStart(2, "0")}.ts`
+      ),
+      omittedPathCount: 0,
+    }));
+    const plan = (limitationGroups: typeof groups) => planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [{
+        doctorId: "database/drizzle",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "database/drizzle",
+            status: "partial",
+            scope: "full",
+            filesExamined: 1,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [],
+            limitationGroups,
+          }],
+        },
+      }],
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database")!;
+
+    const forward = plan(groups);
+    const reverse = plan([...groups].reverse());
+    const expectedSummary = {
+      total: (MAX_COVERAGE_RECORDS + 60) * 20,
+      emitted: MAX_COVERAGE_RECORDS * MAX_LIMITATION_SAMPLE_PATHS,
+      omitted: (MAX_COVERAGE_RECORDS + 60) * 20 -
+        MAX_COVERAGE_RECORDS * MAX_LIMITATION_SAMPLE_PATHS,
+    };
+
+    expect(forward).toEqual(reverse);
+    expect(forward.limitationGroups).toHaveLength(MAX_COVERAGE_RECORDS);
+    expect(forward.limitationSummary).toEqual(expectedSummary);
+    expect(forward.modules[0]).toMatchObject({
+      limitationGroups: expect.arrayContaining([expect.objectContaining({
+        samplePaths: expect.any(Array),
+      })]),
+      limitationSummary: expectedSummary,
+    });
   });
 
   it.each([

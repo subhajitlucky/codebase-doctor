@@ -120,9 +120,12 @@ function aggregateLimitationMetadata(
     total: number;
     samplePaths: string[];
     omittedPathCount: number;
+    summarylessTotal: number;
+    summarylessSamplePaths: string[];
   }
   const groupsByReason = new Map<string, MutableGroup>();
   let limitationSummary: OmittedRecordSummary | undefined;
+  let summarylessTotal = 0;
 
   const admitSample = (samples: string[], path: string): void => {
     if (samples.includes(path)) return;
@@ -133,12 +136,17 @@ function aggregateLimitationMetadata(
   };
 
   for (const entry of entries) {
+    const hasUpstreamSummary = entry.limitationSummary !== undefined;
     limitationSummary = mergeOmittedRecordSummaries(
       limitationSummary,
       entry.limitationSummary,
     );
     for (const incoming of entry.limitationGroups ?? []) {
       if (typeof incoming.reason !== "string") continue;
+      const incomingTotal = saturatingAddCount(0, incoming.total);
+      if (!hasUpstreamSummary) {
+        summarylessTotal = saturatingAddCount(summarylessTotal, incomingTotal);
+      }
       let group = groupsByReason.get(incoming.reason);
       if (group === undefined) {
         if (groupsByReason.size >= MAX_COVERAGE_RECORDS) {
@@ -158,23 +166,49 @@ function aggregateLimitationMetadata(
           total: 0,
           samplePaths: [],
           omittedPathCount: 0,
+          summarylessTotal: 0,
+          summarylessSamplePaths: [],
         };
         groupsByReason.set(incoming.reason, group);
       }
-      group.total = saturatingAddCount(group.total, incoming.total);
+      group.total = saturatingAddCount(group.total, incomingTotal);
       group.omittedPathCount = saturatingAddCount(
         group.omittedPathCount,
         incoming.omittedPathCount,
       );
       for (const path of incoming.samplePaths) {
-        if (typeof path === "string") admitSample(group.samplePaths, path);
+        if (typeof path !== "string") continue;
+        admitSample(group.samplePaths, path);
+        if (!hasUpstreamSummary) admitSample(group.summarylessSamplePaths, path);
+      }
+      if (!hasUpstreamSummary) {
+        group.summarylessTotal = saturatingAddCount(
+          group.summarylessTotal,
+          incomingTotal,
+        );
       }
     }
+  }
+  let summarylessEmitted = 0;
+  for (const group of groupsByReason.values()) {
+    summarylessEmitted = saturatingAddCount(
+      summarylessEmitted,
+      Math.min(group.summarylessTotal, group.summarylessSamplePaths.length),
+    );
+  }
+  if (summarylessTotal > 0) {
+    limitationSummary = mergeOmittedRecordSummaries(limitationSummary, {
+      total: summarylessTotal,
+      emitted: summarylessEmitted,
+      omitted: summarylessTotal - summarylessEmitted,
+    });
   }
   const groups = [...groupsByReason.values()]
     .sort((left, right) => left.reason.localeCompare(right.reason))
     .map((group): LimitationGroup => ({
-      ...group,
+      reason: group.reason,
+      total: group.total,
+      samplePaths: group.samplePaths,
       omittedPathCount: Math.max(
         group.omittedPathCount,
         Math.max(0, group.total - group.samplePaths.length),

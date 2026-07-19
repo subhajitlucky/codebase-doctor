@@ -4,6 +4,7 @@ import {
   MAX_LIMITATION_SAMPLE_PATHS,
   boundLimitations,
   boundRecords,
+  preserveSummaryWithAdditionalOmissions,
 } from "../../../src/core/bounded-evidence.js";
 
 const REASONS = [
@@ -52,5 +53,25 @@ describe("bounded report evidence", () => {
       emitted: MAX_COVERAGE_RECORDS,
       omitted: 1_500 - MAX_COVERAGE_RECORDS,
     });
+  });
+
+  it.each([
+    [
+      { total: 120, emitted: 120, omitted: 0 },
+      { total: 120, emitted: 100, omitted: 20 },
+      { total: 120, emitted: 100, omitted: 20 },
+    ],
+    [
+      { total: 240, emitted: 200, omitted: 40 },
+      { total: 200, emitted: 100, omitted: 100 },
+      { total: 240, emitted: 100, omitted: 140 },
+    ],
+    [
+      { total: 10, emitted: 8, omitted: 2 },
+      { total: 12, emitted: 9, omitted: 3 },
+      { total: 14, emitted: 9, omitted: 5 },
+    ],
+  ])("reclassifies bounded evidence without inventing totals", (existing, normalized, expected) => {
+    expect(preserveSummaryWithAdditionalOmissions(existing, normalized)).toEqual(expected);
   });
 });
