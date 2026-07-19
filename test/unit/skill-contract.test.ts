@@ -4,6 +4,21 @@ import { describe, expect, it } from "vitest";
 const skillPath = ".agents/skills/codebase-doctor/SKILL.md";
 
 describe("Codebase Doctor agent skill contract", () => {
+  it("teaches agents to interpret Drizzle Date evidence without granting repair authority", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/database\/drizzle\/raw-sql-date-parameter/);
+    expect(skill).toMatch(/evidence.*not.*automatic truth|not.*automatic truth.*evidence/is);
+    expect(skill).toMatch(/postgres-js.*ERR_INVALID_ARG_TYPE|ERR_INVALID_ARG_TYPE.*postgres-js/is);
+    expect(skill).toMatch(/Date\(\).*Date\.now\(\).*toISOString|toISOString.*Date\.now\(\).*Date\(\)/is);
+    expect(skill).toMatch(/lte\(column, date\)/);
+    expect(skill).toMatch(/explicit.*two-argument.*encoder|two-argument.*explicit.*encoder/is);
+    expect(skill).toMatch(/external.*(?:human|agent).*(?:repair|change|remediat).*rerun.*same.*scope/is);
+    expect(skill).toMatch(/never.*(?:ask|grant).*Codebase Doctor.*target[- ]write/is);
+    expect(skill).toMatch(/never.*(?:copy|request|reveal).*raw SQL|raw SQL.*(?:withheld|never.*copy)/is);
+    expect(skill).toMatch(/partial.*not.*clean|not.*clean.*partial/is);
+  });
+
   it("has minimal trigger-focused frontmatter", async () => {
     const skill = await readFile(skillPath, "utf8");
     const frontmatter = skill.match(/^---\n([\s\S]*?)\n---/)?.[1];

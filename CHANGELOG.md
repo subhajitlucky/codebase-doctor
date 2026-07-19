@@ -4,6 +4,19 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add the read-only, offline `database/drizzle` module and its precision-first
+  `database/drizzle/raw-sql-date-parameter` rule for statically proven
+  JavaScript Date values interpolated through raw Drizzle SQL on confirmed
+  postgres-js paths.
+
+### Security
+
+- Keep raw SQL, source expressions, Date values, and secrets out of findings,
+  fingerprints, and every reporter. The module provides external-only typed
+  comparison or explicit-encoder guidance and never applies a repair.
+
 ## [0.1.6] - 2026-07-18
 
 ### Changed

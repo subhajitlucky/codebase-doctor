@@ -74,7 +74,7 @@ calling a codebase verified or clean.
 | --- | --- | --- |
 | Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, visible-test diagnostics, a bounded JavaScript/TypeScript source-impact graph, and precision-first missing-target findings | Cross-language dependency and behavioral topology |
 | Configured validation | JavaScript/TypeScript and Python command planning; execution only with `--run-checks` | Sandboxed validation across supported ecosystems |
-| Database | Offline PostgreSQL migration RLS and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
+| Database | Offline PostgreSQL migration RLS, precision-first Drizzle/postgres-js raw-Date diagnostics, and separately permitted live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, and additional database engines |
 | Frontend | Framework detection only; repository-owned checks may provide evidence | Built-in React, Next.js, accessibility, SEO, and bundle analysis |
 | Backend and authorization | NestJS detection only; repository-owned checks may provide evidence | Built-in API, authentication, worker, webhook, cron, permission, and rate-limit analysis |
 | Security | Built-in repository-shareable secrets analysis, offline npm dependency metadata analysis, command-output redaction, and RLS findings; no permission or current advisory analyzer yet | Built-in secrets, cross-ecosystem dependency, permission, vulnerability, and supply-chain analysis |
@@ -98,9 +98,11 @@ detected but its analysis is unsupported, skipped, failed, or not selected.”
 Each entry includes evidence, limitations, and module-level status where a
 domain contains more than one analysis module.
 
-For example, the database domain can show the offline `database/sql-rls` module
-as completed while the separately permissioned live `database/rls` module is
-skipped. The database domain is then partial rather than silently clean.
+For example, the database domain reports the offline `database/drizzle` and
+`database/sql-rls` modules independently from the separately permissioned live
+`database/rls` module. One can complete while another is partial, not
+applicable, not selected, or skipped; the database domain is never silently
+called clean.
 Changed audits can mark unaffected domains `not-selected`; security and
 performance can remain `unknown` and `unsupported` until an applicable analyzer
 exists.
@@ -136,6 +138,8 @@ module details, evidence, limitations, and findings.
 - A built-in live PostgreSQL RLS analyzer migrated from RLS Doctor.
 - Automatic offline PostgreSQL RLS analysis for Supabase, Prisma, Drizzle, and
   generic migration directories.
+- Automatic offline `database/drizzle/raw-sql-date-parameter` diagnostics for
+  statically proven Date values on confirmed Drizzle/postgres-js paths.
 - Final-state reconstruction for supported table, policy, RLS, and table-grant
   statements, with explicit partial coverage for dynamic or unsupported SQL.
 - Explicit, independent permission for database network access.
@@ -147,6 +151,58 @@ module details, evidence, limitations, and findings.
   2 and 3, with bounded work and source-value-safe findings.
 
 Go, Rust, and Java are detection-only in `0.1.x`; Codebase Doctor does not execute their toolchains yet.
+
+## Built-in Drizzle postgres-js Date diagnostic
+
+The combined audit automatically runs the read-only, offline `database/drizzle`
+module. Its `database/drizzle/raw-sql-date-parameter` rule catches a recurring
+runtime boundary: a JavaScript `Date` interpolated into a raw Drizzle `sql`
+template can bypass the column's timestamp encoder. postgres-js may then receive
+a `Date` where it requires an encoded string and throw `ERR_INVALID_ARG_TYPE`.
+Equivalent SQL can still work in psql because psql is not receiving the same
+unencoded JavaScript parameter.
+
+Applicability is deliberately narrow. The module requires confirmed postgres-js
+usage through an exact `drizzle-orm/postgres-js` adapter import, or scoped
+owning/workspace dependency evidence for both `drizzle-orm` and `postgres`. It
+reports only statically proven Date flows, such as `new Date()` and supported
+stable typed or constant propagation. It does not infer from a variable name.
+
+The following are not findings: `Date()`, `Date.now()`, an already encoded
+`toISOString()` string, typed comparisons such as `lte(column, date)`, and a
+proven explicit two-argument encoder such as `sql.param(value, encoder)`.
+Unsupported syntax and unresolved or unclassified value flows become partial
+coverage limitations rather than guessed findings. Partial coverage is not a
+clean Drizzle audit.
+
+The finding is medium severity and high confidence. Confidence is high because
+the adapter, SQL binding, and Date flow are statically proven; severity remains
+medium because static analysis cannot know the affected query's business
+criticality. Raw SQL, raw expressions, parameter values, and secrets are
+withheld from findings, fingerprints, text, JSON, and SARIF reports.
+
+For example, this is the unsafe shape an authorized external actor should
+review—not an edit Codebase Doctor performs:
+
+```ts
+// Before: raw interpolation can bypass the timestamp column encoder.
+const rows = await db.execute(sql`select * from jobs where run_at <= ${date}`);
+
+// After: guidance for a human or separately authorized external coding agent.
+const rows = await db.select().from(jobs).where(lte(jobs.runAt, date));
+```
+
+Run a changed audit after a repair and a full audit at a trust boundary:
+
+```bash
+codebase-doctor audit . --changed --json
+codebase-doctor audit . --json
+```
+
+Treat the finding as bounded evidence, not automatic truth. A human or external
+authorized coding agent must preserve timestamp and timezone semantics, make
+the repair, and rerun the same scope. Codebase Doctor provides guidance only;
+it never modifies the query or receives target-write authority.
 
 ## Built-in JavaScript and TypeScript source-impact graph
 
@@ -403,6 +459,8 @@ live skip does not mean the deployed database was audited and found clean.
 
 Static and live evidence answer different questions:
 
+- `database/drizzle` inspects supported application source offline for proven
+  Drizzle/postgres-js raw Date parameter hazards.
 - `database/sql-rls` reconstructs expected state from repository migrations.
 - `database/rls` inspects observed live database state.
 
@@ -511,6 +569,7 @@ Approved child commands still inherit host networking in `0.1.x`. Do not execute
 - `checks/command-timeout`
 - `database/rls/*`
 - `database/sql-rls/*`
+- `database/drizzle/raw-sql-date-parameter`
 - `security/secrets/*`
 - `security/dependencies/*`
 - `source/import-target-missing`

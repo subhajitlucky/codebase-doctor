@@ -59,6 +59,94 @@ function result(): ScanResult {
 }
 
 describe("SARIF reporter", () => {
+  it("maps Drizzle Date findings to warnings without auto-fixes or source disclosure", () => {
+    const drizzleResult = result();
+    drizzleResult.coverageSummary = { total: 2, emitted: 1, omitted: 1 };
+    drizzleResult.coverage = [{
+      moduleId: "database/drizzle",
+      status: "partial",
+      scope: "full",
+      filesExamined: 1,
+      statementsExamined: 20,
+      statementsRecognized: 1,
+      limitations: ["A supported Date flow could not be classified."],
+      limitationGroups: [{
+        reason: "A supported Date flow could not be classified.",
+        total: 2,
+        samplePaths: ["src/query.ts"],
+        omittedPathCount: 1,
+      }],
+      limitationSummary: { total: 2, emitted: 1, omitted: 1 },
+    }];
+    drizzleResult.findings = [{
+      ruleId: "database/drizzle/raw-sql-date-parameter",
+      doctorId: "database/drizzle",
+      severity: "medium",
+      confidence: "high",
+      category: "database",
+      title: "Raw Drizzle SQL receives an unencoded Date value",
+      message: "A statically proven JavaScript Date reaches a raw Drizzle SQL parameter.",
+      location: { path: "src/query.ts", line: 12, column: 18 },
+      evidence: [{
+        type: "file",
+        path: "src/query.ts",
+        detail: "A constructed-date value is interpolated through the imported Drizzle sql binding 'dbSql'; source and parameter content were withheld.",
+      }],
+      impact: "postgres-js can reject an unencoded Date parameter at runtime.",
+      remediationConstraints: [
+        "Only an authorized human or external coding agent may change target repository files.",
+      ],
+      remediation: "Have an authorized external actor use lte(column, date), or supply a proven explicit encoder.",
+      verification: {
+        command: "codebase-doctor audit . --json",
+        expected: "The fingerprint is absent and database/drizzle coverage completed for the same scope.",
+      },
+      fingerprint: "drizzle-date-fingerprint",
+    }];
+    drizzleResult.comparison = {
+      new: ["drizzle-date-fingerprint"],
+      unchanged: [],
+      resolved: [],
+      newSummary: drizzleResult.summary,
+    };
+
+    const serialized = renderSarifReport(drizzleResult);
+    const report = JSON.parse(serialized);
+    const finding = report.runs[0].results[0];
+
+    expect(finding).toMatchObject({
+      ruleId: "database/drizzle/raw-sql-date-parameter",
+      level: "warning",
+      locations: [{ physicalLocation: {
+        artifactLocation: { uri: "src/query.ts" },
+        region: { startLine: 12, startColumn: 18 },
+      } }],
+      properties: {
+        confidence: "high",
+        doctorId: "database/drizzle",
+        evidence: [{ detail: expect.stringContaining("sql binding 'dbSql'") }],
+        remediation: expect.stringMatching(/lte\(column, date\).*explicit encoder/i),
+        verification: { command: "codebase-doctor audit . --json" },
+      },
+    });
+    expect(finding.fixes).toBeUndefined();
+    expect(report.runs[0].tool.driver.rules[0].defaultConfiguration.level).toBe("warning");
+    expect(report.runs[0].properties).toMatchObject({
+      coverageSummary: { total: 2, emitted: 1, omitted: 1 },
+      coverage: [{
+        moduleId: "database/drizzle",
+        limitationGroups: [{ total: 2, omittedPathCount: 1 }],
+      }],
+    });
+    expect(serialized).not.toMatch(/target[- ]write/i);
+    for (const withheld of [
+      "select * from private_events where created_at <=",
+      "dangerousDateValue",
+      "2037-04-05T06:07:08.000Z",
+      "sk-test-drizzle-report-secret",
+    ]) expect(serialized).not.toContain(withheld);
+  });
+
   it("maps source-integrity findings through the generic SARIF contract", () => {
     const sourceResult = result();
     sourceResult.findings = [{
