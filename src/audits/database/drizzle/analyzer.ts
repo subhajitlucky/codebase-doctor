@@ -178,6 +178,13 @@ function exactDateType(annotationContainer: Node | undefined): boolean {
     identifierName(objectNode(annotation?.typeName)) === "Date";
 }
 
+function exactRequiredDateBinding(pattern: Node | undefined): boolean {
+  let candidate = pattern;
+  if (nodeType(candidate) === "TSParameterProperty") candidate = objectNode(candidate?.parameter);
+  if (nodeType(candidate) !== "Identifier" || candidate?.optional === true) return false;
+  return exactDateType(candidate);
+}
+
 function enterBindingDiscovery(
   node: Node | undefined,
   budget: BindingDiscoveryBudget,
@@ -280,6 +287,7 @@ function predeclareStatement(
     return;
   }
   if (type === "VariableDeclaration" && Array.isArray(statement.declarations)) {
+    if (statement.kind === "var") return;
     for (const rawDeclaration of statement.declarations) {
       if (budget.exceeded) break;
       const declaration = objectNode(rawDeclaration);
@@ -292,7 +300,7 @@ function predeclareStatement(
           kind: statement.kind === "const" ? "const" : "local",
           declarationOffset: offset(declaration),
           ...(identifierName(id) === name && init !== undefined ? { init } : {}),
-          exactDateType: identifierName(id) === name && exactDateType(id),
+          exactDateType: identifierName(id) === name && exactRequiredDateBinding(id),
           writes: [],
           duplicate: false,
         });
@@ -329,6 +337,67 @@ function predeclareStatement(
   }
 }
 
+function predeclareHoistedVars(
+  scope: Scope,
+  body: unknown,
+  parentBudget: BindingDiscoveryBudget,
+  depth: number,
+): void {
+  const remainingNodes = Math.max(1, parentBudget.maxNodes - parentBudget.nodes);
+  const budget: BindingDiscoveryBudget = {
+    maxNodes: remainingNodes,
+    maxDepth: parentBudget.maxDepth,
+    visited: new WeakSet(),
+    nodes: 0,
+    exceeded: false,
+  };
+
+  const scan = (value: unknown, currentDepth: number): void => {
+    if (budget.exceeded) return;
+    if (Array.isArray(value)) {
+      for (const child of value) scan(child, currentDepth + 1);
+      return;
+    }
+    const node = objectNode(value);
+    if (!enterBindingDiscovery(node, budget, currentDepth)) return;
+    const type = nodeType(node);
+    if ([
+      "FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression",
+      "ObjectMethod", "ClassMethod", "ClassPrivateMethod", "ClassDeclaration",
+      "ClassExpression", "StaticBlock",
+    ].includes(type ?? "")) return;
+
+    if (type === "VariableDeclaration" && node.kind === "var" && Array.isArray(node.declarations)) {
+      for (const rawDeclaration of node.declarations) {
+        const declaration = objectNode(rawDeclaration);
+        if (declaration === undefined) continue;
+        const id = objectNode(declaration.id);
+        const init = objectNode(declaration.init);
+        for (const name of bindingNames(id, budget, currentDepth + 1)) {
+          declare(scope, {
+            name,
+            kind: "local",
+            declarationOffset: offset(declaration),
+            ...(identifierName(id) === name && init !== undefined ? { init } : {}),
+            exactDateType: identifierName(id) === name && exactRequiredDateBinding(id),
+            writes: [],
+            duplicate: false,
+          });
+        }
+      }
+    }
+
+    for (const [key, child] of Object.entries(node)) {
+      if (["loc", "comments", "errors", "tokens"].includes(key)) continue;
+      if (typeof child === "object" && child !== null) scan(child, currentDepth + 1);
+    }
+  };
+
+  scan(body, depth);
+  parentBudget.nodes += budget.nodes;
+  if (budget.exceeded || parentBudget.nodes > parentBudget.maxNodes) parentBudget.exceeded = true;
+}
+
 function predeclareBody(
   scope: Scope,
   body: unknown,
@@ -359,7 +428,8 @@ function addParameters(
         name,
         kind: "parameter",
         declarationOffset: offset(param),
-        exactDateType: identifierName(param) === name && exactDateType(param),
+        exactDateType: (identifierName(param) === name || nodeType(param) === "TSParameterProperty") &&
+          exactRequiredDateBinding(param),
         writes: [],
         duplicate: false,
       });
@@ -415,26 +485,87 @@ function importedSqlBinding(scope: Scope, identifier: Node | undefined): boolean
   return name !== undefined && resolve(scope, name)?.kind === "import-sql";
 }
 
-function isEncodedSqlParameter(expression: Node, scope: Scope): boolean {
-  if (nodeType(expression) !== "CallExpression") return false;
-  const args = Array.isArray(expression.arguments) ? expression.arguments : [];
-  if (args.length !== 2) return false;
-  const callee = objectNode(expression.callee);
-  if (nodeType(callee) !== "MemberExpression" || callee?.computed === true) return false;
-  return importedSqlBinding(scope, objectNode(callee?.object)) &&
-    identifierName(objectNode(callee?.property)) === "param";
+type SqlParameterClassification =
+  | { readonly kind: "not-parameter" }
+  | { readonly kind: "safe" }
+  | { readonly kind: "invalid"; readonly value?: Node }
+  | { readonly kind: "unknown" };
+
+function isCallableNode(node: Node | undefined): boolean {
+  return ["ArrowFunctionExpression", "FunctionExpression", "ObjectMethod"].includes(nodeType(node) ?? "");
 }
 
-function unencodedSqlParameterValue(expression: Node, scope: Scope): Node | undefined {
-  if (nodeType(expression) !== "CallExpression") return undefined;
+function objectHasProvenEncoder(object: Node): boolean {
+  if (nodeType(object) !== "ObjectExpression" || !Array.isArray(object.properties)) return false;
+  if (object.properties.some((property) => nodeType(objectNode(property)) === "SpreadElement")) return false;
+  let mapProperty: Node | undefined;
+  for (const rawProperty of object.properties) {
+    const property = objectNode(rawProperty);
+    if (property === undefined || property.computed === true) continue;
+    if (identifierName(objectNode(property.key)) === "mapToDriverValue" ||
+        (nodeType(objectNode(property.key)) === "StringLiteral" &&
+          objectNode(property.key)?.value === "mapToDriverValue")) {
+      mapProperty = property;
+    }
+  }
+  if (nodeType(mapProperty) === "ObjectMethod") return mapProperty?.kind === "method";
+  return nodeType(mapProperty) === "ObjectProperty" && isCallableNode(objectNode(mapProperty?.value));
+}
+
+function proveEncoder(
+  expression: Node,
+  scope: Scope,
+  useOffset: number,
+  seen: Set<Binding> = new Set(),
+  remainingDepth = DATE_PROOF_MAX_DEPTH,
+): boolean {
+  if (remainingDepth <= 0) return false;
+  if (objectHasProvenEncoder(expression)) return true;
+  const name = identifierName(expression);
+  if (name === undefined) return false;
+  const binding = resolve(scope, name);
+  if (binding?.kind !== "const" || binding.init === undefined || binding.duplicate ||
+      binding.declarationOffset >= useOffset || binding.writes.length > 0 || seen.has(binding)) {
+    return false;
+  }
+  seen.add(binding);
+  return proveEncoder(binding.init, scope, binding.declarationOffset, seen, remainingDepth - 1);
+}
+
+function definitelyInvalidEncoder(expression: Node | undefined, scope: Scope): boolean {
+  if (expression === undefined) return true;
+  const type = nodeType(expression);
+  if (type === "Identifier" && identifierName(expression) === "undefined" &&
+      resolve(scope, "undefined") === undefined) return true;
+  if (type === "NullLiteral" || (type === "UnaryExpression" && expression.operator === "void")) return true;
+  return [
+    "StringLiteral", "NumericLiteral", "BooleanLiteral", "BigIntLiteral", "RegExpLiteral",
+  ].includes(type ?? "") ||
+    (type === "TemplateLiteral" && Array.isArray(expression.expressions) && expression.expressions.length === 0) ||
+    type === "ArrayExpression";
+}
+
+function classifySqlParameter(
+  expression: Node,
+  scope: Scope,
+): SqlParameterClassification {
+  if (nodeType(expression) !== "CallExpression") return { kind: "not-parameter" };
   const callee = objectNode(expression.callee);
   if (callee === undefined || nodeType(callee) !== "MemberExpression" || callee.computed === true ||
       !importedSqlBinding(scope, objectNode(callee.object)) ||
       identifierName(objectNode(callee.property)) !== "param") {
-    return undefined;
+    return { kind: "not-parameter" };
   }
   const args = Array.isArray(expression.arguments) ? expression.arguments : [];
-  return args.length === 2 ? undefined : objectNode(args[0]);
+  const value = objectNode(args[0]);
+  const encoder = objectNode(args[1]);
+  if (args.length < 2 || definitelyInvalidEncoder(encoder, scope)) {
+    return { kind: "invalid", ...(value === undefined ? {} : { value }) };
+  }
+  if (args.length === 2 && encoder !== undefined && proveEncoder(encoder, scope, offset(expression))) {
+    return { kind: "safe" };
+  }
+  return { kind: "unknown" };
 }
 
 function isLiteralOrKnownScalar(
@@ -535,6 +666,18 @@ function assignmentNames(
   return [];
 }
 
+function assignedMemberRootName(node: Node): string | undefined {
+  const type = nodeType(node);
+  let target: Node | undefined;
+  if (type === "AssignmentExpression") target = objectNode(node.left);
+  if (type === "UpdateExpression" || (type === "UnaryExpression" && node.operator === "delete")) {
+    target = objectNode(node.argument);
+  }
+  if (nodeType(target) !== "MemberExpression") return undefined;
+  while (nodeType(target) === "MemberExpression") target = objectNode(target?.object);
+  return identifierName(target);
+}
+
 export function analyzeDrizzleRawSqlDates(
   path: string,
   source: string,
@@ -584,6 +727,7 @@ export function analyzeDrizzleRawSqlDates(
   const rootScope: Scope = { bindings: new Map() };
   const program = objectNode(objectNode(ast)?.program);
   predeclareBody(rootScope, program?.body, bindingBudget, 0);
+  predeclareHoistedVars(rootScope, program?.body, bindingBudget, 0);
   if (bindingBudget.exceeded) exceedBudget();
 
   const visit = (value: unknown, scope: Scope, depth: number): void => {
@@ -608,6 +752,11 @@ export function analyzeDrizzleRawSqlDates(
     const type = nodeType(node);
     for (const name of assignmentNames(node, bindingBudget, depth)) {
       const binding = resolve(scope, name);
+      if (binding !== undefined) binding.writes.push(offset(node));
+    }
+    const mutatedRoot = assignedMemberRootName(node);
+    if (mutatedRoot !== undefined) {
+      const binding = resolve(scope, mutatedRoot);
       if (binding !== undefined) binding.writes.push(offset(node));
     }
     if (bindingBudget.exceeded) {
@@ -659,6 +808,7 @@ export function analyzeDrizzleRawSqlDates(
       const body = objectNode(node.body);
       if (nodeType(body) === "BlockStatement") {
         predeclareBody(functionScope, body?.body, bindingBudget, depth);
+        predeclareHoistedVars(functionScope, body?.body, bindingBudget, depth);
         if (bindingBudget.exceeded) {
           exceedBudget();
           return;
@@ -680,7 +830,7 @@ export function analyzeDrizzleRawSqlDates(
           name,
           kind: "parameter",
           declarationOffset: offset(param),
-          exactDateType: identifierName(param) === name && exactDateType(param),
+          exactDateType: identifierName(param) === name && exactRequiredDateBinding(param),
           writes: [],
           duplicate: false,
         });
@@ -723,6 +873,7 @@ export function analyzeDrizzleRawSqlDates(
     if (type === "StaticBlock") {
       const staticScope: Scope = { parent: scope, bindings: new Map() };
       predeclareBody(staticScope, node.body, bindingBudget, depth);
+      predeclareHoistedVars(staticScope, node.body, bindingBudget, depth);
       if (bindingBudget.exceeded) {
         exceedBudget();
         return;
@@ -760,8 +911,7 @@ export function analyzeDrizzleRawSqlDates(
       const sqlBinding = identifierName(objectNode(node.tag));
       for (const rawExpression of Array.isArray(quasi?.expressions) ? quasi.expressions : []) {
         const expression = objectNode(rawExpression);
-        if (expression === undefined || sqlBinding === undefined ||
-            isEncodedSqlParameter(expression, scope)) continue;
+        if (expression === undefined || sqlBinding === undefined) continue;
         pendingInterpolations.push({ expression, scope, sqlBinding });
       }
     }
@@ -775,8 +925,10 @@ export function analyzeDrizzleRawSqlDates(
   visit(program, rootScope, 0);
   if (!budgetExceeded) {
     for (const { expression, scope, sqlBinding } of pendingInterpolations) {
-      const parameterValue = unencodedSqlParameterValue(expression, scope);
-      const evidenceClass = proveDate(parameterValue ?? expression, scope, offset(expression));
+      const parameter = classifySqlParameter(expression, scope);
+      if (parameter.kind === "safe") continue;
+      const proofExpression = parameter.kind === "invalid" ? parameter.value : undefined;
+      const evidenceClass = proveDate(proofExpression ?? expression, scope, offset(expression));
       const safeLocation = location(expression);
       if (evidenceClass !== undefined && safeLocation !== undefined) {
         if (matches.length < bounds.maxMatches) {

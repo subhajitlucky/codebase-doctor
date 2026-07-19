@@ -61,7 +61,8 @@ describe("independent auditor product boundary", () => {
       expect(text, path).toMatch(/statically proven.*Date/is);
       expect(text, path).toMatch(/medium.*severity.*high.*confidence|medium\/high/is);
       expect(text, path).toMatch(/lte\(column, date\)/);
-      expect(text, path).toMatch(/explicit.*two-argument.*encoder|two-argument.*explicit.*encoder/is);
+      expect(text, path).toMatch(/statically proven.*explicit.*encoder|explicit.*encoder.*statically proven/is);
+      expect(text, path).toMatch(/unknown.*encoder.*partial|partial.*unknown.*encoder/is);
       expect(text, path).toMatch(/Date\(\).*Date\.now\(\).*toISOString|toISOString.*Date\.now\(\).*Date\(\)/is);
       expect(text, path).toMatch(/name.*(?:not|never).*finding|not.*(?:guess|infer).*name/is);
       expect(text, path).toMatch(/partial.*(?:unsupported|unresolved|unclassified).*(?:flow|syntax)|(?:flow|syntax).*(?:unsupported|unresolved|unclassified).*partial/is);

@@ -170,10 +170,12 @@ stable typed or constant propagation. It does not infer from a variable name.
 
 The following are not findings: `Date()`, `Date.now()`, an already encoded
 `toISOString()` string, typed comparisons such as `lte(column, date)`, and a
-proven explicit two-argument encoder such as `sql.param(value, encoder)`.
-Unsupported syntax and unresolved or unclassified value flows become partial
-coverage limitations rather than guessed findings. Partial coverage is not a
-clean Drizzle audit.
+statically proven explicit encoder such as an immutable encoder object with a
+callable `mapToDriverValue` passed to `sql.param(value, encoder)`. Merely
+supplying an unknown second argument does not prove an encoder; that
+interpolation becomes a partial coverage limitation. Unsupported syntax and unresolved or
+unclassified value flows likewise become partial coverage limitations rather
+than guessed findings. Partial coverage is not a clean Drizzle audit.
 
 The finding is medium severity and high confidence. Confidence is high because
 the adapter, SQL binding, and Date flow are statically proven; severity remains

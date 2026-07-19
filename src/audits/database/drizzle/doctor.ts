@@ -334,7 +334,7 @@ function findingFor(
       "Codebase Doctor provides guidance only and never edits or executes the query.",
     ],
     remediation:
-      "Have an authorized human or external coding agent use a typed Drizzle comparison such as lte(column, date), or supply a proven explicit encoder, then rerun the audit.",
+      "Have an authorized human or external coding agent use a typed Drizzle comparison such as lte(column, date), or supply a statically proven explicit encoder, then rerun the audit.",
     verification: {
       command: changed
         ? "codebase-doctor audit . --changed --json"

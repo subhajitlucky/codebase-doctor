@@ -151,14 +151,29 @@ describe("Drizzle Doctor", () => {
     const contents = new Map([["src/query.ts", [
       'import { sql, lte } from "drizzle-orm";',
       "const cutoff = new Date();",
+      "const encoder = { mapToDriverValue: (value: Date) => value.toISOString() };",
       "db.select().where(lte(table.availableAt, cutoff));",
-      "sql`available_at <= ${sql.param(cutoff, table.availableAt)}`;",
+      "sql`available_at <= ${sql.param(cutoff, encoder)}`;",
     ].join("\n")]]);
     const { result } = await diagnose(contents);
     expect(result.findings).toEqual([]);
     expect(result.coverage).toEqual([expect.objectContaining({
       status: "completed",
       statementsRecognized: 0,
+    })]);
+  });
+
+  it("reports partial coverage when an explicit encoder argument cannot be proven", async () => {
+    const contents = new Map([["src/query.ts", [
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "sql`available_at <= ${sql.param(cutoff, table.availableAt)}`;",
+    ].join("\n")]]);
+    const { result } = await diagnose(contents);
+    expect(result.findings).toEqual([]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      limitations: [expect.stringMatching(/raw Drizzle value interpolation could not be classified/iu)],
     })]);
   });
 

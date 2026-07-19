@@ -250,7 +250,7 @@ describe("analyzeDrizzleRawSqlDates", () => {
     expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
   });
 
-  it("exempts only the explicit two-argument sql.param encoder wrapper", () => {
+  it("exempts only a sql.param wrapper with a statically proven encoder", () => {
     const result = analyze([
       'import { sql } from "drizzle-orm";',
       "const cutoff = new Date();",
@@ -260,6 +260,177 @@ describe("analyzeDrizzleRawSqlDates", () => {
 
     expect(result.matches).toEqual([
       { line: 4, column: 37, evidenceClass: "immutable-date-binding", sqlBinding: "sql" },
+    ]);
+  });
+
+  it("flags proven Dates when sql.param has no usable encoder", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "sql`${sql.param(cutoff)} ${sql.param(cutoff, undefined)} ${sql.param(cutoff, null)} ${sql.param(cutoff, void 0)} ${sql.param(cutoff, 'encoder')}`;",
+    ].join("\n"));
+
+    expect(result.matches).toHaveLength(5);
+    expect(result.matches.every(({ evidenceClass }) => evidenceClass === "immutable-date-binding")).toBe(true);
+    expect(result.limitations).toEqual([]);
+  });
+
+  it("keeps unknown sql.param encoders partial instead of assuming safety", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "declare const encoder: unknown;",
+      "declare const table: { availableAt: unknown };",
+      "sql`${sql.param(cutoff, encoder)} ${sql.param(cutoff, table.availableAt)} ${sql.param(cutoff, getEncoder())} ${sql.param(cutoff, {})}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 5, column: 7 },
+      { code: "unresolved-interpolation", line: 5, column: 37 },
+      { code: "unresolved-interpolation", line: 5, column: 77 },
+      { code: "unresolved-interpolation", line: 5, column: 112 },
+    ]);
+  });
+
+  it("proves direct and bounded immutable-const encoder objects", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "const base = { mapToDriverValue(value: Date) { return value.toISOString(); } };",
+      "const encoder = base;",
+      "sql`${sql.param(cutoff, { mapToDriverValue: (value: Date) => value.toISOString() })} ${sql.param(cutoff, encoder)}`;",
+    ].join("\n"));
+
+    expect(result).toEqual({ status: "completed", matches: [], limitations: [] });
+  });
+
+  it("does not prove a const encoder object whose callable property is overwritten", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "const encoder = { mapToDriverValue: (value: Date) => value.toISOString() };",
+      "encoder.mapToDriverValue = undefined;",
+      "sql`${sql.param(cutoff, encoder)}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 5, column: 7 },
+    ]);
+  });
+
+  it("bounds encoder proof across cycles and long alias chains", () => {
+    const aliases = Array.from({ length: 96 }, (_, index) => `const encoder${index + 1} = encoder${index};`);
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "const first = second;",
+      "const second = first;",
+      "const encoder0 = { mapToDriverValue: (value: Date) => value.toISOString() };",
+      ...aliases,
+      "sql`${sql.param(cutoff, first)} ${sql.param(cutoff, encoder96)}`;",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.status).toBe("partial");
+    expect(result.limitations).toHaveLength(2);
+    expect(result.limitations.every(({ code }) => code === "unresolved-interpolation")).toBe(true);
+  });
+
+  it("does not trust a shadowed sql.param lookalike", () => {
+    const result = analyze([
+      'import { sql as drizzleSql } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "function query(sql: { param(value: unknown, encoder: unknown): unknown }) {",
+      "  return drizzleSql`${sql.param(cutoff, { mapToDriverValue() {} })}`;",
+      "}",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 4, column: 23 },
+    ]);
+  });
+
+  it("does not let later block var declarations expose imported sql or global Date", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "function shadowSql() {",
+      "  sql`${new Date()}`;",
+      "  if (condition) { var sql = localTag; }",
+      "}",
+      "function shadowDate() {",
+      "  sql`${new Date()}`;",
+      "  try {} finally { var Date = LocalDate; }",
+      "}",
+    ].join("\n"));
+
+    expect(result).toEqual({
+      status: "partial",
+      matches: [],
+      limitations: [{ code: "unresolved-interpolation", line: 7, column: 9 }],
+    });
+  });
+
+  it("hoists for-in and switch var bindings but not nested-function vars", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "function outer() {",
+      "  sql`${new Date()}`;",
+      "  switch (kind) { case 1: var sql = localTag; }",
+      "}",
+      "function dateOuter() {",
+      "  sql`${new Date()}`;",
+      "  for (var Date in constructors) {}",
+      "}",
+      "function isolated() {",
+      "  sql`${new Date()}`;",
+      "  function nested() { var sql = localTag; var Date = LocalDate; }",
+      "}",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 11, column: 9, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+    ]);
+  });
+
+  it("does not hoist block-scoped let declarations", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "function query() {",
+      "  sql`${new Date()}`;",
+      "  if (condition) { let sql = localTag; sql`${new Date()}`; }",
+      "}",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 3, column: 9, evidenceClass: "direct-date-construction", sqlBinding: "sql" },
+    ]);
+  });
+
+  it("keeps optional Date parameters unresolved", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "function query(cutoff?: Date) { return sql`${cutoff}`; }",
+      "class Queries { constructor(private second?: Date) { sql`${second}`; } }",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([]);
+    expect(result.limitations).toEqual([
+      { code: "unresolved-interpolation", line: 2, column: 46 },
+      { code: "unresolved-interpolation", line: 3, column: 60 },
+    ]);
+  });
+
+  it("keeps nonoptional Date parameter properties as exact Date proof", () => {
+    const result = analyze([
+      'import { sql } from "drizzle-orm";',
+      "class Queries { constructor(private cutoff: Date) { sql`${cutoff}`; } }",
+    ].join("\n"));
+
+    expect(result.matches).toEqual([
+      { line: 2, column: 59, evidenceClass: "declared-date-type", sqlBinding: "sql" },
     ]);
   });
 
