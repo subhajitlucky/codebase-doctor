@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-import { boundLimitations } from "../../../core/bounded-evidence.js";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import {
   createFingerprint,
@@ -35,7 +34,10 @@ export interface DrizzleDoctorOptions {
   readonly maxTotalBytes?: number;
   readonly maxFiles?: number;
   readonly maxFindings?: number;
+  readonly maxLimitations?: number;
 }
+
+const DEFAULT_MAX_LIMITATIONS = 100;
 
 function positiveSafeInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -52,28 +54,174 @@ function supportedRegularFile(file: FileRecord): boolean {
   return file.kind === "file" && SUPPORTED_SOURCE_EXTENSION.test(file.path);
 }
 
-function owns(project: DetectedProject, path: string): boolean {
-  return project.root === "." || path === project.root || path.startsWith(`${project.root}/`);
+class ProjectOwnerIndex {
+  readonly #byRoot = new Map<string, DetectedProject[]>();
+
+  constructor(projects: readonly DetectedProject[]) {
+    for (const project of projects) {
+      const atRoot = this.#byRoot.get(project.root) ?? [];
+      atRoot.push(project);
+      this.#byRoot.set(project.root, atRoot);
+    }
+  }
+
+  uniqueOwner(path: string): DetectedProject | "ambiguous" | undefined {
+    let prefix = path;
+    while (prefix.length > 0) {
+      const exact = this.#byRoot.get(prefix);
+      if (exact !== undefined) return exact.length === 1 ? exact[0] : "ambiguous";
+      const separator = prefix.lastIndexOf("/");
+      if (separator < 0) break;
+      prefix = prefix.slice(0, separator);
+    }
+    const root = this.#byRoot.get(".");
+    return root === undefined ? undefined : root.length === 1 ? root[0] : "ambiguous";
+  }
 }
 
-function uniqueOwner(snapshot: ProjectSnapshot, path: string): DetectedProject | undefined {
-  const owners = snapshot.projects.filter((project) => owns(project, path));
-  if (owners.length === 0) return undefined;
-  const deepest = Math.max(...owners.map(({ root }) => root === "." ? 0 : root.length));
-  const candidates = owners.filter(({ root }) => (root === "." ? 0 : root.length) === deepest);
-  return candidates.length === 1 ? candidates[0] : undefined;
+class BoundedFileDiscovery {
+  readonly #files: FileRecord[] = [];
+  #candidateCount = 0;
+
+  constructor(readonly maximum: number) {}
+
+  admit(file: FileRecord): void {
+    this.#candidateCount += 1;
+    if (this.#files.length < this.maximum) {
+      this.#files.push(file);
+      this.#bubbleUp(this.#files.length - 1);
+      return;
+    }
+    const latest = this.#files[0];
+    if (latest === undefined || compareCodePoints(file.path, latest.path) >= 0) return;
+    this.#files[0] = file;
+    this.#sinkDown(0);
+  }
+
+  orderedFiles(): readonly FileRecord[] {
+    return [...this.#files].sort((left, right) => compareCodePoints(left.path, right.path));
+  }
+
+  omittedCount(): number {
+    return this.#candidateCount - this.#files.length;
+  }
+
+  #bubbleUp(start: number): void {
+    let index = start;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compareCodePoints(this.#files[parent]!.path, this.#files[index]!.path) >= 0) return;
+      [this.#files[parent], this.#files[index]] = [this.#files[index]!, this.#files[parent]!];
+      index = parent;
+    }
+  }
+
+  #sinkDown(start: number): void {
+    let index = start;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let latest = index;
+      if (left < this.#files.length &&
+          compareCodePoints(this.#files[left]!.path, this.#files[latest]!.path) > 0) latest = left;
+      if (right < this.#files.length &&
+          compareCodePoints(this.#files[right]!.path, this.#files[latest]!.path) > 0) latest = right;
+      if (latest === index) return;
+      [this.#files[index], this.#files[latest]] = [this.#files[latest]!, this.#files[index]!];
+      index = latest;
+    }
+  }
 }
 
-function discoveryFiles(snapshot: ProjectSnapshot): FileRecord[] {
+class BoundedLimitationCollector {
+  readonly #values: string[] = [];
+  #occurrences = 0;
+
+  constructor(readonly maximum: number) {}
+
+  get occurrenceCount(): number {
+    return this.#occurrences;
+  }
+
+  add(value: string): void {
+    this.#occurrences += 1;
+    if (this.#values.length < this.maximum) {
+      this.#values.push(value);
+      this.#bubbleUp(this.#values.length - 1);
+      return;
+    }
+    const latest = this.#values[0];
+    if (latest === undefined || compareCodePoints(value, latest) >= 0) return;
+    this.#values[0] = value;
+    this.#sinkDown(0);
+  }
+
+  addAll(values: readonly string[]): void {
+    for (const value of values) this.add(value);
+  }
+
+  output(): {
+    limitations: readonly string[];
+    summary?: { total: number; emitted: number; omitted: number };
+  } {
+    const limitations = [...new Set(this.#values.sort(compareCodePoints))];
+    const emitted = limitations.length;
+    const omitted = this.#occurrences - emitted;
+    return {
+      limitations,
+      ...(omitted === 0 ? {} : {
+        summary: { total: this.#occurrences, emitted, omitted },
+      }),
+    };
+  }
+
+  #bubbleUp(start: number): void {
+    let index = start;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compareCodePoints(this.#values[parent]!, this.#values[index]!) >= 0) return;
+      [this.#values[parent], this.#values[index]] = [this.#values[index]!, this.#values[parent]!];
+      index = parent;
+    }
+  }
+
+  #sinkDown(start: number): void {
+    let index = start;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let latest = index;
+      if (left < this.#values.length &&
+          compareCodePoints(this.#values[left]!, this.#values[latest]!) > 0) latest = left;
+      if (right < this.#values.length &&
+          compareCodePoints(this.#values[right]!, this.#values[latest]!) > 0) latest = right;
+      if (latest === index) return;
+      [this.#values[index], this.#values[latest]] = [this.#values[latest]!, this.#values[index]!];
+      index = latest;
+    }
+  }
+}
+
+function discoverFiles(
+  snapshot: ProjectSnapshot,
+  maximum: number,
+  limitations: BoundedLimitationCollector,
+): BoundedFileDiscovery {
   const affected = new Set(snapshot.auditScope.affectedProjectIds);
-  return snapshot.files
-    .filter(supportedRegularFile)
-    .filter((file) => {
-      const owner = uniqueOwner(snapshot, file.path);
-      return owner !== undefined &&
-        (snapshot.auditScope.mode === "full" || affected.has(owner.id));
-    })
-    .sort((left, right) => compareCodePoints(left.path, right.path));
+  const owners = new ProjectOwnerIndex(snapshot.projects);
+  const selected = new BoundedFileDiscovery(maximum);
+  for (const file of snapshot.files) {
+    if (!supportedRegularFile(file)) continue;
+    const owner = owners.uniqueOwner(file.path);
+    if (owner === "ambiguous") {
+      limitations.add(`${file.path}: source ownership is ambiguous; adapter applicability discovery was withheld.`);
+      continue;
+    }
+    if (owner === undefined ||
+        (snapshot.auditScope.mode === "changed" && !affected.has(owner.id))) continue;
+    selected.admit(file);
+  }
+  return selected;
 }
 
 function safeAbsolutePath(root: string, path: string): string | undefined {
@@ -133,7 +281,7 @@ function findingFor(
       doctorId: DOCTOR_ID,
       ruleId: RULE_ID,
       location,
-      identity: `${match.evidenceClass}:${match.sqlBinding}`,
+      identity: match.evidenceClass,
     }),
   };
 }
@@ -160,9 +308,9 @@ function coverage(
   filesExamined: number,
   linesExamined: number,
   findingsRecognized: number,
-  values: readonly string[],
+  collector: BoundedLimitationCollector,
 ): AuditCoverage {
-  const bounded = boundLimitations(values);
+  const bounded = collector.output();
   return {
     moduleId: DOCTOR_ID,
     status,
@@ -171,8 +319,7 @@ function coverage(
     statementsExamined: linesExamined,
     statementsRecognized: findingsRecognized,
     limitations: bounded.limitations,
-    ...(bounded.groups.length === 0 ? {} : { limitationGroups: bounded.groups }),
-    ...(bounded.summary.omitted === 0 ? {} : { limitationSummary: bounded.summary }),
+    ...(bounded.summary === undefined ? {} : { limitationSummary: bounded.summary }),
   };
 }
 
@@ -193,6 +340,10 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
     options.maxFindings ?? DEFAULT_MAX_FINDINGS,
     "maxFindings",
   );
+  const maxLimitations = positiveSafeInteger(
+    options.maxLimitations ?? DEFAULT_MAX_LIMITATIONS,
+    "maxLimitations",
+  );
   const readSelectedFile = options.readFile ?? readFile;
 
   return {
@@ -202,54 +353,54 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
-      const limitations: string[] = [];
+      const limitations = new BoundedLimitationCollector(maxLimitations);
       const cache = new Map<string, string>();
       const admittedPaths = new Set<string>();
       const adapterImportPaths: string[] = [];
       let totalBytes = 0;
 
-      const candidates = discoveryFiles(snapshot);
-      const admittedCandidates = candidates.slice(0, maxFiles);
-      if (candidates.length > maxFiles) {
-        limitations.push(
-          `Drizzle source file limit of ${maxFiles} was reached; ${candidates.length - maxFiles} current supported file(s) were not discovered or analyzed.`,
+      const discovery = discoverFiles(snapshot, maxFiles, limitations);
+      const omittedCandidates = discovery.omittedCount();
+      if (omittedCandidates > 0) {
+        limitations.add(
+          `Drizzle source file limit of ${maxFiles} was reached; ${omittedCandidates} current supported file(s) were not discovered or analyzed.`,
         );
       }
 
-      for (const file of admittedCandidates) {
+      for (const file of discovery.orderedFiles()) {
         admittedPaths.add(file.path);
         if (file.size > maxFileBytes) {
-          limitations.push(
+          limitations.add(
             `${file.path}: file exceeds the ${maxFileBytes}-byte Drizzle audit size limit.`,
           );
           continue;
         }
         if (totalBytes + file.size > maxTotalBytes) {
-          limitations.push(
+          limitations.add(
             `${file.path}: total Drizzle audit content limit of ${maxTotalBytes} bytes was reached; remaining context and selected files were not examined.`,
           );
           break;
         }
         const absolutePath = safeAbsolutePath(snapshot.root, file.path);
         if (absolutePath === undefined) {
-          limitations.push(`${file.path}: inventoried source path could not be safely read.`);
+          limitations.add(`${file.path}: inventoried source path could not be safely read.`);
           continue;
         }
         let bytes: Uint8Array;
         try {
           bytes = await readSelectedFile(absolutePath);
         } catch {
-          limitations.push(`${file.path}: unable to read selected source for Drizzle audit.`);
+          limitations.add(`${file.path}: unable to read selected source for Drizzle audit.`);
           continue;
         }
         if (bytes.byteLength > maxFileBytes) {
-          limitations.push(
+          limitations.add(
             `${file.path}: file exceeds the ${maxFileBytes}-byte Drizzle audit size limit.`,
           );
           continue;
         }
         if (totalBytes + bytes.byteLength > maxTotalBytes) {
-          limitations.push(
+          limitations.add(
             `${file.path}: total Drizzle audit content limit of ${maxTotalBytes} bytes was reached after inventory size changed; remaining context and selected files were not examined.`,
           );
           break;
@@ -259,7 +410,7 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
         cache.set(file.path, source);
         const adapter = analyzeDrizzlePostgresJsAdapterImport(file.path, source);
         if (adapter.status === "partial") {
-          limitations.push(
+          limitations.add(
             `${file.path}: source syntax could not be parsed for postgres-js adapter applicability discovery.`,
           );
         } else if (adapter.present) {
@@ -271,7 +422,7 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
         maxFiles,
         postgresJsImportPaths: adapterImportPaths,
       });
-      limitations.push(...selection.limitations);
+      limitations.addAll(selection.limitations);
 
       const findings: Finding[] = [];
       let filesExamined = 0;
@@ -283,7 +434,7 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
           break;
         }
         if (!admittedPaths.has(file.path)) {
-          limitations.push(
+          limitations.add(
             `${file.path}: selected source was outside the combined ${maxFiles}-file Drizzle audit ceiling.`,
           );
           continue;
@@ -295,9 +446,9 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
         });
         filesExamined += 1;
         linesExamined += lineCount(source);
-        limitations.push(...analysis.limitations.map((entry) =>
-          limitationForAnalysis(file.path, entry)
-        ));
+        for (const entry of analysis.limitations) {
+          limitations.add(limitationForAnalysis(file.path, entry));
+        }
         const remaining = maxFindings - findings.length;
         const accepted = analysis.matches.slice(0, remaining);
         findings.push(...accepted.map((match) =>
@@ -309,14 +460,14 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
         }
       }
       if (findingLimitReached) {
-        limitations.push(
+        limitations.add(
           `Drizzle audit finding limit of ${maxFindings} was reached; additional matches and remaining selected files were not reported.`,
         );
       }
 
-      const substantiveLimitations = limitations.length > 0;
+      const substantiveLimitations = limitations.occurrenceCount > 0;
       if (snapshot.auditScope.mode === "changed" && selection.files.length > 0) {
-        limitations.push(
+        limitations.add(
           "Changed scope examined selected current changed files only; unchanged files were not independently re-audited.",
         );
       }

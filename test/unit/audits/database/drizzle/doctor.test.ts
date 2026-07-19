@@ -121,6 +121,29 @@ describe("Drizzle Doctor", () => {
     expect(serialized).not.toContain("new Date");
   });
 
+  it("keeps the fingerprint stable when only the local sql alias changes", async () => {
+    const first = new Map([["src/query.ts", [
+      'import { sql as raw } from "drizzle-orm";',
+      'raw`${new Date()}`;',
+    ].join("\n")]]);
+    const second = new Map([["src/query.ts", [
+      'import { sql as tag } from "drizzle-orm";',
+      'tag`${new Date()}`;',
+    ].join("\n")]]);
+
+    const firstResult = await diagnose(first);
+    const secondResult = await diagnose(second);
+    expect(firstResult.result.findings[0]?.location).toEqual(
+      secondResult.result.findings[0]?.location,
+    );
+    expect(firstResult.result.findings[0]?.fingerprint).toBe(
+      secondResult.result.findings[0]?.fingerprint,
+    );
+    expect(firstResult.result.findings[0]?.evidence).not.toEqual(
+      secondResult.result.findings[0]?.evidence,
+    );
+  });
+
   it("does not flag typed comparisons or explicit encoders", async () => {
     const contents = new Map([["src/query.ts", [
       'import { sql, lte } from "drizzle-orm";',
@@ -208,6 +231,31 @@ describe("Drizzle Doctor", () => {
     expect(result.coverage).toEqual([expect.objectContaining({ filesExamined: 1 })]);
   });
 
+  it("does not read unaffected project context in changed mode", async () => {
+    const contents = new Map([
+      ["apps/api/src/db.ts", 'import { drizzle } from "drizzle-orm/postgres-js";'],
+      ["apps/api/src/query.ts", 'import { sql } from "drizzle-orm";\nsql`${new Date()}`;'],
+      ["apps/web/src/db.ts", 'import { drizzle } from "drizzle-orm/postgres-js";'],
+    ]);
+    const api = { ...project([]), id: "api", root: "apps/api" };
+    const web = { ...project([]), id: "web", root: "apps/web" };
+    const readFile = reader(contents);
+    const { result } = await diagnose(contents, { readFile }, {
+      projects: [api, web],
+      auditScope: {
+        ...changedScope([{ status: "modified", path: "apps/api/src/query.ts" }]),
+        affectedProjectIds: ["api"],
+      },
+    });
+
+    expect(readFile.mock.calls.map(([path]) => path)).toEqual([
+      "/repo/apps/api/src/db.ts",
+      "/repo/apps/api/src/query.ts",
+    ]);
+    expect(readFile).not.toHaveBeenCalledWith("/repo/apps/web/src/db.ts");
+    expect(result.findings).toHaveLength(1);
+  });
+
   it("returns not-selected when an applicable changed project has no current selected source", async () => {
     const { result } = await diagnose(new Map(), {}, {
       files: [],
@@ -267,12 +315,54 @@ describe("Drizzle Doctor", () => {
     expect(limitedFindings.result.coverage).toEqual([expect.objectContaining({ status: "partial" })]);
   });
 
+  it("streams a large reverse-ordered inventory and retains only earliest file paths", async () => {
+    const contents = new Map(Array.from({ length: 250 }, (_, index) => {
+      const ordinal = 249 - index;
+      return [`src/file-${String(ordinal).padStart(3, "0")}.ts`, "export {};\n"] as const;
+    }));
+    const readFile = reader(contents);
+    const { result } = await diagnose(contents, { readFile, maxFiles: 3 });
+    expect(readFile.mock.calls.map(([path]) => path)).toEqual([
+      "/repo/src/file-000.ts",
+      "/repo/src/file-001.ts",
+      "/repo/src/file-002.ts",
+    ]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      filesExamined: 3,
+      limitations: expect.arrayContaining([
+        "Drizzle source file limit of 3 was reached; 247 current supported file(s) were not discovered or analyzed.",
+      ]),
+    })]);
+  });
+
+  it("bounds limitation memory and reports exact omitted duplicate occurrences", async () => {
+    const content = "xx";
+    const contents = new Map([["src/repeated.ts", content]]);
+    const repeated = Array.from({ length: 25 }, () => file("src/repeated.ts", content));
+    const readFile = reader(contents);
+    const { result } = await diagnose(contents, {
+      readFile,
+      maxFileBytes: 1,
+      maxFiles: 30,
+      maxLimitations: 1,
+    }, { files: repeated });
+
+    expect(readFile).not.toHaveBeenCalled();
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      limitations: ["src/repeated.ts: file exceeds the 1-byte Drizzle audit size limit."],
+      limitationSummary: { total: 25, emitted: 1, omitted: 24 },
+    })]);
+  });
+
   it("rejects invalid bound overrides", () => {
     for (const options of [
       { maxFileBytes: 0 },
       { maxTotalBytes: -1 },
       { maxFiles: 1.5 },
       { maxFindings: Number.POSITIVE_INFINITY },
+      { maxLimitations: 0 },
     ]) {
       expect(() => createDrizzleDoctor(options)).toThrow(/positive safe integer/iu);
     }
