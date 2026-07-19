@@ -44,7 +44,10 @@ function supportsSource(path: string): boolean {
 interface ProjectIndex {
   readonly byId: ReadonlyMap<string, DetectedProject>;
   readonly deepestOwners: (path: string) => readonly DetectedProject[];
-  readonly descendantProjects: (project: DetectedProject) => readonly DetectedProject[];
+  readonly visitDescendantProjects: (
+    project: DetectedProject,
+    visitor: (candidate: DetectedProject) => void,
+  ) => void;
   readonly workspaceContextProjectIds: (project: DetectedProject) => ReadonlySet<string>;
 }
 
@@ -57,28 +60,22 @@ function buildProjectIndex(snapshot: ProjectSnapshot): ProjectIndex {
     projectsByRoot.set(project.root, projects);
   }
   for (const projects of projectsByRoot.values()) {
-    projects.sort((left, right) => left.id.localeCompare(right.id));
+    projects.sort((left, right) => compareCodePoints(left.id, right.id));
   }
 
-  const descendantsByProjectId = new Map<string, DetectedProject[]>();
-  for (const candidate of snapshot.projects) {
-    const ancestorRoots = new Set<string>(["."]);
-    if (candidate.root !== ".") {
-      let prefix = candidate.root;
-      while (prefix.length > 0) {
-        ancestorRoots.add(prefix);
-        const separator = prefix.lastIndexOf("/");
-        if (separator < 0) break;
-        prefix = prefix.slice(0, separator);
-      }
+  const projectsByRootOrder = [...snapshot.projects].sort((left, right) =>
+    compareCodePoints(left.root, right.root) || compareCodePoints(left.id, right.id)
+  );
+
+  function firstProjectAtOrAfter(root: string): number {
+    let low = 0;
+    let high = projectsByRootOrder.length;
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2);
+      if (compareCodePoints(projectsByRootOrder[middle]!.root, root) < 0) low = middle + 1;
+      else high = middle;
     }
-    for (const root of ancestorRoots) {
-      for (const ancestor of projectsByRoot.get(root) ?? []) {
-        const descendants = descendantsByProjectId.get(ancestor.id) ?? [];
-        descendants.push(candidate);
-        descendantsByProjectId.set(ancestor.id, descendants);
-      }
-    }
+    return low;
   }
 
   const supportedOwnersByMemberRoot = new Map<string, string[]>();
@@ -104,8 +101,22 @@ function buildProjectIndex(snapshot: ProjectSnapshot): ProjectIndex {
       }
       return projectsByRoot.get(".") ?? [];
     },
-    descendantProjects(project) {
-      return descendantsByProjectId.get(project.id) ?? [];
+    visitDescendantProjects(project, visitor) {
+      if (project.root === ".") {
+        for (const candidate of projectsByRootOrder) visitor(candidate);
+        return;
+      }
+      for (const candidate of projectsByRoot.get(project.root) ?? []) visitor(candidate);
+      const prefix = `${project.root}/`;
+      for (
+        let index = firstProjectAtOrAfter(prefix);
+        index < projectsByRootOrder.length;
+        index += 1
+      ) {
+        const candidate = projectsByRootOrder[index]!;
+        if (!candidate.root.startsWith(prefix)) break;
+        visitor(candidate);
+      }
     },
     workspaceContextProjectIds(project) {
       const context = new Set([project.id]);
@@ -220,13 +231,13 @@ class BoundedFileSelection {
       return;
     }
     const latest = this.#files[0];
-    if (latest === undefined || file.path.localeCompare(latest.path) >= 0) return;
+    if (latest === undefined || compareCodePoints(file.path, latest.path) >= 0) return;
     this.#files[0] = file;
     this.#sinkDown(0);
   }
 
   orderedFiles(): readonly FileRecord[] {
-    return [...this.#files].sort((left, right) => left.path.localeCompare(right.path));
+    return [...this.#files].sort((left, right) => compareCodePoints(left.path, right.path));
   }
 
   omittedCount(): number {
@@ -237,7 +248,7 @@ class BoundedFileSelection {
     let index = start;
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2);
-      if (this.#files[parent]!.path.localeCompare(this.#files[index]!.path) >= 0) return;
+      if (compareCodePoints(this.#files[parent]!.path, this.#files[index]!.path) >= 0) return;
       [this.#files[parent], this.#files[index]] = [this.#files[index]!, this.#files[parent]!];
       index = parent;
     }
@@ -251,11 +262,11 @@ class BoundedFileSelection {
       let latest = index;
       if (
         left < this.#files.length &&
-        this.#files[left]!.path.localeCompare(this.#files[latest]!.path) > 0
+        compareCodePoints(this.#files[left]!.path, this.#files[latest]!.path) > 0
       ) latest = left;
       if (
         right < this.#files.length &&
-        this.#files[right]!.path.localeCompare(this.#files[latest]!.path) > 0
+        compareCodePoints(this.#files[right]!.path, this.#files[latest]!.path) > 0
       ) latest = right;
       if (latest === index) return;
       [this.#files[index], this.#files[latest]] = [this.#files[latest]!, this.#files[index]!];
@@ -281,7 +292,7 @@ class BoundedLimitations {
       return;
     }
     const latest = this.#values[0];
-    if (latest === undefined || compareLimitations(value, latest) >= 0) return;
+    if (latest === undefined || compareCodePoints(value, latest) >= 0) return;
     this.#retained.delete(latest);
     this.#values[0] = value;
     this.#retained.add(value);
@@ -289,7 +300,7 @@ class BoundedLimitations {
   }
 
   output(): readonly string[] {
-    const ordered = [...this.#values].sort(compareLimitations);
+    const ordered = [...this.#values].sort(compareCodePoints);
     if (this.#occurrenceCount === ordered.length) return ordered;
     const retainedCount = Math.max(this.max - 1, 0);
     const samples = ordered.slice(0, retainedCount);
@@ -304,7 +315,7 @@ class BoundedLimitations {
     let index = start;
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2);
-      if (compareLimitations(this.#values[parent]!, this.#values[index]!) >= 0) return;
+      if (compareCodePoints(this.#values[parent]!, this.#values[index]!) >= 0) return;
       [this.#values[parent], this.#values[index]] = [this.#values[index]!, this.#values[parent]!];
       index = parent;
     }
@@ -318,11 +329,11 @@ class BoundedLimitations {
       let latest = index;
       if (
         left < this.#values.length &&
-        compareLimitations(this.#values[left]!, this.#values[latest]!) > 0
+        compareCodePoints(this.#values[left]!, this.#values[latest]!) > 0
       ) latest = left;
       if (
         right < this.#values.length &&
-        compareLimitations(this.#values[right]!, this.#values[latest]!) > 0
+        compareCodePoints(this.#values[right]!, this.#values[latest]!) > 0
       ) latest = right;
       if (latest === index) return;
       [this.#values[index], this.#values[latest]] = [this.#values[latest]!, this.#values[index]!];
@@ -331,7 +342,7 @@ class BoundedLimitations {
   }
 }
 
-function compareLimitations(left: string, right: string): number {
+function compareCodePoints(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
@@ -381,7 +392,7 @@ export function selectDrizzleAuditFiles(
       sourceProvenProjectIds.has(project.id) ||
       dependencyApplicable(project, projectIndex, dependencies)
     )
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => compareCodePoints(left.id, right.id));
   const applicableProjectIds = new Set(applicableProjects.map(({ id }) => id));
 
   const consideredProjects = snapshot.projects.filter((project) =>
@@ -411,24 +422,29 @@ export function selectDrizzleAuditFiles(
     if (workspace.supported) continue;
     const owner = projectIndex.byId.get(workspace.ownerProjectId);
     if (owner === undefined) continue;
-    const inScopeBoundaryProjects = projectIndex
-      .descendantProjects(owner)
-      .filter((project) => consideredProjectIds.has(project.id));
-    if (inScopeBoundaryProjects.length === 0) continue;
-    const boundaryProjects = scope === "full"
-      ? inScopeBoundaryProjects
-      : [...new Map([owner, ...inScopeBoundaryProjects].map((project) => [project.id, project])).values()];
     const boundaryDependencies = new Set<string>();
-    for (const project of boundaryProjects) {
+    let hasInScopeBoundaryProject = false;
+    let ownerWasProcessed = false;
+    let hasUnresolvedRelevantProject = false;
+    function consumeBoundaryProject(project: DetectedProject): void {
       for (const dependency of dependencies.get(project.id)?.names ?? []) {
         boundaryDependencies.add(dependency);
       }
+      if (applicableProjectIds.has(project.id)) return;
+      const ownDependencies = dependencies.get(project.id)?.names;
+      if (
+        ownDependencies?.has(DRIZZLE_DEPENDENCY) ||
+        ownDependencies?.has(POSTGRES_JS_DEPENDENCY)
+      ) hasUnresolvedRelevantProject = true;
     }
-    const hasUnresolvedRelevantProject = boundaryProjects.some((project) => {
-      if (applicableProjectIds.has(project.id)) return false;
-      const ownDependencies = dependencies.get(project.id)?.names ?? new Set<string>();
-      return ownDependencies.has(DRIZZLE_DEPENDENCY) || ownDependencies.has(POSTGRES_JS_DEPENDENCY);
+    projectIndex.visitDescendantProjects(owner, (project) => {
+      if (!consideredProjectIds.has(project.id)) return;
+      hasInScopeBoundaryProject = true;
+      if (project.id === owner.id) ownerWasProcessed = true;
+      consumeBoundaryProject(project);
     });
+    if (!hasInScopeBoundaryProject) continue;
+    if (scope === "changed" && !ownerWasProcessed) consumeBoundaryProject(owner);
     if (
       hasUnresolvedRelevantProject &&
       boundaryDependencies.has(DRIZZLE_DEPENDENCY) &&
@@ -531,7 +547,7 @@ export function selectDrizzleAuditFiles(
 
   return {
     scope,
-    applicableProjectIds: [...applicableProjectIds].sort(),
+    applicableProjectIds: [...applicableProjectIds].sort(compareCodePoints),
     files: orderedFiles,
     limitations: limitations.output(),
   };

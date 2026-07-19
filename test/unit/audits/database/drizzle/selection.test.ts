@@ -180,6 +180,34 @@ describe("Drizzle audit file selection", () => {
     expect(unrelated).toMatchObject({ limitations: [] });
   });
 
+  it("finds affected descendants through a deeply nested project index", () => {
+    const depth = 400;
+    const nestedProjects = Array.from({ length: depth }, (_, index) => {
+      const root = Array.from({ length: index + 1 }, () => "nested").join("/");
+      return project(
+        `nested-${String(index).padStart(3, "0")}`,
+        root,
+        index === depth - 1 ? ["drizzle-orm"] : [],
+      );
+    });
+    const deepest = nestedProjects.at(-1)!;
+    const selection = select(snapshot({
+      projects: [project("root", ".", ["postgres"]), ...nestedProjects],
+      workspaces: [{
+        ownerProjectId: "root",
+        sourcePath: "package.json",
+        pattern: "nested/**",
+        supported: false,
+        matchedProjectRoots: [],
+      }],
+      auditScope: changedScope([deepest.id], []),
+    }));
+
+    expect(selection.limitations).toEqual([
+      "package.json: unsupported workspace boundary prevents complete Drizzle applicability analysis.",
+    ]);
+  });
+
   it("accepts parser-proven drizzle-orm/postgres-js import evidence for its owner", () => {
     const selection = select(snapshot({
       files: [file("services/api/db.ts"), file("services/api/query.ts")],
@@ -463,6 +491,26 @@ describe("Drizzle audit file selection", () => {
     expect(selection.limitations).toEqual([
       "Drizzle source selection stopped at the 3-file limit; 12002 files were omitted.",
     ]);
+  });
+
+  it("uses one code-point order for mixed-case and non-ASCII file ceilings", () => {
+    const files = [
+      file("src/Ω.ts"),
+      file("src/é.ts"),
+      file("src/Ä.ts"),
+      file("src/a.ts"),
+      file("src/A.ts"),
+    ];
+    const expected = ["src/A.ts", "src/a.ts", "src/Ä.ts"];
+    const value = (orderedFiles: typeof files) => snapshot({
+      files: orderedFiles,
+      projects: [project("root", ".", ["drizzle-orm", "postgres"])],
+    });
+
+    expect(select(value(files), { maxFiles: 3 }).files.map(({ path }) => path)).toEqual(expected);
+    expect(
+      select(value([...files].reverse()), { maxFiles: 3 }).files.map(({ path }) => path),
+    ).toEqual(expected);
   });
 
   it("bounds and deterministically sorts limitations", () => {
