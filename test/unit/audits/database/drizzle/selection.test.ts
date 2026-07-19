@@ -477,13 +477,35 @@ describe("Drizzle audit file selection", () => {
 
     expect(selection.limitations).toEqual([
       "a.md: changed path is not an inventoried regular file.",
-      "Drizzle source selection omitted 2 additional limitations.",
+      "Drizzle source selection omitted 2 additional limitation occurrences.",
     ]);
     expect(select(snapshot({
       projects: [project("root", ".", ["drizzle-orm", "postgres"])],
       auditScope: changedScope(["root"], changes),
     }), { maxLimitations: 1 }).limitations).toEqual([
-      "Drizzle source selection omitted 3 additional limitations.",
+      "Drizzle source selection omitted 3 additional limitation occurrences.",
     ]);
+  });
+
+  it("bounds limitation retention independent of input order and honestly counts duplicates", () => {
+    const paths = Array.from({ length: 1_000 }, (_, index) =>
+      `missing-${String(index).padStart(5, "0")}.ts`
+    );
+    const withDuplicates = [...paths, paths[999]!, paths[999]!];
+    const expected = [
+      "missing-00000.ts: postgres-js import evidence is not an inventoried regular file.",
+      "missing-00001.ts: postgres-js import evidence is not an inventoried regular file.",
+      "missing-00002.ts: postgres-js import evidence is not an inventoried regular file.",
+      "Drizzle source selection omitted 999 additional limitation occurrences.",
+    ];
+
+    expect(select(snapshot(), {
+      maxLimitations: 4,
+      postgresJsImportPaths: withDuplicates,
+    }).limitations).toEqual(expected);
+    expect(select(snapshot(), {
+      maxLimitations: 4,
+      postgresJsImportPaths: [...withDuplicates].reverse(),
+    }).limitations).toEqual(expected);
   });
 });

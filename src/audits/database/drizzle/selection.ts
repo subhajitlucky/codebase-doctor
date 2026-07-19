@@ -264,15 +264,77 @@ class BoundedFileSelection {
   }
 }
 
-function boundedLimitations(values: ReadonlySet<string>, max: number): readonly string[] {
-  const ordered = [...values].sort();
-  if (ordered.length <= max) return ordered;
-  const retainedCount = Math.max(max - 1, 0);
-  const omitted = ordered.length - retainedCount;
-  return [
-    ...ordered.slice(0, retainedCount),
-    `Drizzle source selection omitted ${omitted} additional limitation${omitted === 1 ? "" : "s"}.`,
-  ];
+class BoundedLimitations {
+  readonly #values: string[] = [];
+  readonly #retained = new Set<string>();
+  #occurrenceCount = 0;
+
+  constructor(readonly max: number) {}
+
+  add(value: string): void {
+    this.#occurrenceCount += 1;
+    if (this.#retained.has(value)) return;
+    if (this.#values.length < this.max) {
+      this.#values.push(value);
+      this.#retained.add(value);
+      this.#bubbleUp(this.#values.length - 1);
+      return;
+    }
+    const latest = this.#values[0];
+    if (latest === undefined || compareLimitations(value, latest) >= 0) return;
+    this.#retained.delete(latest);
+    this.#values[0] = value;
+    this.#retained.add(value);
+    this.#sinkDown(0);
+  }
+
+  output(): readonly string[] {
+    const ordered = [...this.#values].sort(compareLimitations);
+    if (this.#occurrenceCount === ordered.length) return ordered;
+    const retainedCount = Math.max(this.max - 1, 0);
+    const samples = ordered.slice(0, retainedCount);
+    const omittedOccurrences = this.#occurrenceCount - samples.length;
+    return [
+      ...samples,
+      `Drizzle source selection omitted ${omittedOccurrences} additional limitation occurrence${omittedOccurrences === 1 ? "" : "s"}.`,
+    ];
+  }
+
+  #bubbleUp(start: number): void {
+    let index = start;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compareLimitations(this.#values[parent]!, this.#values[index]!) >= 0) return;
+      [this.#values[parent], this.#values[index]] = [this.#values[index]!, this.#values[parent]!];
+      index = parent;
+    }
+  }
+
+  #sinkDown(start: number): void {
+    let index = start;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let latest = index;
+      if (
+        left < this.#values.length &&
+        compareLimitations(this.#values[left]!, this.#values[latest]!) > 0
+      ) latest = left;
+      if (
+        right < this.#values.length &&
+        compareLimitations(this.#values[right]!, this.#values[latest]!) > 0
+      ) latest = right;
+      if (latest === index) return;
+      [this.#values[index], this.#values[latest]] = [this.#values[latest]!, this.#values[index]!];
+      index = latest;
+    }
+  }
+}
+
+function compareLimitations(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 export function selectDrizzleAuditFiles(
@@ -288,14 +350,14 @@ export function selectDrizzleAuditFiles(
     "maxLimitations",
   );
   const scope = snapshot.auditScope.mode;
-  const limitations = new Set<string>();
+  const limitations = new BoundedLimitations(maxLimitations);
   const filesByPath = new Map(snapshot.files.map((entry) => [entry.path, entry]));
   const projectIndex = buildProjectIndex(snapshot);
   const dependencies = dependencyIndex(snapshot);
   const affected = new Set(snapshot.auditScope.affectedProjectIds);
   const sourceProvenProjectIds = new Set<string>();
 
-  for (const path of [...new Set(options.postgresJsImportPaths ?? [])].sort()) {
+  for (const path of options.postgresJsImportPaths ?? []) {
     const file = filesByPath.get(path);
     if (file?.kind !== "file") {
       limitations.add(`${path}: postgres-js import evidence is not an inventoried regular file.`);
@@ -471,6 +533,6 @@ export function selectDrizzleAuditFiles(
     scope,
     applicableProjectIds: [...applicableProjectIds].sort(),
     files: orderedFiles,
-    limitations: boundedLimitations(limitations, maxLimitations),
+    limitations: limitations.output(),
   };
 }
