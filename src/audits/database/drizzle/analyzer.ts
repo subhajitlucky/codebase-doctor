@@ -37,6 +37,7 @@ interface Bounds {
   readonly maxNodes: number;
   readonly maxDepth: number;
   readonly maxLimitations: number;
+  readonly maxMatches: number;
 }
 
 interface BindingDiscoveryBudget {
@@ -57,6 +58,7 @@ const DEFAULT_BOUNDS: Bounds = {
   maxNodes: 100_000,
   maxDepth: 256,
   maxLimitations: 64,
+  maxMatches: 10_000,
 };
 const DATE_PROOF_MAX_DEPTH = 64;
 
@@ -102,6 +104,49 @@ function parserPlugins(path: string): ParserPlugin[] {
   return plugins;
 }
 
+export interface DrizzlePostgresJsAdapterImportAnalysis {
+  readonly status: "completed" | "partial";
+  readonly present: boolean;
+}
+
+/**
+ * Proves only a runtime static import of the exact postgres-js adapter module.
+ * This deliberately does not use text search, subpath inference, or type-only
+ * imports as execution-path evidence.
+ */
+export function analyzeDrizzlePostgresJsAdapterImport(
+  path: string,
+  source: string,
+): DrizzlePostgresJsAdapterImportAnalysis {
+  let ast: unknown;
+  try {
+    ast = parse(source, {
+      sourceType: "unambiguous",
+      sourceFilename: path,
+      plugins: parserPlugins(path),
+      attachComment: false,
+      errorRecovery: false,
+      createImportExpressions: true,
+    });
+  } catch {
+    return { status: "partial", present: false };
+  }
+  const program = objectNode(objectNode(ast)?.program);
+  for (const rawStatement of Array.isArray(program?.body) ? program.body : []) {
+    const statement = objectNode(rawStatement);
+    if (statement === undefined || nodeType(statement) !== "ImportDeclaration" ||
+        statement.importKind === "type") continue;
+    if (objectNode(statement.source)?.value !== "drizzle-orm/postgres-js") continue;
+    const specifiers = Array.isArray(statement.specifiers) ? statement.specifiers : [];
+    if (specifiers.length === 0 || specifiers.some((rawSpecifier) =>
+      objectNode(rawSpecifier)?.importKind !== "type"
+    )) {
+      return { status: "completed", present: true };
+    }
+  }
+  return { status: "completed", present: false };
+}
+
 function boundedInteger(value: number | undefined, fallback: number, minimum: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
   return Math.max(minimum, Math.floor(value));
@@ -112,6 +157,7 @@ function normalizeBounds(options: DrizzleAnalyzerBounds): Bounds {
     maxNodes: boundedInteger(options.maxNodes, DEFAULT_BOUNDS.maxNodes, 1),
     maxDepth: boundedInteger(options.maxDepth, DEFAULT_BOUNDS.maxDepth, 1),
     maxLimitations: boundedInteger(options.maxLimitations, DEFAULT_BOUNDS.maxLimitations, 1),
+    maxMatches: boundedInteger(options.maxMatches, DEFAULT_BOUNDS.maxMatches, 1),
   };
 }
 
@@ -522,6 +568,7 @@ export function analyzeDrizzleRawSqlDates(
   };
   let nodes = 0;
   let budgetExceeded = false;
+  let matchLimitExceeded = false;
 
   const addLimitation = (limitation: DrizzleAnalysisLimitation, node?: Node): void => {
     if (limitations.length >= bounds.maxLimitations) return;
@@ -732,12 +779,17 @@ export function analyzeDrizzleRawSqlDates(
       const evidenceClass = proveDate(parameterValue ?? expression, scope, offset(expression));
       const safeLocation = location(expression);
       if (evidenceClass !== undefined && safeLocation !== undefined) {
-        matches.push({
-          ...safeLocation,
-          evidenceClass,
-          sqlBinding: sqlBinding.length <= 128 ? sqlBinding : "alias-over-limit",
-          offset: offset(expression),
-        });
+        if (matches.length < bounds.maxMatches) {
+          matches.push({
+            ...safeLocation,
+            evidenceClass,
+            sqlBinding: sqlBinding.length <= 128 ? sqlBinding : "alias-over-limit",
+            offset: offset(expression),
+          });
+        } else if (!matchLimitExceeded) {
+          matchLimitExceeded = true;
+          addLimitation({ code: "match-limit-exceeded" });
+        }
       } else if (!isLiteralOrKnownScalar(expression, scope, offset(expression)) &&
           !isObviousSqlStructure(expression, scope)) {
         addLimitation({ code: "unresolved-interpolation", ...safeLocation }, expression);
@@ -751,7 +803,8 @@ export function analyzeDrizzleRawSqlDates(
   );
 
   return {
-    status: budgetExceeded || limitations.some(({ code }) => code !== "unresolved-interpolation")
+    status: budgetExceeded || matchLimitExceeded ||
+        limitations.some(({ code }) => code !== "unresolved-interpolation")
       ? "partial"
       : limitations.length > 0 ? "partial" : "completed",
     matches: matches.map(({ offset: _offset, ...match }) => match),

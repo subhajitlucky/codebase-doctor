@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { analyzeDrizzleRawSqlDates } from "../../../../../src/audits/database/drizzle/analyzer.js";
+import {
+  analyzeDrizzlePostgresJsAdapterImport,
+  analyzeDrizzleRawSqlDates,
+} from "../../../../../src/audits/database/drizzle/analyzer.js";
 
 function analyze(source: string, path = "src/query.ts") {
   return analyzeDrizzleRawSqlDates(path, source);
@@ -430,6 +433,49 @@ describe("analyzeDrizzleRawSqlDates", () => {
       status: "partial",
       matches: [],
       limitations: [{ code: "analysis-budget-exceeded" }],
+    });
+  });
+});
+
+describe("analyzeDrizzlePostgresJsAdapterImport", () => {
+  it("proves only an exact runtime module import", () => {
+    expect(analyzeDrizzlePostgresJsAdapterImport(
+      "src/db.ts",
+      'import { drizzle } from "drizzle-orm/postgres-js";',
+    )).toEqual({ status: "completed", present: true });
+    expect(analyzeDrizzlePostgresJsAdapterImport(
+      "src/db.ts",
+      'import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";',
+    )).toEqual({ status: "completed", present: false });
+    expect(analyzeDrizzlePostgresJsAdapterImport(
+      "src/db.ts",
+      'import adapter from "drizzle-orm/postgres-js/migrator";',
+    )).toEqual({ status: "completed", present: false });
+    expect(analyzeDrizzlePostgresJsAdapterImport(
+      "src/db.ts",
+      'const text = "drizzle-orm/postgres-js";',
+    )).toEqual({ status: "completed", present: false });
+  });
+
+  it("returns partial instead of guessing when parsing fails", () => {
+    expect(analyzeDrizzlePostgresJsAdapterImport("src/db.ts", "import {")).toEqual({
+      status: "partial",
+      present: false,
+    });
+  });
+});
+
+describe("Drizzle analyzer retained-match bounds", () => {
+  it("bounds retained matches and reports partial coverage", () => {
+    const result = analyzeDrizzleRawSqlDates(
+      "src/query.ts",
+      'import { sql } from "drizzle-orm"; sql`${new Date()} ${new Date(1)}`;',
+      { maxMatches: 1 },
+    );
+    expect(result.matches).toHaveLength(1);
+    expect(result).toMatchObject({
+      status: "partial",
+      limitations: [{ code: "match-limit-exceeded" }],
     });
   });
 });

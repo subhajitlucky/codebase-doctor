@@ -7,6 +7,7 @@ export type DrizzleDateEvidenceClass =
 export type DrizzleAnalysisLimitationCode =
   | "parse-failure"
   | "analysis-budget-exceeded"
+  | "match-limit-exceeded"
   | "unresolved-interpolation";
 
 export interface DrizzleDateMatch {
@@ -32,4 +33,5 @@ export interface DrizzleAnalyzerBounds {
   readonly maxNodes?: number;
   readonly maxDepth?: number;
   readonly maxLimitations?: number;
+  readonly maxMatches?: number;
 }
