@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import {
@@ -29,7 +30,14 @@ const DEFAULT_MAX_FINDINGS = 1_000;
 const SUPPORTED_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/iu;
 
 export interface DrizzleDoctorOptions {
-  readonly readFile?: (absolutePath: string) => Promise<Uint8Array>;
+  /**
+   * A bounded reader must return at most `allowance + 1` bytes. The extra byte
+   * is a size-growth sentinel and is never admitted to analysis.
+   */
+  readonly readFile?: (
+    absolutePath: string,
+    allowance: number,
+  ) => Promise<Uint8Array>;
   readonly maxFileBytes?: number;
   readonly maxTotalBytes?: number;
   readonly maxFiles?: number;
@@ -38,6 +46,63 @@ export interface DrizzleDoctorOptions {
 }
 
 const DEFAULT_MAX_LIMITATIONS = 100;
+const READ_CHUNK_BYTES = 64 * 1024;
+const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+
+class SafeReadFailure extends Error {
+  constructor(readonly reason: "unavailable" | "not-regular") {
+    super("Bounded source read failed.");
+  }
+}
+
+/**
+ * Protects the final path component with O_NOFOLLOW, validates the opened
+ * handle, and never reads beyond allowance plus one sentinel byte. This does
+ * not claim openat2-style protection against hostile replacement of ancestor
+ * directories.
+ */
+async function readBoundedRegularFile(
+  absolutePath: string,
+  allowance: number,
+): Promise<Uint8Array> {
+  let handle;
+  try {
+    handle = await open(absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    throw new SafeReadFailure("unavailable");
+  }
+  try {
+    let metadata;
+    try {
+      metadata = await handle.stat();
+    } catch {
+      throw new SafeReadFailure("unavailable");
+    }
+    if (!metadata.isFile()) throw new SafeReadFailure("not-regular");
+
+    const chunks: Buffer[] = [];
+    let remaining = allowance + 1;
+    while (remaining > 0) {
+      const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, remaining));
+      let bytesRead: number;
+      try {
+        ({ bytesRead } = await handle.read(chunk, 0, chunk.byteLength, null));
+      } catch {
+        throw new SafeReadFailure("unavailable");
+      }
+      if (bytesRead === 0) break;
+      chunks.push(chunk.subarray(0, bytesRead));
+      remaining -= bytesRead;
+    }
+    return Buffer.concat(chunks);
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      // The read result remains bounded; close errors are never disclosed.
+    }
+  }
+}
 
 function positiveSafeInteger(value: number, name: string): number {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -344,7 +409,7 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
     options.maxLimitations ?? DEFAULT_MAX_LIMITATIONS,
     "maxLimitations",
   );
-  const readSelectedFile = options.readFile ?? readFile;
+  const readSelectedFile = options.readFile ?? readBoundedRegularFile;
 
   return {
     id: DOCTOR_ID,
@@ -386,27 +451,55 @@ export function createDrizzleDoctor(options: DrizzleDoctorOptions = {}): Doctor 
           limitations.add(`${file.path}: inventoried source path could not be safely read.`);
           continue;
         }
+        const remainingTotalBytes = maxTotalBytes - totalBytes;
+        const allowance = Math.min(maxFileBytes, remainingTotalBytes);
         let bytes: Uint8Array;
         try {
-          bytes = await readSelectedFile(absolutePath);
-        } catch {
-          limitations.add(`${file.path}: unable to read selected source for Drizzle audit.`);
+          bytes = await readSelectedFile(absolutePath, allowance);
+        } catch (error) {
+          limitations.add(error instanceof SafeReadFailure && error.reason === "not-regular"
+            ? `${file.path}: inventoried source is no longer a regular file.`
+            : `${file.path}: unable to safely read the final source path for Drizzle audit.`);
           continue;
         }
-        if (bytes.byteLength > maxFileBytes) {
+        if (bytes.byteLength > allowance + 1) {
           limitations.add(
-            `${file.path}: file exceeds the ${maxFileBytes}-byte Drizzle audit size limit.`,
+            `${file.path}: bounded source reader exceeded its redacted byte contract; content was rejected.`,
           );
           continue;
         }
-        if (totalBytes + bytes.byteLength > maxTotalBytes) {
+        totalBytes += bytes.byteLength;
+        if (bytes.byteLength > allowance) {
+          if (allowance === maxFileBytes) {
+            limitations.add(
+              `${file.path}: file exceeds the ${maxFileBytes}-byte Drizzle audit size limit.`,
+            );
+          } else {
+            limitations.add(
+              `${file.path}: total Drizzle audit content limit of ${maxTotalBytes} bytes was reached while bounded-reading source.`,
+            );
+          }
+          continue;
+        }
+        if (bytes.byteLength !== file.size) {
           limitations.add(
-            `${file.path}: total Drizzle audit content limit of ${maxTotalBytes} bytes was reached after inventory size changed; remaining context and selected files were not examined.`,
+            `${file.path}: source size changed after inventory; content was withheld from analysis.`,
+          );
+          continue;
+        }
+        if (totalBytes > maxTotalBytes) {
+          limitations.add(
+            `${file.path}: total Drizzle audit content limit of ${maxTotalBytes} bytes was exceeded by a bounded growth sentinel.`,
           );
           break;
         }
-        totalBytes += bytes.byteLength;
-        const source = Buffer.from(bytes).toString("utf8");
+        let source: string;
+        try {
+          source = UTF8_DECODER.decode(bytes);
+        } catch {
+          limitations.add(`${file.path}: selected source is not valid UTF-8.`);
+          continue;
+        }
         cache.set(file.path, source);
         const adapter = analyzeDrizzlePostgresJsAdapterImport(file.path, source);
         if (adapter.status === "partial") {

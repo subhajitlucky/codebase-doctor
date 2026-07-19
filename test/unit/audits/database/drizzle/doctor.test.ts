@@ -1,4 +1,7 @@
 import { Buffer } from "node:buffer";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createDrizzleDoctor } from "../../../../../src/audits/database/drizzle/doctor.js";
 import { fullAuditScope } from "../../../../../src/scope/planner.js";
@@ -49,11 +52,11 @@ function snapshot(
 }
 
 function reader(contents: ReadonlyMap<string, string>) {
-  return vi.fn(async (absolutePath: string) => {
+  return vi.fn(async (absolutePath: string, allowance: number) => {
     const path = absolutePath.replace(/^\/repo\//u, "");
     const content = contents.get(path);
     if (content === undefined) throw new Error("sensitive host error");
-    return Buffer.from(content);
+    return Buffer.from(content).subarray(0, allowance + 1);
   });
 }
 
@@ -278,6 +281,102 @@ describe("Drizzle Doctor", () => {
     expect(result.coverage).toEqual([expect.objectContaining({ status: "partial" })]);
     expect(JSON.stringify(result)).not.toContain("HOST SECRET");
     expect(result.findings).toEqual([]);
+  });
+
+  it("does not follow a final symlink swapped in after regular-file inventory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codebase-doctor-drizzle-"));
+    const outside = await mkdtemp(join(tmpdir(), "codebase-doctor-outside-"));
+    const source = 'import { sql } from "drizzle-orm"; sql`${new Date()}`;';
+    try {
+      await mkdir(join(root, "src"));
+      await writeFile(join(outside, "query.ts"), source);
+      await symlink(join(outside, "query.ts"), join(root, "src/query.ts"));
+      const doctor = createDrizzleDoctor();
+      const result = await doctor.diagnose({
+        snapshot: snapshot(new Map(), {
+          root,
+          files: [file("src/query.ts", source)],
+        }),
+        allowedCapabilities: new Set(["filesystem:read"]),
+      });
+
+      expect(result.findings).toEqual([]);
+      expect(result.coverage).toEqual([expect.objectContaining({
+        status: "partial",
+        filesExamined: 0,
+      })]);
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(source);
+      expect(serialized).not.toContain(outside);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("passes a strict allowance to injected readers and rejects growth after cap plus sentinel", async () => {
+    const content = 'import { sql } from "drizzle-orm"; sql`${new Date()}`;';
+    const contents = new Map([["src/query.ts", content]]);
+    const readFile = vi.fn(async (_path: string, allowance: number) =>
+      Buffer.alloc(allowance + 1, 0x61)
+    );
+    const { result } = await diagnose(contents, {
+      readFile,
+      maxFileBytes: 10,
+    }, {
+      files: [{ path: "src/query.ts", kind: "file", size: 1 }],
+    });
+
+    expect(readFile).toHaveBeenCalledWith("/repo/src/query.ts", 10);
+    expect(result.findings).toEqual([]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      filesExamined: 0,
+    })]);
+
+    const contractViolation = await diagnose(contents, {
+      readFile: async (_path, allowance) =>
+        Buffer.concat([Buffer.alloc(allowance + 2), Buffer.from("READER_SECRET")]),
+      maxFileBytes: 10,
+    }, {
+      files: [{ path: "src/query.ts", kind: "file", size: 1 }],
+    });
+    expect(contractViolation.result.findings).toEqual([]);
+    expect(contractViolation.result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      filesExamined: 0,
+      limitations: [
+        "src/query.ts: bounded source reader exceeded its redacted byte contract; content was rejected.",
+      ],
+    })]);
+    expect(JSON.stringify(contractViolation.result)).not.toContain("READER_SECRET");
+  });
+
+  it("rejects invalid UTF-8 before parsing and withholds all source bytes", async () => {
+    const sensitive = "SENSITIVE_INVALID_SOURCE";
+    const bytes = Buffer.concat([
+      Buffer.from('import { sql } from "drizzle-orm"; sql`${new Date()}`;'),
+      Buffer.from([0xff]),
+      Buffer.from(sensitive),
+    ]);
+    const contents = new Map([["src/query.ts", "inventory placeholder"]]);
+    const { result } = await diagnose(contents, {
+      readFile: async (_path, allowance) => bytes.subarray(0, allowance + 1),
+      maxFileBytes: bytes.length,
+    }, {
+      files: [{ path: "src/query.ts", kind: "file", size: bytes.length }],
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(result.coverage).toEqual([expect.objectContaining({
+      status: "partial",
+      filesExamined: 0,
+      limitations: ["src/query.ts: selected source is not valid UTF-8."],
+    })]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain(sensitive);
+    expect(serialized).not.toContain("�");
+    expect(serialized).not.toContain("new Date");
   });
 
   it("enforces file and total byte ceilings before analysis", async () => {
