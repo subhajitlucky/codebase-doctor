@@ -21,6 +21,73 @@ export interface BoundedLimitations {
   readonly summary: OmittedRecordSummary;
 }
 
+function safeCount(value: number): number {
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function coherentSummary(summary: OmittedRecordSummary): OmittedRecordSummary {
+  const total = safeCount(summary.total);
+  const omitted = Math.min(safeCount(summary.omitted), total);
+  const emitted = Math.min(safeCount(summary.emitted), total - omitted);
+  return { total, emitted, omitted };
+}
+
+export function saturatingAddCount(left: number, right: number): number {
+  const normalizedLeft = safeCount(left);
+  const normalizedRight = safeCount(right);
+  if (normalizedLeft > Number.MAX_SAFE_INTEGER - normalizedRight) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return normalizedLeft + normalizedRight;
+}
+
+export function mergeOmittedRecordSummaries(
+  left: OmittedRecordSummary | undefined,
+  right: OmittedRecordSummary | undefined,
+): OmittedRecordSummary | undefined {
+  if (left === undefined) return right === undefined ? undefined : coherentSummary(right);
+  if (right === undefined) return coherentSummary(left);
+  const normalizedLeft = coherentSummary(left);
+  const normalizedRight = coherentSummary(right);
+  const total = saturatingAddCount(normalizedLeft.total, normalizedRight.total);
+  const omitted = Math.min(
+    saturatingAddCount(normalizedLeft.omitted, normalizedRight.omitted),
+    total,
+  );
+  const emitted = Math.min(
+    saturatingAddCount(normalizedLeft.emitted, normalizedRight.emitted),
+    total - omitted,
+  );
+  return { total, emitted, omitted };
+}
+
+export function preserveSummaryWithAdditionalOmissions(
+  existing: OmittedRecordSummary | undefined,
+  normalized: OmittedRecordSummary,
+): OmittedRecordSummary | undefined {
+  const normalizedSummary = coherentSummary(normalized);
+  if (existing === undefined) {
+    return normalizedSummary.omitted === 0 ? undefined : normalizedSummary;
+  }
+  const existingSummary = coherentSummary(existing);
+  const additionalMaterialized = Math.max(
+    0,
+    normalizedSummary.total - existingSummary.emitted,
+  );
+  const total = saturatingAddCount(existingSummary.total, additionalMaterialized);
+  const materialized = saturatingAddCount(
+    existingSummary.emitted,
+    additionalMaterialized,
+  );
+  const newlyOmitted = Math.min(normalizedSummary.omitted, materialized);
+  const omitted = Math.min(
+    saturatingAddCount(existingSummary.omitted, newlyOmitted),
+    total,
+  );
+  const emitted = Math.min(materialized - newlyOmitted, total - omitted);
+  return { total, emitted, omitted };
+}
+
 const PATH_SCOPED_REASONS = new Set([
   "npm lock ownership is unresolved; missing-lockfile analysis was withheld.",
   "private key matched an inventoried localhost-only test certificate; no finding was emitted.",

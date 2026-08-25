@@ -144,7 +144,34 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    permission is validation execution, not Doctor repair authority. Do not use
    `--run-checks` on an untrusted repository.
 
-8. Static `database/sql-rls` coverage runs automatically and offline for
+8. Interpret the automatic, read-only, offline `database/drizzle` module before
+   requesting live database access. Its
+   `database/drizzle/raw-sql-date-parameter` rule means a statically proven
+   JavaScript `Date` reached a raw Drizzle SQL interpolation on a confirmed
+   postgres-js path. Raw interpolation can bypass the timestamp encoder, so
+   postgres-js may throw `ERR_INVALID_ARG_TYPE` even when equivalent SQL works
+   in psql.
+
+   Applicability requires an exact `drizzle-orm/postgres-js` adapter import or
+   scoped owning/workspace dependencies on both `drizzle-orm` and `postgres`.
+   `Date()`, `Date.now()`, `toISOString()`, name-based guesses,
+   `lte(column, date)`, and a fresh inline encoder object with no spreads and a
+   callable `mapToDriverValue` passed directly to `sql.param` are not findings.
+   Encoder identifiers, aliases, member accesses, and calls—including `const`
+   objects—are partial coverage, not assumed safety. Unsupported syntax or
+   unresolved and unclassified Date flow is also a partial coverage limitation; partial
+   coverage is not clean.
+
+   The finding is medium severity and high confidence. Treat it as evidence,
+   not automatic truth. Raw SQL, raw expressions, Date values, and secrets are
+   withheld; never copy or request them from Doctor. Ask an external authorized
+   human or coding agent to preserve timestamp semantics and repair the query
+   with a typed comparison such as `lte(column, date)` or an explicit encoder,
+   then rerun the same scope. Only a fresh inline callable encoder is recognized
+   as safe by this static audit; all other encoder forms remain partial. Never ask for or grant
+   Codebase Doctor target-write authority. Doctor never performs the change.
+
+9. Static `database/sql-rls` coverage runs automatically and offline for
    supported migration streams. It reports expected migration state, never
    executes SQL, and may be partial for dynamic, malformed, or unsupported SQL.
    Partial coverage is not clean. Live `database/rls` reports observed catalog
@@ -160,7 +187,7 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    `--database-timeout` to change the catalog statement timeout. A skipped or
    failed live doctor is not a clean database audit.
 
-9. The combined audit automatically runs the read-only, offline
+10. The combined audit automatically runs the read-only, offline
    `security/secrets` module. It is precision-first and not exhaustive. A
    Git-ignored local `.env` file is normal and is not a finding; a tracked
    `.env`, template, source file, or other repository-shareable file containing
@@ -175,7 +202,7 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    outside Codebase Doctor, and then rerun the same audit. Doctor never performs
    those actions.
 
-10. The combined audit also automatically runs the read-only, offline
+11. The combined audit also automatically runs the read-only, offline
    `security/dependencies` module for npm lockfile versions 2 and 3. pnpm, Yarn,
    Bun, Python, and other ecosystems remain explicit unsupported coverage for
    this module. It never invokes npm or another package manager, runs a shell or
@@ -196,7 +223,7 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    correct the metadata and rerun the same scope; Doctor never performs that
    remediation.
 
-11. Apply the precision and bounded-report contract. Workspace publication
+12. Apply the precision and bounded-report contract. Workspace publication
     entries, generated targets, and fixture-controlled paths are coverage
     limitations unless independently proven broken; they are not missing-target
     findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive

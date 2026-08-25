@@ -325,7 +325,7 @@ describe("scan orchestration", () => {
     expect(diagnose).toHaveBeenCalledOnce();
   });
 
-  it("registers static and live RLS doctors only for the combined audit path", async () => {
+  it("registers offline Drizzle, static RLS, and live RLS doctors only for the combined audit path", async () => {
     const discovery = {
       inventoryWorkspace: vi.fn(async () => inventory),
       loadManifests: vi.fn(async () => []),
@@ -357,6 +357,7 @@ describe("scan orchestration", () => {
       status: "completed",
     }));
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/sql-rls");
+    expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("database/drizzle");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/secrets");
     expect(scanned.doctorRuns.map(({ doctorId }) => doctorId)).not.toContain("security/dependencies");
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
@@ -380,6 +381,17 @@ describe("scan orchestration", () => {
       ],
     }));
     expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "database/drizzle",
+      status: "completed",
+    }));
+    expect(audited.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/drizzle",
+      status: "partial",
+      limitations: [
+        ".: dependency metadata is unavailable; Drizzle applicability is unknown for project root.",
+      ],
+    }));
+    expect(audited.doctorRuns).toContainEqual(expect.objectContaining({
       doctorId: "database/sql-rls",
       status: "completed",
     }));
@@ -397,7 +409,7 @@ describe("scan orchestration", () => {
       coverageComplete: false,
     });
     expect(audited.domainCoverage.find(({ domain }) => domain === "database")).toMatchObject({
-      status: "skipped",
+      status: "partial",
       coverageComplete: false,
     });
   });

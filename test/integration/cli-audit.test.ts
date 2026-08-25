@@ -99,6 +99,149 @@ afterEach(async () => {
 });
 
 describe("audit CLI", () => {
+  it("reports a proven raw Drizzle Date offline without disclosing source values", async () => {
+    const sensitiveDate = "2042-11-23T12:34:56.000Z";
+    const sensitiveSql = "select * from jobs where retry_at <= ";
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        private: true,
+        dependencies: { "drizzle-orm": "1.0.0", postgres: "3.4.0" },
+      }),
+      "src/recovery.ts": [
+        'import { sql } from "drizzle-orm";',
+        `const cutoff = new Date("${sensitiveDate}");`,
+        `export const recovery = sql\`${sensitiveSql}\${cutoff}\`;`,
+        "",
+      ].join("\n"),
+    });
+    const before = await captureGitRepositorySnapshot(root);
+
+    const result = cli(["audit", root, "--json", "--fail-on", "medium"], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(report.findings).toContainEqual(expect.objectContaining({
+      doctorId: "database/drizzle",
+      ruleId: "database/drizzle/raw-sql-date-parameter",
+      severity: "medium",
+      confidence: "high",
+      location: expect.objectContaining({ path: "src/recovery.ts", line: 3 }),
+      remediation: expect.stringMatching(/lte\(column, date\)/),
+    }));
+    expect(report.doctorRuns).toContainEqual(expect.objectContaining({
+      doctorId: "database/drizzle",
+      status: "completed",
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "database",
+      modules: expect.arrayContaining([
+        expect.objectContaining({ moduleId: "database/drizzle", status: "completed" }),
+      ]),
+    }));
+    expect(result.stdout).not.toContain(sensitiveDate);
+    expect(result.stdout).not.toContain(sensitiveSql);
+    expect(await captureGitRepositorySnapshot(root)).toEqual(before);
+  });
+
+  it("keeps typed Drizzle comparisons safe and changed coverage honest", async () => {
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        private: true,
+        dependencies: { "drizzle-orm": "1.0.0", postgres: "3.4.0" },
+      }),
+      "src/recovery.ts": [
+        'import { lte } from "drizzle-orm";',
+        "const cutoff = new Date();",
+        "export const recovery = lte(jobs.retryAt, cutoff);",
+        "",
+      ].join("\n"),
+    });
+    await writeProjectFile(root, "src/recovery.ts", [
+      'import { lte } from "drizzle-orm";',
+      "const cutoff = new Date();",
+      "export const recovery = lte(jobs.retryAt, cutoff);",
+      "// current changed file",
+      "",
+    ].join("\n"));
+
+    const result = cli([
+      "audit", root, "--changed", "--json", "--fail-on", "medium",
+    ], root);
+    const report = JSON.parse(result.stdout);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(report.findings).not.toContainEqual(expect.objectContaining({
+      doctorId: "database/drizzle",
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/drizzle",
+      scope: "changed",
+      status: "completed",
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/unchanged files were not independently re-audited/i),
+      ]),
+    }));
+  });
+
+  it("reports an unsafe changed Drizzle Date with changed verification and redaction", async () => {
+    const sensitiveDate = "2044-02-03T04:05:06.000Z";
+    const sensitiveSql = "select private_payload from recovery where locked_at <= ";
+    const { root } = await createRepository({
+      "package.json": JSON.stringify({
+        private: true,
+        dependencies: { "drizzle-orm": "1.0.0", postgres: "3.4.0" },
+      }),
+      "src/recovery.ts": [
+        'import { sql } from "drizzle-orm";',
+        `const cutoff = new Date("${sensitiveDate}");`,
+        `export const recovery = sql\`${sensitiveSql}\${cutoff}\`;`,
+        "",
+      ].join("\n"),
+    });
+    await writeProjectFile(root, "src/recovery.ts", [
+      'import { sql } from "drizzle-orm";',
+      `const cutoff = new Date("${sensitiveDate}");`,
+      "// changed query path",
+      `export const recovery = sql\`${sensitiveSql}\${cutoff}\`;`,
+      "",
+    ].join("\n"));
+
+    const result = cli([
+      "audit", root, "--changed", "--json", "--fail-on", "medium",
+    ], root);
+    const report = JSON.parse(result.stdout);
+    const finding = report.findings.find(({ doctorId }: { doctorId: string }) =>
+      doctorId === "database/drizzle"
+    );
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(finding).toMatchObject({
+      ruleId: "database/drizzle/raw-sql-date-parameter",
+      location: { path: "src/recovery.ts", line: 4, column: expect.any(Number) },
+      remediation: expect.stringMatching(/lte\(column, date\)/),
+      verification: {
+        command: "codebase-doctor audit . --changed --json",
+        expected: expect.stringMatching(/database\/drizzle coverage completed/i),
+      },
+    });
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/drizzle",
+      status: "completed",
+      scope: "changed",
+      limitations: expect.arrayContaining([
+        expect.stringMatching(/unchanged files were not independently re-audited/i),
+      ]),
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "database",
+      applicability: "detected",
+      status: "partial",
+      coverageComplete: false,
+    }));
+    expect(result.stdout).not.toContain(sensitiveDate);
+    expect(result.stdout).not.toContain(sensitiveSql);
+  });
+
   it("reports tracked env credentials but ignores a Git-ignored local env file", async () => {
     const trackedSecret = generatedToken("ghp_");
     const ignoredSecret = generatedToken("glpat-");
@@ -994,6 +1137,10 @@ describe("audit CLI", () => {
       skipReason: expect.stringContaining("network:access"),
     }));
     expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "database/drizzle",
+      status: "not-applicable",
+    }));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
       moduleId: "database/sql-rls",
       status: "not-applicable",
     }));
@@ -1008,6 +1155,12 @@ describe("audit CLI", () => {
       doctorId: "database/rls",
       status: "failed",
       error: expect.objectContaining({ message: expect.stringMatching(/DATABASE_URL/) }),
+    }));
+    expect(report.domainCoverage).toContainEqual(expect.objectContaining({
+      domain: "database",
+      applicability: "unknown",
+      status: "failed",
+      coverageComplete: false,
     }));
   });
 

@@ -5,6 +5,12 @@ import type {
   LimitationGroup,
   OmittedRecordSummary,
 } from "./bounded-evidence.js";
+import {
+  MAX_COVERAGE_RECORDS,
+  MAX_LIMITATION_SAMPLE_PATHS,
+  mergeOmittedRecordSummaries,
+  saturatingAddCount,
+} from "./bounded-evidence.js";
 
 export const AUDIT_DOMAINS = [
   "repository",
@@ -100,6 +106,120 @@ function aggregateStatuses(statuses: readonly DomainCoverageStatus[]): DomainCov
   return [...statuses].sort((left, right) => STATUS_PRIORITY[right] - STATUS_PRIORITY[left])[0]!;
 }
 
+function aggregateLimitationMetadata(
+  entries: readonly {
+    limitationGroups?: readonly LimitationGroup[];
+    limitationSummary?: OmittedRecordSummary;
+  }[],
+): {
+  limitationGroups?: readonly LimitationGroup[];
+  limitationSummary?: OmittedRecordSummary;
+} {
+  interface MutableGroup {
+    reason: string;
+    total: number;
+    samplePaths: string[];
+    omittedPathCount: number;
+    summarylessTotal: number;
+    summarylessSamplePaths: string[];
+  }
+  const groupsByReason = new Map<string, MutableGroup>();
+  let limitationSummary: OmittedRecordSummary | undefined;
+  let summarylessTotal = 0;
+
+  const admitSample = (samples: string[], path: string): void => {
+    if (samples.includes(path)) return;
+    const insertion = samples.findIndex((sample) => path.localeCompare(sample) < 0);
+    if (insertion < 0) samples.push(path);
+    else samples.splice(insertion, 0, path);
+    if (samples.length > MAX_LIMITATION_SAMPLE_PATHS) samples.pop();
+  };
+
+  for (const entry of entries) {
+    const hasUpstreamSummary = entry.limitationSummary !== undefined;
+    limitationSummary = mergeOmittedRecordSummaries(
+      limitationSummary,
+      entry.limitationSummary,
+    );
+    for (const incoming of entry.limitationGroups ?? []) {
+      if (typeof incoming.reason !== "string") continue;
+      const incomingTotal = saturatingAddCount(0, incoming.total);
+      if (!hasUpstreamSummary) {
+        summarylessTotal = saturatingAddCount(summarylessTotal, incomingTotal);
+      }
+      let group = groupsByReason.get(incoming.reason);
+      if (group === undefined) {
+        if (groupsByReason.size >= MAX_COVERAGE_RECORDS) {
+          let greatestReason: string | undefined;
+          for (const reason of groupsByReason.keys()) {
+            if (greatestReason === undefined || reason.localeCompare(greatestReason) > 0) {
+              greatestReason = reason;
+            }
+          }
+          if (greatestReason !== undefined && incoming.reason.localeCompare(greatestReason) >= 0) {
+            continue;
+          }
+          if (greatestReason !== undefined) groupsByReason.delete(greatestReason);
+        }
+        group = {
+          reason: incoming.reason,
+          total: 0,
+          samplePaths: [],
+          omittedPathCount: 0,
+          summarylessTotal: 0,
+          summarylessSamplePaths: [],
+        };
+        groupsByReason.set(incoming.reason, group);
+      }
+      group.total = saturatingAddCount(group.total, incomingTotal);
+      group.omittedPathCount = saturatingAddCount(
+        group.omittedPathCount,
+        incoming.omittedPathCount,
+      );
+      for (const path of incoming.samplePaths) {
+        if (typeof path !== "string") continue;
+        admitSample(group.samplePaths, path);
+        if (!hasUpstreamSummary) admitSample(group.summarylessSamplePaths, path);
+      }
+      if (!hasUpstreamSummary) {
+        group.summarylessTotal = saturatingAddCount(
+          group.summarylessTotal,
+          incomingTotal,
+        );
+      }
+    }
+  }
+  let summarylessEmitted = 0;
+  for (const group of groupsByReason.values()) {
+    summarylessEmitted = saturatingAddCount(
+      summarylessEmitted,
+      Math.min(group.summarylessTotal, group.summarylessSamplePaths.length),
+    );
+  }
+  if (summarylessTotal > 0) {
+    limitationSummary = mergeOmittedRecordSummaries(limitationSummary, {
+      total: summarylessTotal,
+      emitted: summarylessEmitted,
+      omitted: summarylessTotal - summarylessEmitted,
+    });
+  }
+  const groups = [...groupsByReason.values()]
+    .sort((left, right) => left.reason.localeCompare(right.reason))
+    .map((group): LimitationGroup => ({
+      reason: group.reason,
+      total: group.total,
+      samplePaths: group.samplePaths,
+      omittedPathCount: Math.max(
+        group.omittedPathCount,
+        Math.max(0, group.total - group.samplePaths.length),
+      ),
+    }));
+  return {
+    ...(groups.length === 0 ? {} : { limitationGroups: groups }),
+    ...(limitationSummary === undefined ? {} : { limitationSummary }),
+  };
+}
+
 function moduleCoverage(entry: RegisteredDoctorResult): DomainModuleCoverage {
   const coverage = entry.result.coverage ?? [];
   const status = entry.result.status === "failed"
@@ -115,7 +235,13 @@ function moduleCoverage(entry: RegisteredDoctorResult): DomainModuleCoverage {
     ...(entry.result.skipReason === undefined ? [] : [entry.result.skipReason]),
     ...(entry.result.error === undefined ? [] : [entry.result.error.message]),
   ])].sort();
-  return { moduleId: entry.doctorId, status, scopes, limitations };
+  return {
+    moduleId: entry.doctorId,
+    status,
+    scopes,
+    limitations,
+    ...aggregateLimitationMetadata(coverage),
+  };
 }
 
 function evidenceKey(evidence: DomainCoverageEvidence): string {
@@ -350,8 +476,9 @@ export function planDomainCoverage(
     ? aggregateStatuses(databaseModules.map(({ status }) => status))
     : "not-selected";
   const databaseDetected = databaseModules.some((module) =>
-    module.status === "completed" || module.status === "partial" || module.status === "failed"
+    module.status === "completed" || module.status === "partial"
   );
+  const databaseLimitationMetadata = aggregateLimitationMetadata(databaseModules);
 
   const coverage: DomainCoverage[] = [
     {
@@ -396,6 +523,7 @@ export function planDomainCoverage(
       limitations: input.includeDatabaseAudit
         ? databaseModules.flatMap(({ limitations }) => limitations)
         : ["The repository-only scan command does not select database audit modules."],
+      ...(input.includeDatabaseAudit ? databaseLimitationMetadata : {}),
     },
     securityCoverage(securityModules, input.snapshot),
     infrastructure,

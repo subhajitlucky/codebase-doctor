@@ -5,6 +5,7 @@ import type { FindingThreshold } from "./summary.js";
 import { createCheckDoctor } from "../doctors/checks/doctor.js";
 import { projectDoctor } from "../doctors/project/doctor.js";
 import { createRlsDoctor } from "../audits/database/rls/doctor.js";
+import { createDrizzleDoctor } from "../audits/database/drizzle/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
@@ -110,6 +111,7 @@ const defaultDependencies: ScanDependencies = {
       doctors.push(createDependenciesDoctor());
     }
     if (request.includeDatabaseAudit === true) {
+      doctors.push(createDrizzleDoctor());
       doctors.push(createSqlRlsDoctor());
       doctors.push(createRlsDoctor({
         schemas: request.databaseSchemas ?? ["public"],

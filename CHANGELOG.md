@@ -4,6 +4,29 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add the read-only, offline `database/drizzle` module and its precision-first
+  `database/drizzle/raw-sql-date-parameter` rule for statically proven
+  JavaScript Date values interpolated through raw Drizzle SQL on confirmed
+  postgres-js paths.
+- Add the `codebase-doctor mcp` subcommand: a read-only Model Context Protocol
+  stdio server that reuses the public programmatic audit API without new audit
+  logic. It exposes `audit_codebase` (path, json-or-summary format, and
+  changed/base passthrough mirroring the CLI flags) plus
+  `describe_capabilities` registry metadata, bounds oversized responses at
+  roughly 50 KB with an explicit note, and never grants `--run-checks`
+  validation commands or live database access.
+
+### Security
+
+- Keep raw SQL, source expressions, Date values, and secrets out of findings,
+  fingerprints, and every reporter. The module provides external-only typed
+  comparison or explicit-encoder guidance and never applies a repair. Static
+  safety proof is limited to a fresh inline, spread-free encoder object with a
+  callable `mapToDriverValue`; identifiers, aliases, members, calls, and other
+  encoder arguments remain partial coverage rather than assumed safety.
+
 ## [0.1.6] - 2026-07-18
 
 ### Changed

@@ -62,7 +62,8 @@ CLI request
        full snapshot      affected plans    affected streams
                               |                |
                               v                v
-                         optional checks   offline SQL/RLS doctor
+                         optional checks   offline database doctors
+                                           Drizzle + SQL/RLS
                               |                |
                               +-------+--------+
                                       |
@@ -213,6 +214,56 @@ not a clean source-integrity result. An external authorized human or coding
 agent must correct or restore the intended target and rerun the same scope.
 Codebase Doctor does not modify or repair files.
 
+## Drizzle postgres-js raw Date diagnostic
+
+`database/drizzle` is an independent built-in database module alongside
+`database/sql-rls` and the separately permissioned live `database/rls` Doctor.
+It is read-only and offline, with `filesystem:read` as its only capability. It
+never imports repository code, opens a database connection, uses the network,
+or changes a query.
+
+The pipeline is bounded and deterministic: project/source selection confirms
+applicability, a bounded reader admits current regular source files, the Babel
+AST analyzer resolves the imported Drizzle `sql` binding and narrow Date flow,
+and finding normalization emits only safe evidence. Limits are 1 MiB per file,
+50 MiB per audit, 10,000 source files, and 1,000 findings. Reached limits,
+unreadable input, unsupported syntax, and unresolved value flow become partial
+coverage rather than silently omitted work.
+
+Applicability requires confirmed postgres-js through either an exact
+`drizzle-orm/postgres-js` adapter import or scoped owning/workspace dependency
+evidence for both `drizzle-orm` and `postgres`. Full and changed selection are
+reported independently. Module states distinguish applicable completed and
+partial work from not-applicable and not-selected work; a zero-finding partial
+run is not clean.
+
+The `database/drizzle/raw-sql-date-parameter` rule identifies only a statically proven Date
+value: a JavaScript `Date` interpolated into raw Drizzle SQL. That path can bypass
+the column's timestamp encoder, after which postgres-js may throw
+`ERR_INVALID_ARG_TYPE`; equivalent SQL may work in psql because it does not use
+the unencoded JavaScript parameter. `Date()`, `Date.now()`, `toISOString()`,
+name-based guesses, `lte(column, date)`, and a fresh inline encoder object with
+no spreads and a callable `mapToDriverValue` passed directly to `sql.param` are
+not findings. Encoder identifiers, aliases, member accesses, and calls—including
+objects held by `const` bindings—are partial coverage rather than assumed
+safety. Unsupported or
+unclassified Date flows are partial coverage limitations, not guesses.
+
+Findings are medium severity and high confidence: the static proof is narrow,
+but business impact cannot be inferred. Evidence retains only normalized path,
+line, column, evidence class, and local SQL binding identity. Raw SQL, source
+expressions, Date values, and secrets are withheld. Fingerprint identity uses
+only safe normalized metadata; redaction does not depend on a reporter.
+
+The remediation guidance points an external authorized human or coding agent
+toward a typed comparison such as `lte(column, date)` or an explicit encoder.
+Only a fresh inline callable encoder object is recognized as safe by the current
+static coverage; other encoder forms remain partial. The external actor must
+preserve timezone semantics and rerun the same scope. Doctor supplies evidence and verification guidance; it
+never performs the repair or receives target-write authority. This permanent
+separation keeps Codebase Doctor a model-independent auditor even as builder
+models become more capable.
+
 ## Doctors and capabilities
 
 The implemented Doctor capability vocabulary is read-only filesystem access,
@@ -228,6 +279,8 @@ granted to Doctor.
   reports only provably missing supported internal source targets.
 - Check Doctor previews configured JavaScript/TypeScript and Python validation
   commands, and executes them only with `--run-checks`.
+- `database/drizzle` performs bounded AST analysis for confirmed postgres-js
+  source and emits precision-first raw Date parameter evidence offline.
 - `database/sql-rls` automatically reads inventoried PostgreSQL migration files
   and reconstructs supported expected state without credentials or SQL
   execution.
@@ -405,6 +458,18 @@ current full result as resolved.
 not the findings themselves. Partial and skipped coverage still qualify an exit
 `0` interpretation.
 
+## Model Context Protocol server
+
+The `codebase-doctor mcp` subcommand serves the same normalized audit over an
+MCP stdio transport for coding agents. It exposes two read-only tools:
+`audit_codebase` runs the public programmatic audit API with path,
+json-or-summary format, and changed/base passthrough while bounding oversized
+responses at roughly 50 KB with an explicit note, and
+`describe_capabilities` reads tool, domain, and capability metadata. The
+server never enables validation commands or live database access, performs no
+writes, and preserves the permanent boundary: Models build. Codebase Doctor
+verifies.
+
 ## Public package boundary
 
 The package entry point exports the normalized audit, finding, coverage,
@@ -428,7 +493,7 @@ The following are not implemented behavior:
 - caching or incremental snapshot persistence;
 - container, sandbox, read-only mount, or disposable-copy enforcement for
   approved checks;
-- an MCP server, lifecycle-hook installer, or hosted service;
+- a lifecycle-hook installer or hosted service;
 - deployment drift comparison between expected migrations and live state;
 - additional built-in frontend, backend, security, infrastructure,
   performance, and AI semantic analyzers.

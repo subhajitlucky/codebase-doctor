@@ -39,6 +39,56 @@ async function documents(paths: readonly string[]) {
 }
 
 describe("independent auditor product boundary", () => {
+  it("documents the built-in Drizzle postgres-js Date diagnostic precisely", async () => {
+    const [readme, architecture, skill, changelog] = await Promise.all([
+      readFile("README.md", "utf8"),
+      readFile("docs/architecture.md", "utf8"),
+      readFile(".agents/skills/codebase-doctor/SKILL.md", "utf8"),
+      readFile("CHANGELOG.md", "utf8"),
+    ]);
+
+    for (const [path, text] of [
+      ["README.md", readme],
+      ["docs/architecture.md", architecture],
+      [".agents/skills/codebase-doctor/SKILL.md", skill],
+    ] as const) {
+      expect(text, path).toMatch(/database\/drizzle\/raw-sql-date-parameter/);
+      expect(text, path).toMatch(/raw Drizzle.*(?:JavaScript )?Date.*(?:timestamp )?encoder|Date.*raw Drizzle.*(?:timestamp )?encoder/is);
+      expect(text, path).toMatch(/postgres-js.*ERR_INVALID_ARG_TYPE|ERR_INVALID_ARG_TYPE.*postgres-js/is);
+      expect(text, path).toMatch(/equivalent SQL.*psql|psql.*equivalent SQL/is);
+      expect(text, path).toMatch(/exact.*drizzle-orm\/postgres-js|drizzle-orm\/postgres-js.*exact/is);
+      expect(text, path).toMatch(/drizzle-orm.*postgres.*(?:scoped|owning|workspace)|(?:scoped|owning|workspace).*drizzle-orm.*postgres/is);
+      expect(text, path).toMatch(/statically proven.*Date/is);
+      expect(text, path).toMatch(/medium.*severity.*high.*confidence|medium\/high/is);
+      expect(text, path).toMatch(/lte\(column, date\)/);
+      expect(text, path).toMatch(/fresh inline.*encoder|encoder.*fresh inline/is);
+      expect(text, path).toMatch(/(?:identifier|alias).*(?:const)?.*partial|partial.*(?:identifier|alias)/is);
+      expect(text, path).toMatch(/Date\(\).*Date\.now\(\).*toISOString|toISOString.*Date\.now\(\).*Date\(\)/is);
+      expect(text, path).toMatch(/name.*(?:not|never).*finding|not.*(?:guess|infer).*name/is);
+      expect(text, path).toMatch(/partial.*(?:unsupported|unresolved|unclassified).*(?:flow|syntax)|(?:flow|syntax).*(?:unsupported|unresolved|unclassified).*partial/is);
+      expect(text, path).toMatch(/external.*(?:human|agent).*(?:repair|change|remediat).*rerun|(?:repair|change|remediat).*external.*rerun/is);
+      expect(text, path).toMatch(/raw SQL.*(?:withheld|never.*copied)|(?:withheld|never.*copied).*raw SQL/is);
+    }
+
+    expect(readme).toMatch(/codebase-doctor audit \. --changed --json/);
+    expect(readme).toMatch(/codebase-doctor audit \. --json/);
+    expect(readme).toMatch(/before[\s\S]*sql`[\s\S]*after[\s\S]*lte\(/i);
+    expect(architecture).toMatch(/database\/drizzle.*database\/sql-rls.*database\/rls|database\/sql-rls.*database\/drizzle.*database\/rls/is);
+    expect(architecture).toMatch(/1 MiB.*50 MiB.*10,000.*1,000/is);
+    expect(architecture).toMatch(/bounded.*AST.*selection.*reader.*finding|selection.*bounded.*reader.*AST.*finding/is);
+    expect(architecture).toMatch(/filesystem:read.*only|only.*filesystem:read/is);
+    expect(architecture).toMatch(/applicab.*completed.*partial.*not-applicable.*not-selected/is);
+    expect(architecture).toMatch(/redact.*fingerprint|fingerprint.*redact/is);
+
+    const unreleased = changelog.slice(
+      changelog.indexOf("## [Unreleased]"),
+      changelog.indexOf("## [0.1.6]"),
+    );
+    expect(unreleased).toMatch(/database\/drizzle/);
+    expect(unreleased).toMatch(/read-only.*offline|offline.*read-only/is);
+    expect(unreleased).not.toMatch(/## \[0\.1\.\d+\]/);
+  });
+
   it("pins non-executing source graph parsers exactly", async () => {
     const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
       dependencies?: Record<string, string>;

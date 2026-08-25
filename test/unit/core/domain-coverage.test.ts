@@ -7,6 +7,8 @@ import {
   type DomainCoverage,
   type DomainCoverageStatus,
 } from "../../../src/core/domain-coverage.js";
+import { MAX_COVERAGE_RECORDS, MAX_LIMITATION_SAMPLE_PATHS } from "../../../src/core/bounded-evidence.js";
+import { normalizeScanResult } from "../../../src/core/normalize.js";
 import type { RegisteredDoctorResult } from "../../../src/core/doctor.js";
 import type { CommandPlan } from "../../../src/execution/types.js";
 import { fullAuditScope } from "../../../src/scope/planner.js";
@@ -266,6 +268,23 @@ describe("domain coverage planning", () => {
         },
       },
       result("database/rls", "skipped"),
+      {
+        doctorId: "database/drizzle",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "database/drizzle",
+            status: "not-applicable",
+            scope: "full",
+            filesExamined: 0,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [],
+          }],
+        },
+      },
     ];
 
     const coverage = planDomainCoverage({
@@ -282,6 +301,12 @@ describe("domain coverage planning", () => {
       coverageComplete: false,
       modules: [
         {
+          moduleId: "database/drizzle",
+          status: "not-applicable",
+          scopes: ["full"],
+          limitations: [],
+        },
+        {
           moduleId: "database/rls",
           status: "skipped",
           scopes: [],
@@ -294,6 +319,326 @@ describe("domain coverage planning", () => {
           limitations: [],
         },
       ],
+    });
+  });
+
+  it("keeps Drizzle partial coverage visible beside not-applicable and skipped database modules", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [
+        {
+          doctorId: "database/drizzle",
+          result: {
+            status: "completed",
+            findings: [],
+            durationMs: 1,
+            coverage: [{
+              moduleId: "database/drizzle",
+              status: "partial",
+              scope: "changed",
+              filesExamined: 1,
+              statementsExamined: 4,
+              statementsRecognized: 0,
+              limitations: ["Changed scope did not independently re-audit unchanged files."],
+            }],
+          },
+        },
+        result("database/rls", "skipped"),
+        {
+          doctorId: "database/sql-rls",
+          result: {
+            status: "completed",
+            findings: [],
+            durationMs: 1,
+            coverage: [{
+              moduleId: "database/sql-rls",
+              status: "not-applicable",
+              scope: "root",
+              filesExamined: 0,
+              statementsExamined: 0,
+              statementsRecognized: 0,
+              limitations: [],
+            }],
+          },
+        },
+      ],
+      plans: [],
+      includeDatabaseAudit: true,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "database")).toMatchObject({
+      applicability: "detected",
+      status: "partial",
+      coverageComplete: false,
+      limitations: [
+        "Changed scope did not independently re-audit unchanged files.",
+        "Permission was not granted.",
+      ],
+      modules: [
+        expect.objectContaining({ moduleId: "database/drizzle", status: "partial" }),
+        expect.objectContaining({ moduleId: "database/rls", status: "skipped" }),
+        expect.objectContaining({ moduleId: "database/sql-rls", status: "not-applicable" }),
+      ],
+    });
+  });
+
+  it("preserves bounded Drizzle limitation metadata in module and database coverage", () => {
+    const limitationGroup = {
+      reason: "source syntax could not be parsed.",
+      total: 8,
+      samplePaths: ["src/a.ts", "src/b.ts"],
+      omittedPathCount: 6,
+    };
+    const limitationSummary = { total: 8, emitted: 2, omitted: 6 };
+    const coverage = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [{
+        doctorId: "database/drizzle",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "database/drizzle",
+            status: "partial",
+            scope: "full",
+            filesExamined: 2,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: ["source parse limitations were deterministically sampled."],
+            limitationGroups: [limitationGroup],
+            limitationSummary,
+          }],
+        },
+      }],
+      plans: [],
+      includeDatabaseAudit: true,
+    });
+    const database = coverage.find(({ domain }) => domain === "database");
+
+    expect(database).toMatchObject({
+      limitationGroups: [limitationGroup],
+      limitationSummary,
+      modules: [expect.objectContaining({
+        moduleId: "database/drizzle",
+        limitationGroups: [limitationGroup],
+        limitationSummary,
+      })],
+    });
+  });
+
+  it("merges adversarial database limitation metadata deterministically within strict bounds", () => {
+    const groups = Array.from({ length: MAX_COVERAGE_RECORDS + 60 }, (_, index) => ({
+      reason: `reason-${String(index).padStart(4, "0")}`,
+      total: 20,
+      samplePaths: Array.from({ length: MAX_LIMITATION_SAMPLE_PATHS + 15 }, (_, pathIndex) =>
+        `src/${String(index).padStart(4, "0")}-${String(pathIndex).padStart(2, "0")}.ts`
+      ),
+      omittedPathCount: 0,
+    }));
+    const module = (
+      doctorId: string,
+      limitationGroups: typeof groups,
+      offset: number,
+    ): RegisteredDoctorResult => ({
+      doctorId,
+      result: {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage: [{
+          moduleId: doctorId,
+          status: "partial",
+          scope: "full",
+          filesExamined: 1,
+          statementsExamined: 0,
+          statementsRecognized: 0,
+          limitations: Array.from({ length: 120 }, (_, index) =>
+            `${doctorId} limitation ${offset + index}`
+          ),
+          limitationGroups,
+          limitationSummary: {
+            total: Number.MAX_SAFE_INTEGER - offset,
+            emitted: Number.MAX_SAFE_INTEGER - offset,
+            omitted: Number.MAX_SAFE_INTEGER - offset,
+          },
+        }],
+      },
+    });
+    const forwardResults = [
+      module("database/drizzle", groups, 1),
+      module("database/sql-rls", [...groups].reverse(), 2),
+    ];
+    const plan = (registeredResults: RegisteredDoctorResult[]) => planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults,
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database")!;
+
+    const forward = plan(forwardResults);
+    const reverse = plan([
+      module("database/sql-rls", groups, 2),
+      module("database/drizzle", [...groups].reverse(), 1),
+    ]);
+
+    expect(forward).toEqual(reverse);
+    expect(forward.limitationGroups).toHaveLength(MAX_COVERAGE_RECORDS);
+    expect(forward.limitationGroups?.every(({ samplePaths }) =>
+      samplePaths.length <= MAX_LIMITATION_SAMPLE_PATHS
+    )).toBe(true);
+    expect(forward.modules.every(({ limitationGroups }) =>
+      (limitationGroups?.length ?? 0) <= MAX_COVERAGE_RECORDS &&
+      (limitationGroups ?? []).every(({ samplePaths }) =>
+        samplePaths.length <= MAX_LIMITATION_SAMPLE_PATHS
+      )
+    )).toBe(true);
+    expect(forward.limitationSummary).toMatchObject({
+      total: Number.MAX_SAFE_INTEGER,
+      omitted: Number.MAX_SAFE_INTEGER,
+    });
+    expect(forward.limitationSummary?.emitted).toBe(0);
+    expect((forward.limitationSummary?.emitted ?? 0) +
+      (forward.limitationSummary?.omitted ?? 0)).toBe(
+        forward.limitationSummary?.total,
+      );
+
+    const normalized = normalizeScanResult(
+      "/repo",
+      [],
+      fullAuditScope(),
+      [],
+      [],
+      [forward],
+    ).domainCoverage[0]!;
+    expect(normalized.limitationSummary?.omitted).toBe(Number.MAX_SAFE_INTEGER);
+    expect(Number.isSafeInteger(normalized.limitationSummary?.total)).toBe(true);
+    expect(normalized.modules.every(({ limitationSummary }) =>
+      limitationSummary === undefined ||
+      Object.values(limitationSummary).every(Number.isSafeInteger)
+    )).toBe(true);
+  });
+
+  it("accounts for summary-less limitation groups even when excess reasons are dropped", () => {
+    const groups = Array.from({ length: MAX_COVERAGE_RECORDS + 60 }, (_, index) => ({
+      reason: `summaryless-${String(index).padStart(4, "0")}`,
+      total: 20,
+      samplePaths: Array.from({ length: 20 }, (_, pathIndex) =>
+        `src/${String(index).padStart(4, "0")}-${String(pathIndex).padStart(2, "0")}.ts`
+      ),
+      omittedPathCount: 0,
+    }));
+    const plan = (limitationGroups: typeof groups) => planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [{
+        doctorId: "database/drizzle",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "database/drizzle",
+            status: "partial",
+            scope: "full",
+            filesExamined: 1,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [],
+            limitationGroups,
+          }],
+        },
+      }],
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database")!;
+
+    const forward = plan(groups);
+    const reverse = plan([...groups].reverse());
+    const expectedSummary = {
+      total: (MAX_COVERAGE_RECORDS + 60) * 20,
+      emitted: MAX_COVERAGE_RECORDS * MAX_LIMITATION_SAMPLE_PATHS,
+      omitted: (MAX_COVERAGE_RECORDS + 60) * 20 -
+        MAX_COVERAGE_RECORDS * MAX_LIMITATION_SAMPLE_PATHS,
+    };
+
+    expect(forward).toEqual(reverse);
+    expect(forward.limitationGroups).toHaveLength(MAX_COVERAGE_RECORDS);
+    expect(forward.limitationSummary).toEqual(expectedSummary);
+    expect(forward.modules[0]).toMatchObject({
+      limitationGroups: expect.arrayContaining([expect.objectContaining({
+        samplePaths: expect.any(Array),
+      })]),
+      limitationSummary: expectedSummary,
+    });
+  });
+
+  it.each([
+    ["failed", "unknown"],
+    ["completed", "detected"],
+    ["partial", "detected"],
+    ["not-applicable", "unknown"],
+    ["skipped", "unknown"],
+    ["not-selected", "unknown"],
+  ] as const)("maps a lone %s database module to %s applicability", (status, applicability) => {
+    const registered: RegisteredDoctorResult = status === "failed" || status === "skipped"
+      ? result("database/rls", status)
+      : {
+        doctorId: "database/drizzle",
+        result: {
+          status: "completed",
+          findings: [],
+          durationMs: 1,
+          coverage: [{
+            moduleId: "database/drizzle",
+            status,
+            scope: "full",
+            filesExamined: 0,
+            statementsExamined: 0,
+            statementsRecognized: 0,
+            limitations: [],
+          }],
+        },
+      };
+    const database = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [registered],
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database");
+
+    expect(database?.applicability).toBe(applicability);
+  });
+
+  it("keeps failed database coverage unknown until an applicable sibling establishes detection", () => {
+    const failed = result("database/rls", "failed");
+    const applicable: RegisteredDoctorResult = {
+      doctorId: "database/drizzle",
+      result: {
+        status: "completed",
+        findings: [],
+        durationMs: 1,
+        coverage: [{
+          moduleId: "database/drizzle",
+          status: "partial",
+          scope: "full",
+          filesExamined: 1,
+          statementsExamined: 1,
+          statementsRecognized: 0,
+          limitations: ["bounded analysis was incomplete."],
+        }],
+      },
+    };
+    const database = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [failed, applicable],
+      plans: [],
+      includeDatabaseAudit: true,
+    }).find(({ domain }) => domain === "database");
+
+    expect(database).toMatchObject({
+      applicability: "detected",
+      status: "failed",
+      coverageComplete: false,
     });
   });
 

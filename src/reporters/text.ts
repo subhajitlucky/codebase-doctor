@@ -264,6 +264,7 @@ export function renderTextReport(
   } else {
     for (const finding of result.findings) {
       lines.push(`${severityLabel(finding.severity, colorEnabled)} ${finding.title} (${finding.ruleId})`);
+      lines.push(`  Confidence: ${finding.confidence}; Doctor: ${finding.doctorId}`);
       const findingLocation = location(finding);
       if (findingLocation !== undefined) lines.push(`  Location: ${findingLocation}`);
       lines.push(`  ${finding.message}`);
