@@ -135,6 +135,7 @@ module details, evidence, limitations, and findings.
 - Stable text and JSON schema version `1` reports.
 - Severity thresholds and CI-friendly exit codes.
 - A provider-neutral agent skill.
+- A read-only Model Context Protocol server exposed by `codebase-doctor mcp`.
 - A built-in live PostgreSQL RLS analyzer migrated from RLS Doctor.
 - Automatic offline PostgreSQL RLS analysis for Supabase, Prisma, Drizzle, and
   generic migration directories.
@@ -601,8 +602,8 @@ model is driving it:
    claim a finding resolved outside completed applicable coverage.
 
 The CLI is intentionally model-independent. It can be exposed through a shell,
-repository instructions, an agent skill, CI, hooks, or a future MCP server. A
-model does not need to know which internal audit module found an issue.
+repository instructions, an agent skill, CI, hooks, or the built-in MCP server.
+A model does not need to know which internal audit module found an issue.
 
 ### Agent skill
 
@@ -619,6 +620,27 @@ trust or release boundary. It treats mixed scope, partial, and skipped coverage
 explicitly, requests separate permission for `--run-checks` and live
 `--with-database` access, asks a human or external agent to fix one
 evidence-backed finding at a time, and reruns the same scope.
+
+### MCP server
+
+Run `codebase-doctor mcp` to serve audits on stdio so Claude Desktop, Cursor,
+and other MCP clients can call them as native tools. `audit_codebase` accepts
+`path`, `format` (`json` or `summary`), and `changed` with optional
+`base`, mirroring the CLI flags; `describe_capabilities` reports tools,
+domains, and permissions. Responses are bounded at roughly 50 KB with an
+explicit note, and the server never enables `--run-checks` or live database
+access.
+
+```json
+{
+  "mcpServers": {
+    "codebase-doctor": {
+      "command": "codebase-doctor",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
 ## Development
 
@@ -641,8 +663,8 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
   performance, and AI audit coverage without separate doctor installations.
 - Report which applicable areas were audited, skipped, unsupported, or blocked
   so an agent never mistakes partial coverage for a clean codebase.
-- Add reusable GitHub Action, pull-request annotations, hooks, agent plugins,
-  and MCP integration around the same CLI and report schema.
+- Add reusable GitHub Action, pull-request annotations, hooks, and agent
+  plugins around the same CLI and report schema.
 - Run approved validation in read-only mounts or disposable copies so target
   command side effects cannot alter the audited workspace.
 - Publish cross-model benchmarks that measure defects found, false positives,

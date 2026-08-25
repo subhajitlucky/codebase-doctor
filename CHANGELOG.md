@@ -10,6 +10,13 @@ All notable changes to Codebase Doctor are documented here.
   `database/drizzle/raw-sql-date-parameter` rule for statically proven
   JavaScript Date values interpolated through raw Drizzle SQL on confirmed
   postgres-js paths.
+- Add the `codebase-doctor mcp` subcommand: a read-only Model Context Protocol
+  stdio server that reuses the public programmatic audit API without new audit
+  logic. It exposes `audit_codebase` (path, json-or-summary format, and
+  changed/base passthrough mirroring the CLI flags) plus
+  `describe_capabilities` registry metadata, bounds oversized responses at
+  roughly 50 KB with an explicit note, and never grants `--run-checks`
+  validation commands or live database access.
 
 ### Security
 

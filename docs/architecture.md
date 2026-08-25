@@ -458,6 +458,18 @@ current full result as resolved.
 not the findings themselves. Partial and skipped coverage still qualify an exit
 `0` interpretation.
 
+## Model Context Protocol server
+
+The `codebase-doctor mcp` subcommand serves the same normalized audit over an
+MCP stdio transport for coding agents. It exposes two read-only tools:
+`audit_codebase` runs the public programmatic audit API with path,
+json-or-summary format, and changed/base passthrough while bounding oversized
+responses at roughly 50 KB with an explicit note, and
+`describe_capabilities` reads tool, domain, and capability metadata. The
+server never enables validation commands or live database access, performs no
+writes, and preserves the permanent boundary: Models build. Codebase Doctor
+verifies.
+
 ## Public package boundary
 
 The package entry point exports the normalized audit, finding, coverage,
@@ -481,7 +493,7 @@ The following are not implemented behavior:
 - caching or incremental snapshot persistence;
 - container, sandbox, read-only mount, or disposable-copy enforcement for
   approved checks;
-- an MCP server, lifecycle-hook installer, or hosted service;
+- a lifecycle-hook installer or hosted service;
 - deployment drift comparison between expected migrations and live state;
 - additional built-in frontend, backend, security, infrastructure,
   performance, and AI semantic analyzers.
