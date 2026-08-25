@@ -1,0 +1,63 @@
+# Continuous validation for the codebase-doctor MCP stdio endpoint.
+#
+# Mirrors .github/workflows/ci.yml conventions (triggers, action versions,
+# Node version, npm flags); adds an MCP-scoped vitest run plus a raw
+# JSON-RPC handshake smoke against the built CLI (dist/cli.js mcp).
+name: MCP Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build CLI
+        run: npm run build
+
+      - name: Run MCP test suites
+        run: npx vitest run test/unit/mcp test/integration/mcp-server.test.ts
+
+      # Raw JSON-RPC handshake over stdio against the built CLI: initialize,
+      # notifications/initialized, then tools/list. Asserts the server
+      # announces itself as "codebase-doctor" and exposes audit_codebase.
+      - name: Smoke test MCP stdio endpoint
+        env:
+          # Mirror test/integration/mcp-server.test.ts: never touch a database.
+          DATABASE_URL: ""
+          SUPABASE_DB_URL: ""
+          GIT_CONFIG_NOSYSTEM: "1"
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-mcp-smoke","version":"0.0.0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | timeout 60 node dist/cli.js mcp > mcp-smoke-stdout.jsonl
+          echo "--- MCP server responses ---"
+          cat mcp-smoke-stdout.jsonl
+          grep '"codebase-doctor"' mcp-smoke-stdout.jsonl
+          grep '"audit_codebase"' mcp-smoke-stdout.jsonl
