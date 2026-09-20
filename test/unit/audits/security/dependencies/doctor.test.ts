@@ -135,7 +135,7 @@ describe("Dependencies Doctor", () => {
     })]);
   });
 
-  it("reports unsupported package-manager coverage without fabricated findings", async () => {
+  it("covers declared non-npm managers through cross-ecosystem rules", async () => {
     const doctor = createDependenciesDoctor({ readFile: async () => lock({}) });
     const result = await doctor.diagnose({
       snapshot: npmSnapshot({
@@ -147,16 +147,20 @@ describe("Dependencies Doctor", () => {
       allowedCapabilities: new Set(["filesystem:read"]),
     });
 
-    expect(result.findings).toEqual([]);
-    expect(result.coverage).toEqual([{
-      moduleId: "security/dependencies",
-      status: "unsupported",
-      scope: "full:root",
-      filesExamined: 0,
-      statementsExamined: 0,
-      statementsRecognized: 0,
-      limitations: ["root: node:pnpm dependency metadata is not supported."],
-    }]);
+    expect(result.findings.map((finding) => finding.ruleId).sort()).toEqual([
+      "security/dependencies/competing-lockfiles",
+      "security/dependencies/missing-lockfile",
+    ]);
+    expect(result.coverage).toEqual([
+      expect.objectContaining({
+        moduleId: "security/dependencies",
+        scope: "full:.:pnpm",
+        status: "partial",
+        limitations: [
+          expect.stringContaining("declared package manager pnpm"),
+        ],
+      }),
+    ]);
   });
 
   it("keeps ambiguous nested npm lock ownership as partial coverage", async () => {

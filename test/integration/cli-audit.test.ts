@@ -507,7 +507,7 @@ describe("audit CLI", () => {
     expect(result.stdout).not.toContain(seed);
   });
 
-  it("reports unsupported package managers as coverage, not findings", async () => {
+  it("covers declared pnpm projects with cross-ecosystem coverage instead of unsupported status", async () => {
     const { root } = await createRepository({
       "package.json": JSON.stringify({
         name: "pnpm-fixture",
@@ -530,22 +530,14 @@ describe("audit CLI", () => {
     expect(report.findings.filter(({ doctorId }: { doctorId: string }) =>
       doctorId === "security/dependencies"
     )).toEqual([]);
-    expect(report.coverage).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        moduleId: "security/dependencies",
-        status: "unsupported",
-        scope: "full:root",
-        limitations: ["root: node:pnpm dependency metadata is not supported."],
-      }),
-      expect.objectContaining({
-        moduleId: "security/dependencies",
-        status: "unsupported",
-        scope: "full:project:packages/published",
-        limitations: [
-          "project:packages/published: node:pnpm dependency metadata is not supported.",
-        ],
-      }),
-    ]));
+    expect(report.coverage).toContainEqual(expect.objectContaining({
+      moduleId: "security/dependencies",
+      status: "partial",
+      scope: "full:.:pnpm",
+      limitations: expect.arrayContaining([
+        expect.stringContaining("no importers section"),
+      ]),
+    }));
     expect(report.coverage).not.toContainEqual(expect.objectContaining({
       moduleId: "security/dependencies",
       scope: "full:packages/published",
