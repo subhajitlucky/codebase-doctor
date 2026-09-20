@@ -85,6 +85,7 @@ describe("describe_capabilities tool handler", () => {
       "filesystem:read": true,
       "process:execute": false,
       "network:access": false,
+      "network:advisories": false,
     });
   });
 });

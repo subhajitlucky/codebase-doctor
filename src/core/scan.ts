@@ -8,6 +8,7 @@ import { createRlsDoctor } from "../audits/database/rls/doctor.js";
 import { createDrizzleDoctor } from "../audits/database/drizzle/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
+import { createAdvisoriesDoctor } from "../audits/security/advisories/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
@@ -46,6 +47,7 @@ export interface ScanRequest {
   includeDatabaseAudit?: boolean;
   includeSecurityAudit?: boolean;
   withDatabase?: boolean;
+  withAdvisories?: boolean;
   databaseSchemas?: readonly string[];
   databaseTimeoutMs?: number;
   changed?: boolean;
@@ -109,6 +111,12 @@ const defaultDependencies: ScanDependencies = {
     if (request.includeSecurityAudit === true) {
       doctors.push(createSecretsDoctor());
       doctors.push(createDependenciesDoctor());
+      // Advisory lookup is an optional network add-on: only an explicit
+      // --with-advisories request adds the module, so an unrequested lookup
+      // never marks the security domain incomplete.
+      if (request.withAdvisories === true) {
+        doctors.push(createAdvisoriesDoctor());
+      }
     }
     if (request.includeDatabaseAudit === true) {
       doctors.push(createDrizzleDoctor());
@@ -174,6 +182,7 @@ export async function scanCodebase(
     {
       runChecks: request.runChecks,
       withDatabase: request.withDatabase === true,
+      withAdvisories: request.withAdvisories === true,
     },
   );
   const domainCoverage = planDomainCoverage({
