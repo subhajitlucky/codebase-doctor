@@ -4,6 +4,7 @@ import type { Confidence, Evidence, Severity } from "../../../core/findings.js";
 export const AGENT_SURFACE_DOCTOR_ID = "ai/agent-surface";
 
 export const MCP_CONFIG_BASENAMES = new Set([
+  ".mcp.json",
   "mcp.json",
   "mcp_config.json",
   "mcp-config.json",

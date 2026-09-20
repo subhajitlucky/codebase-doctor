@@ -6,6 +6,13 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Extend the read-only, offline `ai/agent-surface` module with permission
+  boundaries and instruction surfaces: documented permission settings
+  (`permissions.defaultMode: bypassPermissions`, unscoped `permissions.allow`
+  rules, hook commands with text withheld, `chat.tools.autoApprove`,
+  Aider `yes-always`/`yes`), unscoped skill `allowed-tools` grants, and
+  permission-bypass flags in instruction or prompt code content, plus
+  `.mcp.json` discovery.
 - Extend the read-only, offline `security/dependencies` module beyond npm:
   projects that declare or expose pnpm, Yarn (v1 and Berry), or Bun lock
   authority are now covered for insecure sources, mutable git references,

@@ -9,6 +9,12 @@ import {
   MCP_CONFIG_BASENAMES,
   type AgentSurfaceMatch,
 } from "./mcp-config.js";
+import {
+  analyzeInstructionFlags,
+  analyzePermissionConfig,
+  isInstructionFile,
+  permissionConfigKind,
+} from "./permissions.js";
 import { analyzeSkillFile } from "./skills.js";
 
 const DOCTOR_ID = AGENT_SURFACE_DOCTOR_ID;
@@ -37,6 +43,13 @@ function isMcpConfig(path: string): boolean {
 
 function isSkillFile(path: string): boolean {
   return (path.split("/").at(-1) ?? path) === "SKILL.md";
+}
+
+function isAgentSurfaceCandidate(path: string): boolean {
+  return isMcpConfig(path) ||
+    isSkillFile(path) ||
+    isInstructionFile(path) ||
+    permissionConfigKind(path) !== undefined;
 }
 
 function findingFor(match: AgentSurfaceMatch, changed: boolean): Finding {
@@ -96,9 +109,11 @@ function coverage(
 /**
  * Read-only, offline audit of the agent configuration surface: MCP client
  * configurations (unpinned package runners, shell commands, inline
- * credentials, broad filesystem grants) and SKILL.md frontmatter. It never
- * executes a configured command, never connects to a server, and never prints
- * a suspected credential value.
+ * credentials, broad filesystem grants), SKILL.md frontmatter and tool
+ * grants, documented permission settings (bypass modes, unscoped allow rules,
+ * hook commands), and permission-bypass flags that instruction or prompt files
+ * present as commands. It never executes a configured command, never connects
+ * to a server, and never prints a suspected credential value.
  */
 export function createAgentSurfaceDoctor(options: AgentSurfaceDoctorOptions = {}): Doctor {
   const maxFileBytes = positiveInteger(
@@ -122,9 +137,7 @@ export function createAgentSurfaceDoctor(options: AgentSurfaceDoctorOptions = {}
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
       const candidates = snapshot.files
-        .filter(
-          (file) => file.kind === "file" && (isMcpConfig(file.path) || isSkillFile(file.path)),
-        )
+        .filter((file) => file.kind === "file" && isAgentSurfaceCandidate(file.path))
         .map((file) => file.path)
         .sort();
 
@@ -181,11 +194,25 @@ export function createAgentSurfaceDoctor(options: AgentSurfaceDoctorOptions = {}
           entriesExamined += analysis.servers;
           matches.push(...analysis.matches);
           limitations.push(...analysis.limitations);
-        } else {
+        } else if (isSkillFile(path)) {
           const analysis = analyzeSkillFile(path, content);
           entriesExamined += 1;
           matches.push(...analysis.matches);
           limitations.push(...analysis.limitations);
+          const flags = analyzeInstructionFlags(path, content);
+          matches.push(...flags.matches);
+        } else {
+          const kind = permissionConfigKind(path);
+          if (kind !== undefined) {
+            const analysis = analyzePermissionConfig(path, kind, content);
+            entriesExamined += analysis.entries;
+            matches.push(...analysis.matches);
+            limitations.push(...analysis.limitations);
+          }
+          if (isInstructionFile(path)) {
+            entriesExamined += 1;
+            matches.push(...analyzeInstructionFlags(path, content).matches);
+          }
         }
 
         if (totalBytes >= maxTotalBytes && filesExamined < candidates.length) {
