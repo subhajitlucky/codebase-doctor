@@ -6,6 +6,13 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Extend the read-only, offline source-impact graph and source-integrity proof
+  to Python: statement-level `import`, `from`-imports with relative dots, and
+  literal `importlib.import_module`/`__import__` calls are parsed with a
+  bounded tokenizer that ignores comments and strings. Relative module imports
+  carry the relative-explicit missing-target proof; bare-dot attribute
+  imports, namespace-package layouts, and non-literal dynamic calls remain
+  coverage limitations or unproven edges instead of guessed findings.
 - Extend the read-only, offline `ai/agent-surface` module with permission
   boundaries and instruction surfaces: documented permission settings
   (`permissions.defaultMode: bypassPermissions`, unscoped `permissions.allow`

@@ -149,7 +149,7 @@ Zero changed findings is not a full clean result. Consumers must read
 `auditScope`, `doctorRuns`, `coverage`, and `findings` to determine each doctor's
 actual scope.
 
-## JavaScript and TypeScript source-impact graph
+## JavaScript, TypeScript, and Python source-impact graph
 
 The core builds source topology before changed-scope planning and exposes it
 through the finding-free `repository/source-graph` Doctor. The Doctor is
@@ -159,10 +159,22 @@ parser that never executes repository code. Local `tsconfig` and `jsconfig`
 files contribute a deterministic subset of relative aliases and project
 configuration; this is not complete Node or TypeScript module resolution.
 
-Selection admits supported regular JavaScript and TypeScript source files from
-the bounded, symlink-safe inventory. Resolution covers internal relative,
-extension, index, selected alias, unique workspace-package, and supported
-package-entry cases. Dynamic non-literal imports, ambiguous targets,
+Python `.py` files contribute statement-level `import`, `from`-imports with
+relative dots, and literal `importlib.import_module`/`__import__` calls through
+a bounded tokenizer that ignores comments, strings, and triple-quoted blocks.
+Relative module imports resolve against the importing package to `.py` and
+`__init__.py` candidates. Absolute imports resolve only when the top-level name
+provably names an internal module or package under the owning project root or
+its `src/` directory and exactly one candidate root exists; otherwise they are
+external boundaries. Bare `from . import name` attribute imports, namespace
+packages, `<module>.<attribute>` layouts, and non-literal dynamic calls are
+edges without a missing-target proof or limitations, never findings.
+Unterminated string literals make Python parsing partial.
+
+Selection admits supported regular JavaScript, TypeScript, and Python source
+files from the bounded, symlink-safe inventory. Resolution covers internal
+relative, extension, index, selected alias, unique workspace-package, and
+supported package-entry cases. Dynamic non-literal imports, ambiguous targets,
 unsupported configuration or syntax, unreadable input, and reached graph
 ceilings are coverage limitations, not findings. Cycles are valid topology and
 are not findings. This topology selects conservative scope; it does not diagnose
@@ -183,7 +195,7 @@ coverage before calling changed source scope clean or verified. Partial or
 bounded topology is not complete reachability, and an impact path is not proof
 that the dependant is bug-free, buggy, or correct.
 
-## JavaScript and TypeScript source integrity
+## JavaScript, TypeScript, and Python source integrity
 
 The capability-free, read-only, offline `repository/source-integrity` Doctor
 consumes the precomputed graph after scope planning. The
@@ -196,9 +208,11 @@ The Doctor is precision-first and diagnoses only three proof classes: an
 explicit relative target with a supported source extension; a single
 deterministic alias whose configured target explicitly names a supported source
 file; and a unique workspace package whose explicit entry names a supported
-source file. Extensionless, JSON, custom-loader, conditional, ambiguous,
-external, and dynamic references and cycles are not findings. It does not check
-named exports or validate export names.
+source file. Python relative module imports participate as explicit relative
+targets; bare-dot attribute imports and absolute internal imports without a
+present file carry no missing-target proof. Extensionless, JSON, custom-loader,
+conditional, ambiguous, external, and dynamic references and cycles are not
+findings. It does not check named exports or validate export names.
 
 Full mode examines all qualifying edges. Changed mode examines changed importers
 and complete reverse-impacted importers. A deleted or renamed target selects its
