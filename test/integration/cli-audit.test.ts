@@ -288,6 +288,41 @@ describe("audit CLI", () => {
     expect(await captureGitRepositorySnapshot(root)).toEqual(before);
   });
 
+  it("adds the security/advisories module only when explicitly requested", () => {
+    const withoutFlag = cli(["audit", fixture("node-pass"), "--json", "--fail-on", "none"]);
+    expect(withoutFlag.status).toBe(0);
+    const withoutReport = JSON.parse(withoutFlag.stdout);
+    const withoutModules = withoutReport.domainCoverage
+      .find((domain: { domain: string }) => domain.domain === "security")
+      .modules.map((module: { moduleId: string }) => module.moduleId);
+    expect(withoutModules).not.toContain("security/advisories");
+
+    const withFlag = cli([
+      "audit",
+      fixture("node-pass"),
+      "--with-advisories",
+      "--json",
+      "--fail-on",
+      "none",
+    ]);
+    expect(withFlag.status).toBe(0);
+    const report = JSON.parse(withFlag.stdout);
+    const securityModules = report.domainCoverage
+      .find((domain: { domain: string }) => domain.domain === "security")
+      .modules;
+    expect(securityModules).toContainEqual(
+      expect.objectContaining({ moduleId: "security/advisories", status: "not-applicable" }),
+    );
+    expect(report.coverage).toContainEqual(
+      expect.objectContaining({ moduleId: "security/advisories", status: "not-applicable" }),
+    );
+    expect(
+      report.findings.filter(
+        (finding: { doctorId: string }) => finding.doctorId === "security/advisories",
+      ),
+    ).toEqual([]);
+  });
+
   it("classifies a matching localhost test key without mutating or disclosing it", async () => {
     const fixture = createTestCertificate("localhost", "DNS:localhost,IP:127.0.0.1");
     const { root } = await createRepository({

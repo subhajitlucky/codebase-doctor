@@ -34,6 +34,7 @@ Options:
 --require-complete    Fail with exit code 2 when audit coverage is incomplete
 --max-findings <n>    Maximum findings rendered in brief output (default: 100)
 --with-database       Permit live PostgreSQL catalog access
+--with-advisories     Permit one opt-in OSV advisory lookup over resolved npm packages
 --database-schema     Select a database schema; repeatable (default: public)
 --database-timeout    Catalog statement timeout in ms (default: 10000)
 ```
@@ -127,6 +128,12 @@ Precision-first rule families: `security/dependencies/missing-lockfile`, `securi
 
 A normal semver range such as `^5.0.0` is not a finding when lock metadata agrees. The module makes no CVE or current advisory claim; that would need a separately authorized, freshness-aware vulnerability source. Raw dependency specifications and resolved URLs are withheld from reports and never enter a fingerprint, evidence record, message, limitation, error, or report output. Work is bounded to 20 MB per lockfile, 100 MB per audit, 100 findings per lock root, and 1,000 per audit; a reached limit or unsupported ecosystem stays visible in coverage. An external authorized human or agent must correct metadata and rerun the same scope. Inspect coverage before calling the dependency graph clean or verified.
 
+### `security/advisories` (opt-in network lookup)
+
+`audit . --with-advisories` performs one bounded OSV lookup for resolved npm lockfile v2/v3 packages. It sends only package names and versions to api.osv.dev; no source, credentials, or file contents leave the machine, and nothing is written. Without the flag the module is not registered, so an unrequested lookup never marks the security domain incomplete; the MCP server never enables it.
+
+Results are point-in-time: coverage records that advisory data can change as new advisories publish, and a failed or partial lookup is never a clean result. Findings are high-confidence and report the advisory id, aliases, severity, and a fixed version when the advisory provides one. Remediation is an external upgrade through the repository's authorized package manager, followed by rerunning the same scope with `--with-advisories`. Advisory lookup uses the least-privilege `network:advisories` capability, which does not grant live-database access.
+
 ### `database/sql-rls`, `database/rls`, and repository structure
 
 Offline `database/sql-rls` automatically runs when a supported PostgreSQL migration stream is discovered: it requires no credentials, makes no network request, and never executes migration SQL, reconstructing expected table, policy, RLS, and grant state from supported migrations. Partial coverage is not a clean static SQL result; dynamic or unsupported DDL stays visible as a coverage limitation. Live `database/rls` inspects observed database state through a read-only catalog of policies, privileges, roles, memberships, enforcement, and bypass paths, permissioned separately with `--with-database` using environment credentials and a read-only, repeatable-read transaction. Repository structure covers bounded, symlink-safe inventory of Node.js, JavaScript, TypeScript, Python, Go, Rust, and Java detection evidence, structural findings for invalid manifests, conflicting lockfiles, missing workspaces, and absent visible tests, plus validation command planning (execution only with `--run-checks`).
@@ -168,7 +175,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 - SQL auditing reads only inventoried migration files, applies a size ceiling, and never evaluates or executes SQL. The RLS module uses a read-only, repeatable-read transaction and never executes suggested SQL.
 - Dependency auditing reads bounded npm metadata, never invokes npm or another package manager, and never installs or changes dependencies.
 - Source analysis parses bounded JS/TS syntax but never executes source, loads plugins, uses the network, or writes target files.
-- Commands use argument arrays with `shell: false`, minimal environments, and per-command time and output limits. The scanner never installs target-project dependencies and makes no external network calls.
+- Commands use argument arrays with `shell: false`, minimal environments, and per-command time and output limits. The scanner never installs target-project dependencies, and apart from an explicitly requested `--with-advisories` OSV lookup it makes no external network calls.
 
 ## Roadmap
 
