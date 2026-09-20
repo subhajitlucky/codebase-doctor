@@ -313,6 +313,23 @@ a new logical issue. A repair is supported only when the fingerprint is absent
 and all applicable coverage completed. Absence during partial, skipped, failed,
 limited, or out-of-scope work is not resolution.
 
+## Built-in history secrets audit
+
+The combined audit also registers `security/secrets-history`, a read-only,
+offline Doctor over recent Git history. It runs fixed `git log` read commands
+scoped to the audited subtree, parses added patch lines, and reuses the
+`security/secrets` analyzers so a credential deleted from the working tree but
+still reachable in commits is reported with its commit and path while the value
+stays withheld. It never checks out, rewrites, or executes repository content.
+
+A history match whose detector still matches current tracked content is
+suppressed because `security/secrets` already reports it. History scanning is
+bounded to the most recent 200 commits across all branches and 20 MB of patch
+output; an unavailable repository, truncated patch stream, or unreadable current
+file becomes a coverage limitation, never a clean result. Changed audits report
+`not-selected`. Remediation requires an external rotation or revocation first
+and an authorized history-rewriting workflow; the Doctor never rewrites history.
+
 ## Built-in secrets audit
 
 The combined audit registers `security/secrets` as a read-only, offline Doctor.

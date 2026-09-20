@@ -281,6 +281,10 @@ describe("audit CLI", () => {
           moduleId: "security/secrets",
           status: "completed",
         }),
+        expect.objectContaining({
+          moduleId: "security/secrets-history",
+          status: "completed",
+        }),
       ],
     }));
     expect(result.stdout).not.toContain(trackedSecret);
