@@ -287,6 +287,13 @@ granted to Doctor.
 - `database/rls` performs read-only live catalog inspection only with
   `--with-database`, using schemas and credentials supplied through environment
   configuration.
+- `database/rls-drift` compares reconstructed static migration state with the
+  live catalog under the same `--with-database` permission: table existence, RLS
+  and FORCE RLS enablement, policy names, and explicit migration grants. It
+  reports unapplied migrations and live-only changes, never executes DDL, and
+  turns unknown static state, out-of-selection schemas, an unavailable privilege
+  catalog, and changed scope into explicit coverage limitations or not-selected
+  records rather than guessed findings.
 
 `--changed` grants none of these additional capabilities. Approved project
 checks are not filesystem- or network-isolated and may have target side effects,

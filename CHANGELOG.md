@@ -6,6 +6,12 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Add the read-only `database/rls-drift` module (`--with-database`): compares
+  reconstructed static migration state with the live catalog for table
+  existence, RLS and FORCE RLS enablement, policy names, and explicit migration
+  grants, reporting unapplied migrations and live-only changes while unknown
+  static state or an unavailable privilege catalog stays visible as partial
+  coverage. It never executes DDL.
 - Add the read-only, offline `security/secrets-history` module: bounded Git
   history scanning for credential-shaped values deleted from the working tree,
   with the value withheld, subtree-scoped `git log`, and no duplicate finding

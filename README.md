@@ -41,11 +41,12 @@ Options:
 
 There is one unified auditor: one doctor for the whole codebase, not a collection of separate products. Framework- and domain-specific knowledge lives inside the product as built-in internal audit modules. The unified command is `codebase-doctor audit .`; `scan` remains a backward-compatible repository-only command.
 
-Three database modules answer different questions and are never compared for drift yet:
+Database modules answer different questions; `database/rls-drift` compares the static and live views when both are available:
 
 - `database/drizzle` inspects supported application source offline for proven Drizzle/postgres-js raw Date parameter hazards.
 - `database/sql-rls` reconstructs expected state from repository migrations.
 - `database/rls` inspects observed live database state (permissioned with `--with-database`).
+- `database/rls-drift` compares reconstructed migration state with the live catalog (permissioned with `--with-database`).
 
 Built-in source-impact graph, secrets analysis, and dependency analysis ship together in `0.1.4`; they are not part of the historical `0.1.3` package. `0.1.5` added `repository/source-integrity`.
 
@@ -143,6 +144,10 @@ Results are point-in-time: coverage records that advisory data can change as new
 ### `database/sql-rls`, `database/rls`, and repository structure
 
 Offline `database/sql-rls` automatically runs when a supported PostgreSQL migration stream is discovered: it requires no credentials, makes no network request, and never executes migration SQL, reconstructing expected table, policy, RLS, and grant state from supported migrations. Partial coverage is not a clean static SQL result; dynamic or unsupported DDL stays visible as a coverage limitation. Live `database/rls` inspects observed database state through a read-only catalog of policies, privileges, roles, memberships, enforcement, and bypass paths, permissioned separately with `--with-database` using environment credentials and a read-only, repeatable-read transaction. Repository structure covers bounded, symlink-safe inventory of Node.js, JavaScript, TypeScript, Python, Go, Rust, and Java detection evidence, structural findings for invalid manifests, conflicting lockfiles, missing workspaces, and absent visible tests, plus validation command planning (execution only with `--run-checks`).
+
+### `database/rls-drift`
+
+With `--with-database`, the read-only `database/rls-drift` module compares reconstructed static migration state with the live catalog: table existence, RLS and FORCE RLS enablement, policy names, and explicit migration grants. It reports "your migrations say X, the live database says Y" as `table-missing-live`, `rls-disabled-live`, `force-rls-disabled-live`, `policy-missing-live`, `grant-missing-live` (migrations ahead of production) and `rls-enabled-live-only`, `policy-unmanaged-live` (live changes absent from migrations). It never executes DDL, never compares policy expressions or live-only grants, and only compares dimensions whose static state is fully reconstructed; schemas outside the `--database-schema` selection, dynamic DDL, incomplete policy or grant state, and an unavailable privilege catalog become partial coverage instead of guessed findings. Changed audits report the module as not-selected. Reconcile only through the repository's authorized migration and migration-review workflow, then rerun the same audit.
 
 ### `ai/agent-surface`
 
