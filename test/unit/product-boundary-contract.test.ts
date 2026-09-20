@@ -80,13 +80,16 @@ describe("independent auditor product boundary", () => {
     expect(architecture).toMatch(/applicab.*completed.*partial.*not-applicable.*not-selected/is);
     expect(architecture).toMatch(/redact.*fingerprint|fingerprint.*redact/is);
 
-    const unreleased = changelog.slice(
-      changelog.indexOf("## [Unreleased]"),
+    const released = changelog.slice(
+      changelog.indexOf("## [0.1.7]"),
       changelog.indexOf("## [0.1.6]"),
     );
-    expect(unreleased).toMatch(/database\/drizzle/);
-    expect(unreleased).toMatch(/read-only.*offline|offline.*read-only/is);
-    expect(unreleased).not.toMatch(/## \[0\.1\.\d+\]/);
+    expect(changelog.indexOf("## [0.1.7]")).toBeGreaterThan(-1);
+    expect(changelog.indexOf("## [0.1.7]")).toBeLessThan(changelog.indexOf("## [0.1.6]"));
+    expect(released).toMatch(/database\/drizzle/);
+    expect(released).toMatch(/read-only.*offline|offline.*read-only/is);
+    expect(released).toMatch(/--require-complete/);
+    expect(released).toMatch(/GitHub Action/);
   });
 
   it("pins non-executing source graph parsers exactly", async () => {
