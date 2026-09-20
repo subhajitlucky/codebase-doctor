@@ -6,6 +6,13 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Extend the read-only, offline source-impact graph to Java: package
+  declarations and import statements are parsed with a bounded tokenizer
+  (comments, strings, chars, and text blocks ignored), resolved from standard
+  Maven/Gradle package roots, with static-import parent fallback, wildcard
+  limitations, and no missing-target proof because Java classes can be
+  generated or come from a same-package dependency. Adds the `static-import`
+  import kind.
 - Extend the read-only, offline source-impact graph and source-integrity proof
   to Go: single and block `import` declarations are parsed with a bounded
   tokenizer, resolved against each project's `go.mod` module path, and missing

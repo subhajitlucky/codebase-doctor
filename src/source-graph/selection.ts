@@ -16,6 +16,7 @@ const SOURCE_EXTENSIONS = new Set([
   ".cts",
   ".py",
   ".go",
+  ".java",
 ]);
 
 export interface SourceFileSelectionOptions {
