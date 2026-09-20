@@ -20,6 +20,13 @@ All notable changes to Codebase Doctor are documented here.
   snippets for `AGENTS.md`, `CLAUDE.md`, Cursor rules, Windsurf, Cline, Copilot,
   and MCP client configuration. The command only prints; it never writes files.
 
+### Changed
+
+- Reduce audit time on large repositories without changing findings: file stats
+  and source reads run with bounded concurrency in deterministic order, package
+  manifests load in bounded batches, and secret match locations use a linear
+  line-start index (about 5x faster on match-dense files).
+
 ## [0.1.7] - 2026-09-20
 
 ### Added
