@@ -6,6 +6,13 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Extend the read-only, offline source-impact graph to Rust: `mod`
+  declarations and `use` paths (brace groups expanded) are parsed with a
+  bounded tokenizer (line/nested block comments, strings, raw strings, chars,
+  lifetimes ignored) and resolved against `src/lib.rs` or `src/main.rs` with
+  `crate::`, `self::`, and `super::` support. Adds the `module` import kind;
+  missing modules and use targets stay unproven and internal wildcards become
+  limitations.
 - Extend the read-only, offline source-impact graph to Java: package
   declarations and import statements are parsed with a bounded tokenizer
   (comments, strings, chars, and text blocks ignored), resolved from standard

@@ -11,6 +11,8 @@ import { loadGoModuleInfo } from "./go-mod.js";
 import { parseGoImports } from "./go-parser.js";
 import { isJavaSourcePath } from "./java-resolver.js";
 import { parseJavaImports } from "./java-parser.js";
+import { isRustSourcePath } from "./rust-resolver.js";
+import { parseRustImports } from "./rust-parser.js";
 import { parseSourceImports } from "./parser.js";
 import { isPythonSourcePath } from "./python-resolver.js";
 import { isGoSourcePath } from "./go-mod.js";
@@ -192,7 +194,9 @@ export async function buildSourceGraph(
         ? parseGoImports(file.path, source)
         : isJavaSourcePath(file.path)
           ? parseJavaImports(file.path, source)
-          : parseSourceImports(file.path, source);
+          : isRustSourcePath(file.path)
+            ? parseRustImports(file.path, source)
+            : parseSourceImports(file.path, source);
     for (const limitation of parsed.limitations) limitations.add(limitation);
     dynamicBoundaryCount += parsed.dynamicBoundaryCount;
 
