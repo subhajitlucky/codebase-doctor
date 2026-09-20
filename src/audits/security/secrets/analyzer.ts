@@ -9,24 +9,47 @@ interface Candidate {
   readonly match: SecretMatch;
 }
 
-function locationAt(content: string, offset: number): { line: number; column: number } {
-  const before = content.slice(0, offset);
-  const lastNewline = before.lastIndexOf("\n");
-  return {
-    line: before.split("\n").length,
-    column: offset - lastNewline,
-  };
+/**
+ * Lazily built line-start index. Sequential scans reuse one instance per
+ * content, so locating N matches costs O(content + N log lines) instead of
+ * re-slicing the content for every match.
+ */
+class LineIndex {
+  private starts: number[] | undefined;
+
+  constructor(private readonly content: string) {}
+
+  locate(offset: number): { line: number; column: number } {
+    if (this.starts === undefined) {
+      const starts = [0];
+      for (let cursor = 0; cursor < this.content.length; cursor += 1) {
+        if (this.content.charCodeAt(cursor) === 10) starts.push(cursor + 1);
+      }
+      this.starts = starts;
+    }
+
+    const starts = this.starts;
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (starts[middle]! <= offset) low = middle;
+      else high = middle - 1;
+    }
+
+    return { line: low + 1, column: offset - starts[low]! + 1 };
+  }
 }
 
 function safeMatch(
-  content: string,
+  index: LineIndex,
   offset: number,
   fields: Omit<SecretMatch, "line" | "column">,
 ): SecretMatch {
-  return { ...fields, ...locationAt(content, offset) };
+  return { ...fields, ...index.locate(offset) };
 }
 
-function providerCandidates(content: string): Candidate[] {
+function providerCandidates(content: string, index: LineIndex): Candidate[] {
   const candidates: Candidate[] = [];
   for (const pattern of PROVIDER_SECRET_PATTERNS) {
     pattern.expression.lastIndex = 0;
@@ -38,7 +61,7 @@ function providerCandidates(content: string): Candidate[] {
         start,
         end: start + value.length,
         priority: 5,
-        match: safeMatch(content, start, {
+        match: safeMatch(index, start, {
           detectorId: pattern.detectorId,
           family: "provider-token",
           severity: "high",
@@ -50,7 +73,7 @@ function providerCandidates(content: string): Candidate[] {
   return candidates;
 }
 
-function privateKeyCandidates(content: string): Candidate[] {
+function privateKeyCandidates(content: string, index: LineIndex): Candidate[] {
   const candidates: Candidate[] = [];
   const beginExpression = /-----BEGIN ((?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY)-----/gu;
   for (const found of content.matchAll(beginExpression)) {
@@ -64,7 +87,7 @@ function privateKeyCandidates(content: string): Candidate[] {
       start,
       end: markerStart + endMarker.length,
       priority: 6,
-      match: safeMatch(content, start, {
+      match: safeMatch(index, start, {
         detectorId: "pem-private-key",
         family: "private-key",
         severity: "high",
@@ -75,7 +98,7 @@ function privateKeyCandidates(content: string): Candidate[] {
   return candidates;
 }
 
-function awsCandidates(content: string): Candidate[] {
+function awsCandidates(content: string, index: LineIndex): Candidate[] {
   const accessIds = [...content.matchAll(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/gu)]
     .filter(({ 0: value }) => !isPlaceholderSecret(value));
   if (accessIds.length === 0) return [];
@@ -93,7 +116,7 @@ function awsCandidates(content: string): Candidate[] {
       start,
       end: start + found[0].length,
       priority: 5,
-      match: safeMatch(content, start, {
+      match: safeMatch(index, start, {
         detectorId: "aws-access-key-pair",
         family: "aws-credentials",
         severity: "high",
@@ -103,7 +126,7 @@ function awsCandidates(content: string): Candidate[] {
   });
 }
 
-function credentialUrlCandidates(content: string): Candidate[] {
+function credentialUrlCandidates(content: string, index: LineIndex): Candidate[] {
   const candidates: Candidate[] = [];
   const expression = /\b(?:https?|postgres(?:ql)?|mysql):\/\/[^\s:@/]+:([^\s@/]+)@[^\s"'<>]+/giu;
   for (const found of content.matchAll(expression)) {
@@ -115,7 +138,7 @@ function credentialUrlCandidates(content: string): Candidate[] {
       start,
       end: start + password.length,
       priority: 4,
-      match: safeMatch(content, start, {
+      match: safeMatch(index, start, {
         detectorId: "credential-url",
         family: "credential-url",
         severity: "high",
@@ -126,7 +149,7 @@ function credentialUrlCandidates(content: string): Candidate[] {
   return candidates;
 }
 
-function assignmentCandidates(content: string): Candidate[] {
+function assignmentCandidates(content: string, index: LineIndex): Candidate[] {
   const candidates: Candidate[] = [];
   const name = "(?:api[_-]?key|client[_-]?secret|password|private[_-]?key|access[_-]?token|auth[_-]?token|database[_-]?url|github[_-]?token|gitlab[_-]?token|slack[_-]?token)";
   const expression = new RegExp(
@@ -156,7 +179,7 @@ function assignmentCandidates(content: string): Candidate[] {
       start,
       end: start + value.length,
       priority: 1,
-      match: safeMatch(content, start, {
+      match: safeMatch(index, start, {
         detectorId: "sensitive-assignment",
         family: "sensitive-assignment",
         assignmentName,
@@ -173,12 +196,13 @@ function overlaps(left: Candidate, right: Candidate): boolean {
 }
 
 export function analyzeSecrets(content: string): SecretMatch[] {
+  const index = new LineIndex(content);
   const bySpecificity = [
-    ...privateKeyCandidates(content),
-    ...providerCandidates(content),
-    ...awsCandidates(content),
-    ...credentialUrlCandidates(content),
-    ...assignmentCandidates(content),
+    ...privateKeyCandidates(content, index),
+    ...providerCandidates(content, index),
+    ...awsCandidates(content, index),
+    ...credentialUrlCandidates(content, index),
+    ...assignmentCandidates(content, index),
   ].sort((left, right) =>
     right.priority - left.priority || left.start - right.start || left.end - right.end
   );

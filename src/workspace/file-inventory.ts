@@ -118,13 +118,26 @@ export async function inventoryFiles(
 
   async function walk(directory: string, segments: readonly string[], depth: number): Promise<void> {
     const names = (await readdir(directory)).sort();
+    // Stat entries within one directory concurrently; traversal stays in
+    // deterministic sorted order because results are consumed in input order.
+    const entries = await Promise.all(
+      names.map(async (name) => {
+        const absolutePath = join(directory, name);
+        const relativeSegments = [...segments, name];
+        const relativePath = relativeSegments.join("/");
+        if (isExcluded(relativePath)) return undefined;
+        return {
+          absolutePath,
+          relativeSegments,
+          relativePath,
+          status: await lstat(absolutePath),
+        };
+      }),
+    );
 
-    for (const name of names) {
-      const absolutePath = join(directory, name);
-      const relativeSegments = [...segments, name];
-      const relativePath = relativeSegments.join("/");
-      if (isExcluded(relativePath)) continue;
-      const status = await lstat(absolutePath);
+    for (const entry of entries) {
+      if (entry === undefined) continue;
+      const { absolutePath, relativeSegments, relativePath, status } = entry;
 
       if (status.isSymbolicLink()) {
         addFile({ path: relativePath, kind: "symlink", size: status.size });
@@ -132,7 +145,7 @@ export async function inventoryFiles(
       }
 
       if (status.isDirectory()) {
-        if (isIgnoredDirectory(name)) continue;
+        if (isIgnoredDirectory(relativeSegments.at(-1)!)) continue;
 
         const nextDepth = depth + 1;
         if (nextDepth > maxDepth) {

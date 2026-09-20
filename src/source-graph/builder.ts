@@ -21,6 +21,31 @@ import {
 } from "./selection.js";
 import type { SourceGraph, SourceGraphEdge, SourceGraphNode } from "./types.js";
 
+const SOURCE_READ_CONCURRENCY = 8;
+
+/**
+ * Reads source files with bounded concurrency while preserving selection order,
+ * so byte accounting, limitations, and edge ordering stay deterministic.
+ */
+async function* readSourcesBounded<T extends { path: string }>(
+  files: readonly T[],
+  readFile: (path: string) => Promise<string>,
+): AsyncGenerator<{ file: T; source: string | undefined }> {
+  for (let start = 0; start < files.length; start += SOURCE_READ_CONCURRENCY) {
+    const chunk = files.slice(start, start + SOURCE_READ_CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (file) => {
+        try {
+          return { file, source: await readFile(file.path) };
+        } catch {
+          return { file, source: undefined };
+        }
+      }),
+    );
+    for (const result of results) yield result;
+  }
+}
+
 export const DEFAULT_MAX_SOURCE_EDGES = 100_000;
 
 export interface SourceGraphBuildOptions
@@ -131,11 +156,8 @@ export async function buildSourceGraph(
   let dynamicBoundaryCount = 0;
 
   sourceFiles:
-  for (const file of selection.files) {
-    let source: string;
-    try {
-      source = await readFile(file.path);
-    } catch {
+  for await (const { file, source } of readSourcesBounded(selection.files, readFile)) {
+    if (source === undefined) {
       limitations.add(`${file.path}: source file could not be read.`);
       continue;
     }
