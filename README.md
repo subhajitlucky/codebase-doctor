@@ -160,6 +160,15 @@ The read-only, offline `ai/agent-surface` module audits the repository's agent c
 
 Malformed configurations stay visible as coverage limitations, not findings. Nothing on this surface is executed or contacted.
 
+### `infrastructure/docker` and `infrastructure/github-actions`
+
+The read-only, offline infrastructure modules analyze deployment configuration without building, running, or rewriting anything:
+
+- `infrastructure/docker` reads Dockerfiles (including `*.dockerfile`) and reports `unpinned-base-image` (no tag or `latest`), `remote-add` (remote URL fetched by ADD), `pipe-to-shell` (curl or wget piped into a shell), `world-writable` (chmod 777 or a+rwx), and `root-user` (USER root or 0). Build-arg-driven base images stay visible as limitations.
+- `infrastructure/github-actions` reads `.github/workflows/*.yml` and reports `script-injection` (attacker-controlled `github.event` or `github.head_ref` expressions interpolated into `run:` steps), `pull-request-target-checkout` (pull_request_target job checking out the PR head), `write-all-permissions`, and `unpinned-action` (action refs pinned to mutable branches rather than a commit SHA or version tag).
+
+Workflows are never dispatched and images are never built. Malformed YAML, unreadable files, and reached limits become partial coverage.
+
 ## Precision and bounded-report contract
 
 Workspace publication entries, generated targets, and fixture-controlled paths are coverage limitations unless independently proven broken; they are not missing-target findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive npm-specific findings. Only a cryptographic match to an inventoried localhost-only certificate can classify a private key as an intentional local test key; every other matched private key remains high severity.
@@ -202,8 +211,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 
 ## Roadmap
 
-- Compare completed static migration state with observed live catalog state for deployment drift.
-- Expand source topology beyond the deterministic JavaScript/TypeScript subset and add built-in frontend, backend, security, infrastructure, performance, and AI audit coverage without separate doctor installations.
+- Add built-in frontend, backend, performance, and AI semantic audit coverage without separate doctor installations.
 - Extend coverage guarantees beyond the current global `--require-complete` gate.
 - Add pull-request annotations, hooks, and agent plugins around the same CLI and report schema.
 - Run approved validation in read-only mounts or disposable copies.

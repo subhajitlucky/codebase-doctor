@@ -10,6 +10,8 @@ import { createDrizzleDoctor } from "../audits/database/drizzle/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
 import { createAgentSurfaceDoctor } from "../audits/ai/agent-surface/doctor.js";
+import { createDockerDoctor } from "../audits/infrastructure/docker/doctor.js";
+import { createGitHubActionsDoctor } from "../audits/infrastructure/github-actions/doctor.js";
 import { createAdvisoriesDoctor } from "../audits/security/advisories/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
 import { createSecretsHistoryDoctor } from "../audits/security/secrets-history/doctor.js";
@@ -106,6 +108,8 @@ const defaultDependencies: ScanDependencies = {
       sourceGraphDoctor,
       sourceIntegrityDoctor,
       createAgentSurfaceDoctor(),
+      createDockerDoctor(),
+      createGitHubActionsDoctor(),
       createCheckDoctor({
         timeoutMs: request.timeoutMs,
         plans,

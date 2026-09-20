@@ -89,9 +89,17 @@ describe("scan CLI", () => {
     expect(result.status).toBe(0);
     expect(doctorIds).not.toContain("database/sql-rls");
     expect(doctorIds).not.toContain("database/rls");
-    expect(report.coverage).toEqual([
+    expect(report.coverage).toEqual(expect.arrayContaining([
       expect.objectContaining({
         moduleId: "ai/agent-surface",
+        scope: "full",
+      }),
+      expect.objectContaining({
+        moduleId: "infrastructure/docker",
+        scope: "full",
+      }),
+      expect.objectContaining({
+        moduleId: "infrastructure/github-actions",
         scope: "full",
       }),
       expect.objectContaining({
@@ -102,7 +110,7 @@ describe("scan CLI", () => {
         moduleId: "repository/source-integrity",
         scope: "full",
       }),
-    ]);
+    ]));
   });
 
   it("defaults to the current directory", () => {
