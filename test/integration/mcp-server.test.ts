@@ -74,7 +74,7 @@ describe("codebase-doctor mcp server lifecycle", () => {
   );
 
   it(
-    "lists both read-only tools over stdio",
+    "lists every read-only tool over stdio",
     { timeout: 60_000 },
     async () => {
       const client = await connectTestClient();
@@ -83,6 +83,8 @@ describe("codebase-doctor mcp server lifecycle", () => {
       expect(listed.tools.map((tool) => tool.name)).toEqual([
         "audit_codebase",
         "describe_capabilities",
+        "verify_changes",
+        "explain_finding",
       ]);
       for (const tool of listed.tools) {
         expect(tool.inputSchema.type).toBe("object");

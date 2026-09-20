@@ -445,12 +445,13 @@ Available options:
 --changed             Audit Git changes and their affected scope
 --base <ref>          Compare changed scope from the merge base with this ref
 --json                Emit schema-versioned JSON
---format <format>     Output text, json, or sarif
+--format <format>     Output format: text, json, sarif, or brief
 --exclude <glob>      Exclude a repository-relative path glob; repeatable
 --baseline <path>     Compare with a prior Codebase Doctor JSON report
 --timeout <ms>        Set the per-command timeout (default: 120000)
 --fail-on <severity>  info|low|medium|high|critical|none (default: high)
 --require-complete    Fail with exit code 2 when audit coverage is incomplete
+--max-findings <n>    Maximum findings rendered in brief output (default: 100)
 --with-database       Permit live PostgreSQL catalog access
 --database-schema     Select a database schema; repeatable (default: public)
 --database-timeout    Catalog statement timeout in ms (default: 10000)
@@ -512,6 +513,48 @@ Emit SARIF 2.1.0 for code-scanning systems:
 
 ```bash
 codebase-doctor audit . --format sarif > codebase-doctor.sarif
+```
+
+### Verify repairs
+
+`verify` answers the post-repair question for an agent or CI job: which baseline
+findings are actually gone, which remain, and which cannot be proven either way.
+
+```bash
+codebase-doctor audit . --json > baseline.json
+# external agent or human repairs one finding
+codebase-doctor verify . --baseline baseline.json --json
+```
+
+Each baseline fingerprint is reported as:
+
+| Status | Meaning |
+| --- | --- |
+| `resolved` | Absent from the fresh audit and all applicable coverage completed. |
+| `unchanged` | Still present with the same fingerprint. |
+| `unresolved` | Absent, but coverage was incomplete, so the repair cannot be proven. |
+
+New findings (fingerprints absent from the baseline) are listed separately.
+Exit code `1` when anything is `unresolved`, anything is `unchanged` (unless
+`--allow-unchanged` is set), or a new finding meets `--fail-on`. Exit `0` means
+every baseline finding is verifiably resolved and nothing new crosses the
+threshold. `verify` shares the repository options below, including `--changed`,
+`--base`, `--require-complete`, and `--format`.
+
+### Brief output
+
+`--format brief` renders one bounded line per finding for agent consumption,
+with a scope/coverage header, a truncation notice, and explicit coverage
+limitations. It never claims completeness that did not happen.
+
+```bash
+codebase-doctor audit . --format brief --max-findings 50
+```
+
+```text
+codebase-doctor brief
+scope=changed findings=3 shown=3 coverage=complete
+[high] security/secrets/provider-key src/config.ts:12 — Rotate the exposed key and move it to an environment variable.
 ```
 
 Local development usage:
@@ -609,11 +652,14 @@ model is driving it:
 1. Prefer `audit . --changed --json` after edits; run a full audit at trust and
    release boundaries.
 2. Read `auditScope`, optional `sourceImpact`, `doctorRuns`, `coverage`, and
-   `findings` in the compact, schema-versioned evidence.
+   `findings` in the compact, schema-versioned evidence. Use
+   `--format brief` or MCP `explain_finding` when the token budget is tight.
 3. Let a human or separately authorized external coding agent fix a specific
    finding.
-4. Rerun the same scope to verify the external change independently. Do not
-   claim a finding resolved outside completed applicable coverage.
+4. Rerun the same scope to verify the external change independently. Use
+   `verify . --baseline before.json` (or MCP `verify_changes`) for
+   per-fingerprint status; do not claim a finding resolved outside completed
+   applicable coverage.
 
 The CLI is intentionally model-independent. It can be exposed through a shell,
 repository instructions, an agent skill, CI, hooks, or the built-in MCP server.
@@ -638,12 +684,19 @@ evidence-backed finding at a time, and reruns the same scope.
 ### MCP server
 
 Run `codebase-doctor mcp` to serve audits on stdio so Claude Desktop, Cursor,
-and other MCP clients can call them as native tools. `audit_codebase` accepts
-`path`, `format` (`json` or `summary`), and `changed` with optional
-`base`, mirroring the CLI flags; `describe_capabilities` reports tools,
-domains, and permissions. Responses are bounded at roughly 50 KB with an
-explicit note, and the server never enables `--run-checks` or live database
-access.
+and other MCP clients can call them as native tools:
+
+- `audit_codebase` accepts `path`, `format` (`json` or `summary`), and `changed`
+  with optional `base`, mirroring the CLI flags.
+- `verify_changes` accepts `baseline` (a prior schema-1 JSON report on the same
+  machine) plus the same scope arguments, and returns per-fingerprint
+  `resolved`, `unchanged`, `unresolved`, or `new` status.
+- `explain_finding` returns the full evidence, remediation, and verification
+  command for one finding selected by `fingerprint` or `ruleId`.
+- `describe_capabilities` reports tools, domains, and permissions.
+
+Responses are bounded at roughly 50 KB with an explicit note, and the server
+never enables `--run-checks` or live database access.
 
 ```json
 {
