@@ -4,6 +4,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { createAuditCommand } from "./commands/audit.js";
+import { createInstructionsCommand } from "./commands/instructions.js";
 import { createMcpCommand } from "./commands/mcp.js";
 import { createScanCommand } from "./commands/scan.js";
 import { createVerifyCommand } from "./commands/verify.js";
@@ -17,6 +18,7 @@ export function createProgram(): Command {
   program.addCommand(createScanCommand());
   program.addCommand(createAuditCommand());
   program.addCommand(createVerifyCommand());
+  program.addCommand(createInstructionsCommand());
   program.addCommand(createMcpCommand());
   return program;
 }
