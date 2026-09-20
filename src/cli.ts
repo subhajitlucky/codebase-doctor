@@ -28,5 +28,12 @@ const isEntrypoint =
   realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 
 if (isEntrypoint) {
-  await createProgram().parseAsync();
+  const program = createProgram();
+  // With no arguments, show the same help a user gets from --help and treat
+  // the invocation as intentional rather than an error.
+  if (process.argv.length <= 2) {
+    program.outputHelp();
+  } else {
+    await program.parseAsync();
+  }
 }
