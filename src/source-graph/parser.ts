@@ -1,14 +1,15 @@
 import { parse, type ParserPlugin } from "@babel/parser";
 import { posix } from "node:path";
+import {
+  createImportReference,
+  importSourceOffset,
+  type SafeImportReference,
+} from "./references.js";
 import type { SourceImportKind } from "./types.js";
 
 type JsonLikeObject = Record<string, unknown>;
 
-export interface SafeImportReference {
-  readonly kind: SourceImportKind;
-  readonly line?: number;
-  readonly column?: number;
-}
+export { importSpecifier, type SafeImportReference } from "./references.js";
 
 export interface SourceImportParseResult {
   readonly status: "completed" | "partial";
@@ -16,9 +17,6 @@ export interface SourceImportParseResult {
   readonly dynamicBoundaryCount: number;
   readonly limitations: readonly string[];
 }
-
-const rawSpecifiers = new WeakMap<SafeImportReference, string>();
-const sourceOffsets = new WeakMap<SafeImportReference, number>();
 
 function objectValue(value: unknown): JsonLikeObject | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -65,10 +63,6 @@ function safeLocation(node: JsonLikeObject): Pick<SafeImportReference, "line" | 
   };
 }
 
-export function importSpecifier(reference: SafeImportReference): string | undefined {
-  return rawSpecifiers.get(reference);
-}
-
 export function parseSourceImports(path: string, source: string): SourceImportParseResult {
   let ast: unknown;
   try {
@@ -103,10 +97,12 @@ export function parseSourceImports(path: string, source: string): SourceImportPa
       dynamicBoundaryCount += 1;
       return;
     }
-    const reference: SafeImportReference = { kind, ...safeLocation(node) };
-    rawSpecifiers.set(reference, specifier);
-    sourceOffsets.set(reference, typeof node.start === "number" ? node.start : Number.MAX_SAFE_INTEGER);
-    imports.push(reference);
+    imports.push(createImportReference(
+      kind,
+      specifier,
+      safeLocation(node),
+      typeof node.start === "number" ? node.start : Number.MAX_SAFE_INTEGER,
+    ));
   };
 
   const visit = (value: unknown): void => {
@@ -146,8 +142,7 @@ export function parseSourceImports(path: string, source: string): SourceImportPa
 
   visit(ast);
   imports.sort((left, right) =>
-    (sourceOffsets.get(left) ?? Number.MAX_SAFE_INTEGER) -
-      (sourceOffsets.get(right) ?? Number.MAX_SAFE_INTEGER) ||
+    importSourceOffset(left) - importSourceOffset(right) ||
     left.kind.localeCompare(right.kind)
   );
   return {

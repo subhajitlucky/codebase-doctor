@@ -8,6 +8,8 @@ import {
   type SourceAliasConfigOptions,
 } from "./config.js";
 import { parseSourceImports } from "./parser.js";
+import { isPythonSourcePath } from "./python-resolver.js";
+import { parsePythonImports } from "./python-parser.js";
 import {
   createSourceResolverIndex,
   resolveSourceImport,
@@ -176,7 +178,9 @@ export async function buildSourceGraph(
     }
     filesExamined += 1;
     bytesExamined += sourceBytes;
-    const parsed = parseSourceImports(file.path, source);
+    const parsed = isPythonSourcePath(file.path)
+      ? parsePythonImports(file.path, source)
+      : parseSourceImports(file.path, source);
     for (const limitation of parsed.limitations) limitations.add(limitation);
     dynamicBoundaryCount += parsed.dynamicBoundaryCount;
 
