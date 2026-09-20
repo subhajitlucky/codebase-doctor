@@ -681,6 +681,25 @@ explicitly, requests separate permission for `--run-checks` and live
 `--with-database` access, asks a human or external agent to fix one
 evidence-backed finding at a time, and reruns the same scope.
 
+### Agent instructions
+
+`codebase-doctor instructions` prints ready-to-paste instruction snippets for
+the major agent surfaces. It only prints to stdout; Codebase Doctor never writes
+files for you.
+
+```bash
+codebase-doctor instructions --target cursor
+codebase-doctor instructions --target agents,claude,copilot
+codebase-doctor instructions --json
+```
+
+Targets: `agents` (`AGENTS.md`), `claude` (`CLAUDE.md`), `cursor`
+(`.cursor/rules/codebase-doctor.mdc`), `windsurf` (`.windsurfrules`), `cline`
+(`.clinerules/`), `copilot` (`.github/copilot-instructions.md`), and `mcp`
+(client configuration). The snippet encodes the changed-audit and
+verify-baseline loop plus the honest coverage rules, so an agent that reads it
+verifies instead of assuming.
+
 ### MCP server
 
 Run `codebase-doctor mcp` to serve audits on stdio so Claude Desktop, Cursor,
