@@ -31,12 +31,12 @@ export function advisoryFinding(input: AdvisoryFindingInput, advisoryInput: OsvP
     confidence: "high",
     category: "security",
     title: `Resolved dependency has a published advisory: ${pkg.name}`,
-    message: `Resolved dependency ${pkg.name}@${pkg.version} matches advisory ${advisory.id}: ${advisory.summary}`,
+    message: `Resolved ${pkg.ecosystem} dependency ${pkg.name}@${pkg.version} matches advisory ${advisory.id}: ${advisory.summary}`,
     location,
     evidence: [
       {
         type: "observation",
-        detail: `package ${pkg.name}@${pkg.version}; advisory ${advisory.id}${aliases}; advisory severity ${advisory.severity}${fixed}`,
+        detail: `package ${pkg.ecosystem}:${pkg.name}@${pkg.version}; advisory ${advisory.id}${aliases}; advisory severity ${advisory.severity}${fixed}`,
       },
     ],
     impact:
@@ -61,7 +61,7 @@ export function advisoryFinding(input: AdvisoryFindingInput, advisoryInput: OsvP
       doctorId: ADVISORIES_DOCTOR_ID,
       ruleId: VULNERABLE_DEPENDENCY_RULE,
       location,
-      identity: `${pkg.name}@${pkg.version}:${advisory.id}`,
+      identity: `${pkg.ecosystem}:${pkg.name}@${pkg.version}:${advisory.id}`,
     }),
   };
 }
