@@ -2,6 +2,18 @@
 
 All notable changes to Codebase Doctor are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Add read-only, offline infrastructure analyzers: `infrastructure/docker`
+  (unpinned base images, remote ADD, pipe-to-shell installs, world-writable
+  permissions, explicit root users) and `infrastructure/github-actions`
+  (script injection from attacker-controlled expressions, pull_request_target
+  head checkout, write-all permissions, mutable action refs). The
+  infrastructure domain now reports module coverage instead of a blanket
+  unsupported status.
+
 ## [0.1.9] - 2026-09-21
 
 ### Added

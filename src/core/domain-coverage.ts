@@ -417,6 +417,29 @@ function aiCoverage(
   };
 }
 
+function infrastructureCoverage(
+  modules: readonly DomainModuleCoverage[],
+  snapshot: ProjectSnapshot,
+): DomainCoverage {
+  const status = aggregateStatuses(modules.map(({ status }) => status));
+  const applicability = status === "not-applicable" ? "not-detected" : "detected";
+  return {
+    domain: "infrastructure",
+    applicability,
+    status,
+    coverageComplete: status === "completed" || status === "not-applicable",
+    evidence: sortEvidence([
+      ...infrastructureEvidence(snapshot),
+      ...modules.map(({ moduleId }) => ({
+        type: "module" as const,
+        value: moduleId,
+      })),
+    ]),
+    modules,
+    limitations: [...new Set(modules.flatMap(({ limitations }) => limitations))].sort(),
+  };
+}
+
 function securityCoverage(
   modules: readonly DomainModuleCoverage[],
   snapshot: ProjectSnapshot,
@@ -483,11 +506,14 @@ export function planDomainCoverage(
     frameworkEvidence(input.snapshot, BACKEND_FRAMEWORKS),
     "Backend framework evidence was detected, but semantic backend analysis is not implemented.",
   );
-  const infrastructure = unsupportedEntry(
-    "infrastructure",
-    infrastructureEvidence(input.snapshot),
-    "Infrastructure configuration was detected, but semantic infrastructure analysis is not implemented.",
-  );
+  const infrastructure =
+    (modulesByDomain.get("infrastructure") ?? []).length === 0
+      ? unsupportedEntry(
+          "infrastructure",
+          infrastructureEvidence(input.snapshot),
+          "Infrastructure configuration was detected, but semantic infrastructure analysis is not implemented.",
+        )
+      : infrastructureCoverage(modulesByDomain.get("infrastructure")!, input.snapshot);
   const ai =
     (modulesByDomain.get("ai") ?? []).length === 0
       ? unsupportedEntry(

@@ -496,6 +496,27 @@ prompt files are reported only when a permission-bypass flag such as
 or inline code span, so prose warnings are not findings. Malformed
 configuration stays visible as a coverage limitation, never a guessed finding.
 
+## Built-in infrastructure audit
+
+The combined audit registers `infrastructure/docker` and
+`infrastructure/github-actions` as read-only, offline Doctors over deployment
+configuration. Neither builds an image, runs a container, dispatches a
+workflow, or rewrites configuration.
+
+`infrastructure/docker` parses logical Dockerfile instructions (comments and
+line continuations handled) and reports unpinned or `latest` base images,
+remote `ADD` fetches, `curl`/`wget` piped into a shell, `chmod 777` or `a+rwx`,
+and explicit root users. Stage aliases and digests are accepted; build-arg
+base images become limitations.
+
+`infrastructure/github-actions` parses workflow YAML and reports
+attacker-controlled `github.event.*` or `github.head_ref` expressions
+interpolated into `run:` steps, `pull_request_target` jobs that check out the
+pull request head, `permissions: write-all`, and action refs pinned to mutable
+branches (commit SHAs and version tags are accepted, local and docker actions
+are skipped). Malformed YAML and unreadable files become coverage limitations,
+never findings.
+
 ## Precision and bounded-report contract
 
 Workspace publication entries, generated targets, and fixture-controlled paths
@@ -601,8 +622,8 @@ The following are not implemented behavior:
   approved checks;
 - a lifecycle-hook installer or hosted service;
 - deployment drift comparison between expected migrations and live state;
-- additional built-in frontend, backend, security, infrastructure,
-  performance, and AI semantic analyzers.
+- additional built-in frontend, backend, security, performance, and AI
+  semantic analyzers.
 
 Future integrations must preserve the same permanent boundary: Models build.
 Codebase Doctor verifies.
