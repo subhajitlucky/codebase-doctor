@@ -2,7 +2,7 @@
 
 All notable changes to Codebase Doctor are documented here.
 
-## [Unreleased]
+## [0.1.7] - 2026-09-20
 
 ### Added
 
@@ -17,6 +17,13 @@ All notable changes to Codebase Doctor are documented here.
   `describe_capabilities` registry metadata, bounds oversized responses at
   roughly 50 KB with an explicit note, and never grants `--run-checks`
   validation commands or live database access.
+- Add the `--require-complete` scan and audit option: exits with code 2 when any
+  audit domain coverage is incomplete, so partial or unsupported coverage is
+  never reported as a clean result.
+- Add a composite GitHub Action (`action.yml`) and
+  [docs/github-action.md](docs/github-action.md) that install the published CLI,
+  run a scan, write text, JSON, or SARIF output, and fail the job according to
+  `fail-on` and `require-complete`.
 
 ### Security
 
