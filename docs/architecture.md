@@ -192,6 +192,15 @@ edges (an internal wildcard becomes a limitation). Missing Java classes are
 unproven internal edges or external boundaries because classes can be generated
 at build time or provided by a dependency with the same package.
 
+Rust `.rs` files contribute `mod` declarations and `use` paths through a
+bounded tokenizer that ignores line comments, nested block comments, strings,
+raw strings, chars, and lifetimes; brace groups are expanded into complete
+paths. Crates root at `src/lib.rs` or `src/main.rs`; `crate::`, `self::`, and
+`super::` paths resolve to `.rs` files or `mod.rs` directories, dropping a
+trailing item segment when needed. Missing modules and use targets are unproven
+internal edges because build scripts, macros, and path attributes can generate
+or relocate them; internal wildcard imports become limitations.
+
 Selection admits supported regular JavaScript, TypeScript, and Python source
 files from the bounded, symlink-safe inventory. Resolution covers internal
 relative, extension, index, selected alias, unique workspace-package, and

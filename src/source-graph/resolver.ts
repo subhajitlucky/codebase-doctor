@@ -14,6 +14,7 @@ import {
 import { isGoSourcePath, type GoModuleInfo } from "./go-mod.js";
 import { resolveGoImport } from "./go-resolver.js";
 import { isJavaSourcePath, resolveJavaImport } from "./java-resolver.js";
+import { isRustSourcePath, resolveRustImport } from "./rust-resolver.js";
 import { importSpecifier, type SafeImportReference } from "./parser.js";
 import { isPythonSourcePath, resolvePythonImport } from "./python-resolver.js";
 import { isSupportedSourcePath } from "./selection.js";
@@ -368,6 +369,9 @@ export function resolveSourceImport(
   }
   if (isJavaSourcePath(importerPath)) {
     return resolveJavaImport(importerPath, reference, index);
+  }
+  if (isRustSourcePath(importerPath)) {
+    return resolveRustImport(importerPath, reference, index);
   }
   if (specifier.startsWith(".")) {
     const candidates = candidatePaths(posix.dirname(importerPath), specifier, importerPath);
