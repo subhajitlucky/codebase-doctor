@@ -386,6 +386,37 @@ function applyChangedSelection(
   };
 }
 
+function aiCoverage(
+  modules: readonly DomainModuleCoverage[],
+  snapshot: ProjectSnapshot,
+): DomainCoverage {
+  if (modules.length === 0) {
+    return unsupportedEntry(
+      "ai",
+      aiEvidence(snapshot),
+      "AI SDK evidence was detected, but semantic AI-system analysis is not implemented.",
+    );
+  }
+
+  const status = aggregateStatuses(modules.map(({ status }) => status));
+  const applicability = status === "not-applicable" ? "not-detected" : "detected";
+  return {
+    domain: "ai",
+    applicability,
+    status,
+    coverageComplete: status === "completed" || status === "not-applicable",
+    evidence: sortEvidence([
+      ...aiEvidence(snapshot),
+      ...modules.map(({ moduleId }) => ({
+        type: "module" as const,
+        value: moduleId,
+      })),
+    ]),
+    modules,
+    limitations: [...new Set(modules.flatMap(({ limitations }) => limitations))].sort(),
+  };
+}
+
 function securityCoverage(
   modules: readonly DomainModuleCoverage[],
   snapshot: ProjectSnapshot,
@@ -457,11 +488,14 @@ export function planDomainCoverage(
     infrastructureEvidence(input.snapshot),
     "Infrastructure configuration was detected, but semantic infrastructure analysis is not implemented.",
   );
-  const ai = unsupportedEntry(
-    "ai",
-    aiEvidence(input.snapshot),
-    "AI SDK evidence was detected, but semantic AI-system analysis is not implemented.",
-  );
+  const ai =
+    (modulesByDomain.get("ai") ?? []).length === 0
+      ? unsupportedEntry(
+          "ai",
+          aiEvidence(input.snapshot),
+          "AI SDK evidence was detected, but semantic AI-system analysis is not implemented.",
+        )
+      : aiCoverage(modulesByDomain.get("ai")!, input.snapshot);
 
   const repositoryModules = modulesByDomain.get("repository") ?? [];
   const repositoryStatus = aggregateStatuses(repositoryModules.map(({ status }) => status));

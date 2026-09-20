@@ -63,7 +63,7 @@ A full audit examines the full requested repository scope for applicable impleme
 | Security | Secrets analysis, offline npm dependency metadata, command-output redaction, RLS findings; no permission or current advisory analyzer yet | Secrets, cross-ecosystem dependency, permission, vulnerability, supply-chain analysis |
 | Infrastructure | Configuration files may be inventoried; no semantic analyzer | Docker, CI, hosting, deployment analysis |
 | Performance | No semantic analyzer | Cache, query, memory, profiling analysis with explicit runtime permissions |
-| AI systems | No semantic analyzer | Prompt, token, model, grounding analysis with honest statistical limits |
+| AI systems | Agent-surface audit: MCP client configs (pinning, shell commands, inline credentials, filesystem scope) and `SKILL.md` frontmatter; no prompt/model/grounding analyzer yet | Prompt, token, model, grounding analysis with honest statistical limits |
 
 North-star entries are planned internal modules, not separately installed Doctor products and not shipped behavior.
 
@@ -138,6 +138,15 @@ Results are point-in-time: coverage records that advisory data can change as new
 
 Offline `database/sql-rls` automatically runs when a supported PostgreSQL migration stream is discovered: it requires no credentials, makes no network request, and never executes migration SQL, reconstructing expected table, policy, RLS, and grant state from supported migrations. Partial coverage is not a clean static SQL result; dynamic or unsupported DDL stays visible as a coverage limitation. Live `database/rls` inspects observed database state through a read-only catalog of policies, privileges, roles, memberships, enforcement, and bypass paths, permissioned separately with `--with-database` using environment credentials and a read-only, repeatable-read transaction. Repository structure covers bounded, symlink-safe inventory of Node.js, JavaScript, TypeScript, Python, Go, Rust, and Java detection evidence, structural findings for invalid manifests, conflicting lockfiles, missing workspaces, and absent visible tests, plus validation command planning (execution only with `--run-checks`).
 
+### `ai/agent-surface`
+
+The read-only, offline `ai/agent-surface` module audits the repository's agent configuration surface. It never executes a configured command, never connects to an MCP server, and never prints a suspected credential value.
+
+- MCP client configs (`mcp.json`, `mcp_config.json`, `mcp-config.json`, `claude_desktop_config.json`, including `.cursor/`, `.vscode/`, and `.github/copilot/` variants): unpinned package runners (`npx`, `pnpm dlx`, `uvx` without an exact version), shell commands, inline credential values (value withheld and never fingerprinted), and broad filesystem grants such as `/`, home directories, or `--allow-write`.
+- `SKILL.md` files: non-empty `name` and `description` frontmatter is required.
+
+Malformed configurations stay visible as coverage limitations, not findings.
+
 ## Precision and bounded-report contract
 
 Workspace publication entries, generated targets, and fixture-controlled paths are coverage limitations unless independently proven broken; they are not missing-target findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive npm-specific findings. Only a cryptographic match to an inventoried localhost-only certificate can classify a private key as an intentional local test key; every other matched private key remains high severity.
@@ -175,6 +184,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 - SQL auditing reads only inventoried migration files, applies a size ceiling, and never evaluates or executes SQL. The RLS module uses a read-only, repeatable-read transaction and never executes suggested SQL.
 - Dependency auditing reads bounded npm metadata, never invokes npm or another package manager, and never installs or changes dependencies.
 - Source analysis parses bounded JS/TS syntax but never executes source, loads plugins, uses the network, or writes target files.
+- Agent configuration analysis parses bounded MCP config and `SKILL.md` files but never executes configured commands or connects to MCP servers.
 - Commands use argument arrays with `shell: false`, minimal environments, and per-command time and output limits. The scanner never installs target-project dependencies, and apart from an explicitly requested `--with-advisories` OSV lookup it makes no external network calls.
 
 ## Roadmap
