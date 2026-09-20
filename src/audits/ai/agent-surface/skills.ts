@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 import { AGENT_SURFACE_DOCTOR_ID, type AgentSurfaceMatch } from "./mcp-config.js";
+import { BROAD_SKILL_TOOLS } from "./permissions.js";
 
 export interface SkillFileAnalysis {
   readonly status: "supported" | "invalid";
@@ -29,6 +30,37 @@ function missingFrontmatterMatch(path: string, missing: readonly string[]): Agen
     remediation: `Add a YAML frontmatter block with non-empty ${fields} fields.`,
     identity: `skill-frontmatter:${fields}`,
   };
+}
+
+function broadToolMatches(path: string, value: unknown): AgentSurfaceMatch[] {
+  const tokens = typeof value === "string"
+    ? value.split(/[,\s]+/u)
+    : Array.isArray(value)
+      ? value.flatMap((entry) => typeof entry === "string" ? entry.split(/[,\s]+/u) : [])
+      : [];
+  const matches: AgentSurfaceMatch[] = [];
+  const seen = new Set<string>();
+  for (const token of tokens) {
+    if (token.length === 0 || !BROAD_SKILL_TOOLS.has(token) || seen.has(token)) continue;
+    seen.add(token);
+    matches.push({
+      ruleId: `${AGENT_SURFACE_DOCTOR_ID}/skill-broad-tool-grant`,
+      severity: "medium",
+      confidence: "high",
+      path,
+      title: `Agent skill pre-approves an unscoped tool: ${token}`,
+      message: `Skill file ${path} lists ${token} in allowed-tools without a scope, pre-approving every invocation of that tool.`,
+      evidence: {
+        type: "file",
+        path,
+        detail: `allowed-tools entry ${token}`,
+      },
+      impact: "A skill that pre-approves unscoped execution or write tools removes the review step for those actions.",
+      remediation: "Narrow the allowed-tools entry to the smallest command or path pattern the skill needs.",
+      identity: `skill-broad-tool:${token}`,
+    });
+  }
+  return matches;
 }
 
 /**
@@ -73,10 +105,13 @@ export function analyzeSkillFile(path: string, content: string): SkillFileAnalys
   const description = parsed["description"];
   if (typeof name !== "string" || name.trim().length === 0) missing.push("name");
   if (typeof description !== "string" || description.trim().length === 0) missing.push("description");
+  const toolMatches = broadToolMatches(path, parsed["allowed-tools"]);
+  const matches = missing.length === 0 ? toolMatches : [missingFrontmatterMatch(path, missing)];
+  if (missing.length > 0) matches.push(...toolMatches);
 
   return {
     status: "supported",
-    matches: missing.length === 0 ? [] : [missingFrontmatterMatch(path, missing)],
+    matches,
     limitations: [],
   };
 }

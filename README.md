@@ -153,10 +153,12 @@ With `--with-database`, the read-only `database/rls-drift` module compares recon
 
 The read-only, offline `ai/agent-surface` module audits the repository's agent configuration surface. It never executes a configured command, never connects to an MCP server, and never prints a suspected credential value.
 
-- MCP client configs (`mcp.json`, `mcp_config.json`, `mcp-config.json`, `claude_desktop_config.json`, including `.cursor/`, `.vscode/`, and `.github/copilot/` variants): unpinned package runners (`npx`, `pnpm dlx`, `uvx` without an exact version), shell commands, inline credential values (value withheld and never fingerprinted), and broad filesystem grants such as `/`, home directories, or `--allow-write`.
-- `SKILL.md` files: non-empty `name` and `description` frontmatter is required.
+- MCP client configs (`mcp.json`, `.mcp.json`, `mcp_config.json`, `mcp-config.json`, `claude_desktop_config.json`, including `.cursor/`, `.vscode/`, and `.github/copilot/` variants): unpinned package runners (`npx`, `pnpm dlx`, `uvx` without an exact version), shell commands, inline credential values (value withheld and never fingerprinted), and broad filesystem grants such as `/`, home directories, or `--allow-write`.
+- `SKILL.md` files: non-empty `name` and `description` frontmatter is required, and unscoped `allowed-tools` grants such as `Bash(*)`, bare `Bash`, `Write`, or `Edit` are reported as `skill-broad-tool-grant`.
+- Documented permission settings: `permissions.defaultMode: bypassPermissions` in `.claude/settings.json` or `.claude/settings.local.json`, `chat.tools.autoApprove` in `.vscode/settings.json`, `yes-always` or `yes` in `.aider.conf.yml`, unscoped `permissions.allow` rules (`Bash(*)`, `Read(//**)`, and similar), and hook `command` entries (command text withheld) are reported as `permission-bypass`, `broad-permission-allow`, or `hook-shell-command`.
+- Instruction and prompt files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`, `.cursor/rules/*.mdc`, `*.prompt`, `prompts/`): permission-bypass flags such as `--dangerously-skip-permissions` or `--yolo` are reported as `instruction-permission-bypass` only when they appear inside fenced code blocks or inline code, never from prose mentions.
 
-Malformed configurations stay visible as coverage limitations, not findings.
+Malformed configurations stay visible as coverage limitations, not findings. Nothing on this surface is executed or contacted.
 
 ## Precision and bounded-report contract
 

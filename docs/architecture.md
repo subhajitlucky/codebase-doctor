@@ -429,6 +429,28 @@ remediation. Consumers must inspect both `security/secrets` and
 completed plus partial, unsupported, failed, or not-selected module work is
 conservatively incomplete at the security-domain level.
 
+## Built-in agent-surface audit
+
+The combined audit registers `ai/agent-surface` as a read-only, offline Doctor
+over the repository's agent configuration surface. It reads only inventoried
+regular files bounded to 1 MB each, 50 MB per audit, and 200 files. Nothing on
+this surface is executed, no server is contacted, and no suspected credential
+value is printed or fingerprinted.
+
+MCP client configurations contribute unpinned package runners, shell commands,
+inline credential keys with the value withheld, and broad filesystem grants.
+`SKILL.md` frontmatter must declare non-empty `name` and `description`, and
+unscoped `allowed-tools` entries (`Bash(*)`, bare `Bash`, `Write`, `Edit`) are
+reported because they pre-approve every invocation of that tool. Documented
+permission settings are interpreted for known clients only: Claude Code
+`permissions.defaultMode: bypassPermissions`, unscoped `permissions.allow`
+rules, and hook `command` entries (command text withheld); VS Code
+`chat.tools.autoApprove`; and Aider `yes-always` or `yes`. Instruction and
+prompt files are reported only when a permission-bypass flag such as
+`--dangerously-skip-permissions` or `--yolo` appears inside a fenced code block
+or inline code span, so prose warnings are not findings. Malformed
+configuration stays visible as a coverage limitation, never a guessed finding.
+
 ## Precision and bounded-report contract
 
 Workspace publication entries, generated targets, and fixture-controlled paths
