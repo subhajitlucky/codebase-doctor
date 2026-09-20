@@ -23,7 +23,7 @@ export interface SqlRlsDoctorOptions {
   readSqlFile?: (root: string, path: string) => Promise<string>;
 }
 
-async function readInventoriedSqlFile(root: string, path: string): Promise<string> {
+export async function readInventoriedSqlFile(root: string, path: string): Promise<string> {
   const absoluteRoot = resolve(root);
   const absolutePath = resolve(absoluteRoot, path);
   const pathFromRoot = relative(absoluteRoot, absolutePath);
