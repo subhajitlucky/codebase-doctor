@@ -99,9 +99,9 @@ codebase-doctor audit . --changed --json
 codebase-doctor audit . --json
 ```
 
-### `repository/source-graph` (JS/TS source impact)
+### `repository/source-graph` (JS/TS and Python source impact)
 
-The read-only, offline `repository/source-graph` Doctor recognizes static `import`, re-export, type-only import, literal `require`, and literal dynamic import edges with a real syntax parser that never executes repository code. Local `tsconfig` and `jsconfig` files contribute a deterministic subset of relative aliases; this is not complete Node or TypeScript module resolution.
+The read-only, offline `repository/source-graph` Doctor recognizes static `import`, re-export, type-only import, literal `require`, and literal dynamic import edges with a real syntax parser that never executes repository code. Local `tsconfig` and `jsconfig` files contribute a deterministic subset of relative aliases; this is not complete Node or TypeScript module resolution. Python `.py` files contribute statement-level `import`, `from`-imports with relative dots, and literal `importlib.import_module`/`__import__` edges through a bounded tokenizer that ignores comments and string content; attribute-only bare-dot imports and namespace-package layouts stay limitations instead of guessed edges.
 
 Dynamic non-literal imports, ambiguous targets, unsupported configuration or syntax, unreadable input, and graph ceilings are coverage limitations, not findings. Cycles are valid topology and are not findings. The Doctor intentionally emits no bug findings.
 
@@ -111,7 +111,7 @@ Schema-1 reports may include `sourceImpact` (schema `1`). Full mode reports grap
 
 The read-only, offline `repository/source-integrity` Doctor runs after the graph. `repository/source-graph` remains finding-free; the separate `repository/source-integrity` Doctor emits the high-confidence `source/import-target-missing` rule, keeping topology limitations from becoming guessed bugs.
 
-It is precision-first and diagnoses only three proof classes: an explicit relative target with a supported source extension; a single deterministic alias whose configured target explicitly names a supported source file; and a unique workspace package whose explicit entry names a supported source file. Extensionless, JSON, custom-loader, conditional, ambiguous, external, and dynamic references and cycles are not findings. It does not check named exports or validate that a referenced export name exists.
+It is precision-first and diagnoses only three proof classes: an explicit relative target with a supported source extension; a single deterministic alias whose configured target explicitly names a supported source file; and a unique workspace package whose explicit entry names a supported source file. Python relative module imports (`from .models import x`) contribute the relative-explicit proof; bare `from . import name` attribute imports and absolute internal imports without a present file are never findings because Python can resolve them through attributes, namespace packages, or path configuration. Extensionless, JSON, custom-loader, conditional, ambiguous, external, and dynamic references and cycles are not findings. It does not check named exports or validate that a referenced export name exists.
 
 Full mode examines all qualifying edges; changed mode examines changed importers and complete reverse-impacted importers. A deleted or renamed target selects its unchanged importer. Raw import specifiers and source text are withheld; findings expose only normalized paths, import kind, proof class, and safe location. The Doctor emits at most 1,000 findings per audit and reports partial coverage when that ceiling or any upstream graph limitation applies. Partial coverage is not a clean source-integrity result. An external authorized human or agent must correct or restore the intended target and rerun the same scope; Codebase Doctor does not modify or repair files.
 

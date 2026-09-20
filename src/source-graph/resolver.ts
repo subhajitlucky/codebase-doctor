@@ -12,6 +12,7 @@ import {
   type SafeSourceAlias,
 } from "./config.js";
 import { importSpecifier, type SafeImportReference } from "./parser.js";
+import { isPythonSourcePath, resolvePythonImport } from "./python-resolver.js";
 import { isSupportedSourcePath } from "./selection.js";
 import {
   classifyMissingRelativeTarget,
@@ -355,6 +356,9 @@ export function resolveSourceImport(
     };
   }
   const sourcePaths = index.sourcePaths;
+  if (isPythonSourcePath(importerPath)) {
+    return resolvePythonImport(importerPath, specifier, index);
+  }
   if (specifier.startsWith(".")) {
     const candidates = candidatePaths(posix.dirname(importerPath), specifier, importerPath);
     if (candidates === undefined) {

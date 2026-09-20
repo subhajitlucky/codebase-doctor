@@ -14,6 +14,7 @@ const SOURCE_EXTENSIONS = new Set([
   ".tsx",
   ".mts",
   ".cts",
+  ".py",
 ]);
 
 export interface SourceFileSelectionOptions {

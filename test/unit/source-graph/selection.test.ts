@@ -74,7 +74,7 @@ describe("source file selection", () => {
   it("reports no applicable source when the inventory contains no supported file", () => {
     const result = selectSourceFiles(inventory([
       { path: "README.md", kind: "file", size: 10 },
-      { path: "src/main.py", kind: "file", size: 10 },
+      { path: "src/main.go", kind: "file", size: 10 },
     ]));
 
     expect(result).toEqual({
@@ -83,6 +83,15 @@ describe("source file selection", () => {
       plannedBytes: 0,
       limitations: [],
     });
+  });
+
+  it("selects Python source files for the graph", () => {
+    const result = selectSourceFiles(inventory([
+      { path: "pkg/app.py", kind: "file", size: 10 },
+    ]));
+
+    expect(result.status).toBe("completed");
+    expect(result.files.map(({ path }) => path)).toEqual(["pkg/app.py"]);
   });
 
   it("uses stable defaults and rejects invalid resource ceilings", () => {
