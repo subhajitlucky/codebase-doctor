@@ -18,7 +18,7 @@ validation subprocesses remain unsandboxed and may have side effects.
 - [x] Read-only scan: Sutra Python repository
 - [x] Target Git status unchanged before and after every scan
 - [x] MIHA `.venv-*` false positive captured as a regression test and corrected
-- [x] `codebase-doctor@0.1.4` was published on 2026-07-18; recheck the live package immediately before publication
+- [x] `codebase-doctor@0.1.9` was published on 2026-09-21; recheck the live package immediately before publication
 
 ## Before publication
 
