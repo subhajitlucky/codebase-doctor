@@ -6,6 +6,11 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Add the read-only, offline `ai/agent-surface` module: audits MCP client
+  configurations (unpinned package runners, shell commands, inline credentials
+  with the value withheld, broad filesystem grants) and `SKILL.md` frontmatter.
+  It never executes configured commands or connects to MCP servers, and the AI
+  domain now reports this module instead of a blanket unsupported status.
 - Add the opt-in `security/advisories` module (`--with-advisories`): one bounded
   OSV lookup over resolved packages from `package-lock.json`, `pnpm-lock.yaml`,
   `yarn.lock` (v1 and Berry), `bun.lock`, `poetry.lock`, and `uv.lock`,

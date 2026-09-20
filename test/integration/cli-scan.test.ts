@@ -91,6 +91,10 @@ describe("scan CLI", () => {
     expect(doctorIds).not.toContain("database/rls");
     expect(report.coverage).toEqual([
       expect.objectContaining({
+        moduleId: "ai/agent-surface",
+        scope: "full",
+      }),
+      expect.objectContaining({
         moduleId: "repository/source-graph",
         scope: "full",
       }),
