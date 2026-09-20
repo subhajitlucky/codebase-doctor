@@ -59,7 +59,8 @@
     "@modelcontextprotocol/sdk": "1.30.0",
     "commander": "^15.0.0",
     "jsonc-parser": "3.3.1",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

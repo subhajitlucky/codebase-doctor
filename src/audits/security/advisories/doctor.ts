@@ -3,10 +3,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { sortFindings, type Finding } from "../../../core/findings.js";
-import { selectDependencyAuditTargets } from "../dependencies/selection.js";
 import { advisoryFindings } from "./analyzer.js";
 import { createOsvClient, type OsvClient, type OsvPackageAdvisories, type OsvQuery } from "./osv.js";
-import { scanResolvedPackages } from "./parser.js";
+import { lockfileFormatForPath, scanLockfile } from "./parser.js";
 
 const DOCTOR_ID = "security/advisories";
 const DEFAULT_MAX_FILE_BYTES = 20_000_000;
@@ -52,11 +51,13 @@ function coverage(
 }
 
 /**
- * Opt-in advisory lookup. The module is only registered when the caller
- * explicitly requests it (--with-advisories), which also grants the
- * network:access capability; without that request no advisory module appears in
- * reports, so an unrequested lookup never marks the security domain
- * incomplete. Only package names and versions leave the machine.
+ * Opt-in advisory lookup across every discovered supported lockfile
+ * (package-lock.json, pnpm-lock.yaml, yarn.lock, bun.lock, poetry.lock,
+ * uv.lock). The module is only registered when the caller explicitly requests
+ * it (--with-advisories), which also grants the network:advisories capability;
+ * without that request no advisory module appears in reports, so an
+ * unrequested lookup never marks the security domain incomplete. Only package
+ * names, versions, and ecosystems leave the machine.
  */
 export function createAdvisoriesDoctor(options: AdvisoriesDoctorOptions = {}): Doctor {
   const maxFileBytes = positiveInteger(
@@ -84,21 +85,19 @@ export function createAdvisoriesDoctor(options: AdvisoriesDoctorOptions = {}): D
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
-      const selection = selectDependencyAuditTargets(snapshot);
-      const operational = new Set<string>(selection.limitations);
-      const coverageRecords: AuditCoverage[] = [];
+      const limitations = new Set<string>();
+      const lockPaths = snapshot.files
+        .filter((file) => file.kind === "file" && lockfileFormatForPath(file.path) !== undefined)
+        .map((file) => file.path)
+        .sort();
 
-      for (const unsupported of selection.unsupportedScopes) {
-        coverageRecords.push(
-          coverage(
-            "unsupported",
-            `${selection.scope}:${unsupported.projectId}`,
-            0,
-            0,
-            0,
-            [`${unsupported.projectId}: ${unsupported.ecosystem} dependency metadata is not supported.`],
-          ),
-        );
+      if (lockPaths.length === 0) {
+        return {
+          status: "completed",
+          findings: [],
+          coverage: [coverage("not-applicable", snapshot.auditScope.mode, 0, 0, 0, [])],
+          durationMs: Date.now() - startedAt,
+        };
       }
 
       const targets: Array<{ lockPath: string; packages: OsvQuery[] }> = [];
@@ -107,63 +106,62 @@ export function createAdvisoriesDoctor(options: AdvisoriesDoctorOptions = {}): D
       let filesExamined = 0;
       let limitReached = false;
 
-      for (const target of selection.targets) {
-        if (limitReached || target.lockfile === undefined) continue;
-        const path = target.lockfile.path;
+      for (const path of lockPaths) {
+        if (limitReached) break;
 
-        if (target.lockfile.size > maxFileBytes) {
-          operational.add(`${path}: file exceeds the ${maxFileBytes}-byte advisory audit size limit.`);
+        const file = snapshot.files.find((entry) => entry.path === path);
+        const size = file?.size ?? 0;
+        if (size > maxFileBytes) {
+          limitations.add(`${path}: file exceeds the ${maxFileBytes}-byte advisory audit size limit.`);
           continue;
         }
-        if (totalBytes + target.lockfile.size > maxTotalBytes) {
-          operational.add(
+        if (totalBytes + size > maxTotalBytes) {
+          limitations.add(
             `${path}: total advisory audit content limit of ${maxTotalBytes} bytes was reached; remaining lockfiles were not examined.`,
           );
-          limitReached = true;
-          continue;
+          break;
         }
 
         let bytes: Uint8Array | undefined;
         try {
           bytes = await readSelectedFile(join(snapshot.root, ...path.split("/")));
         } catch {
-          operational.add(`${path}: unable to read selected dependency metadata.`);
+          limitations.add(`${path}: unable to read selected dependency metadata.`);
           continue;
         }
         if (bytes.byteLength > maxFileBytes) {
-          operational.add(`${path}: file exceeds the ${maxFileBytes}-byte advisory audit size limit.`);
+          limitations.add(`${path}: file exceeds the ${maxFileBytes}-byte advisory audit size limit.`);
           continue;
         }
         if (totalBytes + bytes.byteLength > maxTotalBytes) {
-          operational.add(
+          limitations.add(
             `${path}: total advisory audit content limit of ${maxTotalBytes} bytes was reached; remaining lockfiles were not examined.`,
           );
-          limitReached = true;
-          continue;
+          break;
         }
 
         totalBytes += bytes.byteLength;
         filesExamined += 1;
 
-        const scanned = scanResolvedPackages(Buffer.from(bytes).toString("utf8"));
+        const scanned = scanLockfile(path, Buffer.from(bytes).toString("utf8"));
         if (scanned.status !== "supported") {
-          operational.add(`${path}: ${scanned.reason ?? "dependency metadata is not supported"}.`);
+          limitations.add(`${path}: ${scanned.reason ?? "dependency metadata is not supported"}.`);
           continue;
         }
 
         const packages: OsvQuery[] = [];
         for (const entry of scanned.packages) {
-          const identity = `${entry.name}@${entry.version}`;
+          const identity = `${entry.ecosystem}:${entry.name}@${entry.version}`;
           if (seenPackages.has(identity)) continue;
           if (seenPackages.size >= maxPackages) {
-            operational.add(
+            limitations.add(
               `Advisory audit package limit of ${maxPackages} was reached; remaining resolved packages were not queried.`,
             );
             limitReached = true;
             break;
           }
           seenPackages.add(identity);
-          packages.push({ name: entry.name, version: entry.version });
+          packages.push({ ecosystem: entry.ecosystem, name: entry.name, version: entry.version });
         }
 
         if (packages.length > 0) targets.push({ lockPath: path, packages });
@@ -177,21 +175,21 @@ export function createAdvisoriesDoctor(options: AdvisoriesDoctorOptions = {}): D
       if (allPackages.length > 0) {
         const lookup = await client.lookup(allPackages);
         if (lookup.status === "failed") {
-          operational.add(
+          limitations.add(
             `Advisory lookup did not complete: ${lookup.message} Advisory coverage is incomplete, and zero findings is not a clean result.`,
           );
         } else {
           lookupLimitations.push(...lookup.limitations);
           const byIdentity = new Map<string, OsvPackageAdvisories>(
             lookup.results.map((result) => [
-              `${result.package.name}@${result.package.version}`,
+              `${result.package.ecosystem}:${result.package.name}@${result.package.version}`,
               result,
             ]),
           );
 
           for (const target of targets) {
             const advisories = target.packages
-              .map((pkg) => byIdentity.get(`${pkg.name}@${pkg.version}`))
+              .map((pkg) => byIdentity.get(`${pkg.ecosystem}:${pkg.name}@${pkg.version}`))
               .filter((entry): entry is OsvPackageAdvisories => entry !== undefined);
             const targetFindings = advisoryFindings({
               lockPath: target.lockPath,
@@ -204,25 +202,19 @@ export function createAdvisoriesDoctor(options: AdvisoriesDoctorOptions = {}): D
         }
       }
 
-      if (coverageRecords.length === 0 && selection.targets.length === 0) {
-        coverageRecords.push(coverage("not-applicable", selection.scope, 0, 0, 0, []));
-      } else {
-        coverageRecords.push(
-          coverage(
-            operational.size > 0 || lookupLimitations.length > 0 ? "partial" : "completed",
-            selection.scope,
-            filesExamined,
-            allPackages.length,
-            findingsReported,
-            [...operational, ...lookupLimitations, POINT_IN_TIME_NOTE],
-          ),
-        );
-      }
-
       return {
         status: "completed",
         findings: sortFindings(findings),
-        coverage: coverageRecords.sort((left, right) => left.scope.localeCompare(right.scope)),
+        coverage: [
+          coverage(
+            limitations.size > 0 || lookupLimitations.length > 0 ? "partial" : "completed",
+            snapshot.auditScope.mode,
+            filesExamined,
+            allPackages.length,
+            findingsReported,
+            [...limitations, ...lookupLimitations, POINT_IN_TIME_NOTE],
+          ),
+        ],
         durationMs: Date.now() - startedAt,
       };
     },

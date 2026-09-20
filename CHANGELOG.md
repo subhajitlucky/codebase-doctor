@@ -7,10 +7,12 @@ All notable changes to Codebase Doctor are documented here.
 ### Added
 
 - Add the opt-in `security/advisories` module (`--with-advisories`): one bounded
-  OSV lookup over resolved npm lockfile packages, reporting advisory id,
-  aliases, severity, and a fixed version when available. It sends only package
-  names and versions, is point-in-time by design, and keeps coverage partial
-  when the lookup fails. The MCP server never enables it.
+  OSV lookup over resolved packages from `package-lock.json`, `pnpm-lock.yaml`,
+  `yarn.lock` (v1 and Berry), `bun.lock`, `poetry.lock`, and `uv.lock`,
+  reporting advisory id, aliases, severity, and a fixed version when available.
+  It sends only package names, versions, and ecosystems, is point-in-time by
+  design, and keeps coverage partial when the lookup fails. The MCP server never
+  enables it.
 
 ### Security
 
