@@ -11,6 +11,7 @@ import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
 import { createAgentSurfaceDoctor } from "../audits/ai/agent-surface/doctor.js";
 import { createAdvisoriesDoctor } from "../audits/security/advisories/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
+import { createSecretsHistoryDoctor } from "../audits/security/secrets-history/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
 import { loadPackageManifests } from "../workspace/manifest-loader.js";
 import { detectProjects } from "../workspace/project-detector.js";
@@ -112,6 +113,7 @@ const defaultDependencies: ScanDependencies = {
     ];
     if (request.includeSecurityAudit === true) {
       doctors.push(createSecretsDoctor());
+      doctors.push(createSecretsHistoryDoctor());
       doctors.push(createDependenciesDoctor());
       // Advisory lookup is an optional network add-on: only an explicit
       // --with-advisories request adds the module, so an unrequested lookup

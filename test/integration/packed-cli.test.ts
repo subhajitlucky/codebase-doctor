@@ -235,6 +235,9 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
             moduleId: "security/secrets",
             status: "partial",
           }),
+          expect.objectContaining({
+            moduleId: "security/secrets-history",
+          }),
         ],
       }));
 
