@@ -292,4 +292,71 @@ describe("scan CLI", () => {
       result.stdout.indexOf("Check: npm run test — passed"),
     );
   });
+
+  it("renders bounded brief output with scope and coverage", () => {
+    const result = cli([
+      "scan",
+      fixture("node-fail"),
+      "--format",
+      "brief",
+      "--fail-on",
+      "none",
+      "--max-findings",
+      "2",
+    ]);
+
+    expect(result.status).toBe(0);
+    const lines = result.stdout.trimEnd().split("\n");
+    expect(lines[0]).toBe("codebase-doctor brief");
+    expect(lines[1]).toMatch(/^scope=full findings=\d+ shown=\d+ coverage=(complete|incomplete)$/u);
+    expect(result.stdout).toMatch(/\[(info|low|medium|high|critical)\] \S+ /u);
+  });
+
+  it("verifies a saved baseline and reports unchanged findings", () => {
+    const directory = mkdtempSync(resolve(tmpdir(), "codebase-doctor-verify-"));
+    temporaryRoots.push(directory);
+    const baselinePath = join(directory, "baseline.json");
+
+    const saved = cli(["audit", fixture("node-fail"), "--json", "--fail-on", "none"]);
+    expect(saved.status).toBe(0);
+    writeFileSync(baselinePath, saved.stdout, "utf8");
+
+    const verified = cli([
+      "verify",
+      fixture("node-fail"),
+      "--baseline",
+      baselinePath,
+      "--json",
+      "--fail-on",
+      "none",
+    ]);
+    expect(verified.status).toBe(1);
+    const verification = JSON.parse(verified.stdout) as {
+      counts: Record<string, number>;
+      coverageLimitations: string[];
+      baseline: unknown[];
+    };
+    expect(verification.baseline.length).toBeGreaterThan(0);
+    expect(verification.counts.unchanged).toBeGreaterThan(0);
+    expect(verification.counts.resolved).toBe(0);
+
+    const allowed = cli([
+      "verify",
+      fixture("node-fail"),
+      "--baseline",
+      baselinePath,
+      "--fail-on",
+      "none",
+      "--allow-unchanged",
+    ]);
+    expect(allowed.status).toBe(0);
+    expect(allowed.stdout).toContain("Codebase Doctor Verify");
+  });
+
+  it("requires a baseline for verify", () => {
+    const result = cli(["verify", fixture("node-pass")]);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/--baseline/u);
+  });
 });

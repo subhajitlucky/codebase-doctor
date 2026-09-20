@@ -2,16 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIT_TOOL_NAME,
   CAPABILITIES_TOOL_NAME,
+  EXPLAIN_TOOL_NAME,
   parseAuditToolArgs,
   parseCapabilitiesToolArgs,
+  parseExplainToolArgs,
+  parseVerifyToolArgs,
   TOOL_DEFINITIONS,
+  VERIFY_TOOL_NAME,
 } from "../../../src/mcp/tool-schemas.js";
 
 describe("mcp tool definitions", () => {
-  it("advertises the read-only audit and capability tools", () => {
+  it("advertises the read-only audit, verify, explain, and capability tools", () => {
     expect(TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
       AUDIT_TOOL_NAME,
       CAPABILITIES_TOOL_NAME,
+      VERIFY_TOOL_NAME,
+      EXPLAIN_TOOL_NAME,
     ]);
     for (const tool of TOOL_DEFINITIONS) {
       expect(tool.inputSchema.type).toBe("object");
@@ -107,6 +113,75 @@ describe("describe_capabilities argument parsing", () => {
     expect(() => parseCapabilitiesToolArgs({})).not.toThrow();
     expect(() => parseCapabilitiesToolArgs({ verbose: true })).toThrow(
       /expected no arguments/u,
+    );
+  });
+});
+
+describe("verify_changes argument parsing", () => {
+  it("requires a baseline and defaults to json", () => {
+    expect(() => parseVerifyToolArgs({})).toThrow(/baseline/u);
+    expect(parseVerifyToolArgs({ baseline: "before.json" })).toEqual({
+      baseline: "before.json",
+      format: "json",
+    });
+  });
+
+  it("keeps path, changed, base, and summary passthrough", () => {
+    expect(
+      parseVerifyToolArgs({
+        path: "/tmp/repo",
+        baseline: "before.json",
+        format: "summary",
+        changed: true,
+        base: "main",
+      }),
+    ).toEqual({
+      path: "/tmp/repo",
+      baseline: "before.json",
+      format: "summary",
+      changed: true,
+      base: "main",
+    });
+  });
+
+  it("rejects unsupported formats and base without changed", () => {
+    expect(() => parseVerifyToolArgs({ baseline: "b.json", format: "sarif" })).toThrow(
+      /expected "json" or "summary"/u,
+    );
+    expect(() => parseVerifyToolArgs({ baseline: "b.json", base: "main" })).toThrow(
+      /--base option requires --changed/u,
+    );
+  });
+});
+
+describe("explain_finding argument parsing", () => {
+  it("requires a fingerprint or rule id", () => {
+    expect(() => parseExplainToolArgs({})).toThrow(/fingerprint.*ruleId|ruleId.*fingerprint/u);
+    expect(parseExplainToolArgs({ ruleId: "source/import-target-missing" })).toEqual({
+      ruleId: "source/import-target-missing",
+    });
+  });
+
+  it("keeps fingerprint, path, changed, and base passthrough", () => {
+    expect(
+      parseExplainToolArgs({
+        path: "/tmp/repo",
+        fingerprint: "abc123",
+        changed: true,
+        base: "main",
+      }),
+    ).toEqual({
+      path: "/tmp/repo",
+      fingerprint: "abc123",
+      changed: true,
+      base: "main",
+    });
+  });
+
+  it("rejects unknown arguments and base without changed", () => {
+    expect(() => parseExplainToolArgs({ rule: "x" })).toThrow(/rule/u);
+    expect(() => parseExplainToolArgs({ ruleId: "x", base: "main" })).toThrow(
+      /--base option requires --changed/u,
     );
   });
 });
