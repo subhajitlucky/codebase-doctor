@@ -7,8 +7,11 @@ import {
   loadSourceAliasConfigs,
   type SourceAliasConfigOptions,
 } from "./config.js";
+import { loadGoModuleInfo } from "./go-mod.js";
+import { parseGoImports } from "./go-parser.js";
 import { parseSourceImports } from "./parser.js";
 import { isPythonSourcePath } from "./python-resolver.js";
+import { isGoSourcePath } from "./go-mod.js";
 import { parsePythonImports } from "./python-parser.js";
 import {
   createSourceResolverIndex,
@@ -135,17 +138,20 @@ export async function buildSourceGraph(
       : { maxExtendsDepth: options.maxExtendsDepth },
   );
   const generatedTargets = await loadGeneratedTargetEvidence(inventory, readFile);
+  const goModuleInfo = await loadGoModuleInfo(inventory, projects, readFile);
   const resolver = createSourceResolverIndex({
     files: inventory.files,
     manifests,
     projects,
     configs: config.configs,
     generatedTargetEvidence: generatedTargets.evidence,
+    goModules: goModuleInfo.modules,
   });
   const limitations = new Set([
     ...selection.limitations,
     ...config.limitations,
     ...generatedTargets.limitations,
+    ...goModuleInfo.limitations,
   ]);
   const nodes: SourceGraphNode[] = selection.files.map(({ path }) => {
     const projectId = ownerOf(path, projects);
@@ -180,7 +186,9 @@ export async function buildSourceGraph(
     bytesExamined += sourceBytes;
     const parsed = isPythonSourcePath(file.path)
       ? parsePythonImports(file.path, source)
-      : parseSourceImports(file.path, source);
+      : isGoSourcePath(file.path)
+        ? parseGoImports(file.path, source)
+        : parseSourceImports(file.path, source);
     for (const limitation of parsed.limitations) limitations.add(limitation);
     dynamicBoundaryCount += parsed.dynamicBoundaryCount;
 

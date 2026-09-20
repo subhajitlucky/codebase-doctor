@@ -11,6 +11,8 @@ import {
   type SourceAliasConfig,
   type SafeSourceAlias,
 } from "./config.js";
+import { isGoSourcePath, type GoModuleInfo } from "./go-mod.js";
+import { resolveGoImport } from "./go-resolver.js";
 import { importSpecifier, type SafeImportReference } from "./parser.js";
 import { isPythonSourcePath, resolvePythonImport } from "./python-resolver.js";
 import { isSupportedSourcePath } from "./selection.js";
@@ -29,6 +31,7 @@ export interface SourceResolverContext {
   readonly projects: readonly DetectedProject[];
   readonly configs: readonly SourceAliasConfig[];
   readonly generatedTargetEvidence?: GeneratedTargetEvidence;
+  readonly goModules?: ReadonlyMap<string, GoModuleInfo>;
 }
 
 export interface SourceResolverIndex extends SourceResolverContext {
@@ -358,6 +361,9 @@ export function resolveSourceImport(
   const sourcePaths = index.sourcePaths;
   if (isPythonSourcePath(importerPath)) {
     return resolvePythonImport(importerPath, specifier, index);
+  }
+  if (isGoSourcePath(importerPath)) {
+    return resolveGoImport(importerPath, specifier, index);
   }
   if (specifier.startsWith(".")) {
     const candidates = candidatePaths(posix.dirname(importerPath), specifier, importerPath);

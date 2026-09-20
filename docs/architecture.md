@@ -171,6 +171,17 @@ packages, `<module>.<attribute>` layouts, and non-literal dynamic calls are
 edges without a missing-target proof or limitations, never findings.
 Unterminated string literals make Python parsing partial.
 
+Go `.go` files contribute single and block `import` declarations through a
+bounded tokenizer that ignores line and block comments, interpreted strings,
+raw strings, and rune literals. Each Go project's `go.mod` contributes the
+module path and `replace` presence; imports under the module path resolve to
+the sorted first non-test `.go` file in the target directory. Internal
+packages that are absent carry the `module-internal` missing-target proof only
+when no `replace` directive exists, because a replacement can redirect the
+package outside the repository. `go.work`-only layouts and unreadable module
+metadata are limitations; standard library and third-party paths are external
+boundaries.
+
 Selection admits supported regular JavaScript, TypeScript, and Python source
 files from the bounded, symlink-safe inventory. Resolution covers internal
 relative, extension, index, selected alias, unique workspace-package, and
@@ -204,11 +215,12 @@ consumes the precomputed graph after scope planning. The
 `source/import-target-missing`. This prevents topology uncertainty from being
 reclassified as a correctness defect.
 
-The Doctor is precision-first and diagnoses only three proof classes: an
+The Doctor is precision-first and diagnoses only four proof classes: an
 explicit relative target with a supported source extension; a single
 deterministic alias whose configured target explicitly names a supported source
-file; and a unique workspace package whose explicit entry names a supported
-source file. Python relative module imports participate as explicit relative
+file; a unique workspace package whose explicit entry names a supported source
+file; and an internal Go package under a module path without a `replace`
+directive. Python relative module imports participate as explicit relative
 targets; bare-dot attribute imports and absolute internal imports without a
 present file carry no missing-target proof. Extensionless, JSON, custom-loader,
 conditional, ambiguous, external, and dynamic references and cycles are not

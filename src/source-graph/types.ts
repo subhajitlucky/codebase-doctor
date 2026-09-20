@@ -15,7 +15,8 @@ export type SourceImportKind = (typeof SOURCE_IMPORT_KINDS)[number];
 
 export type MissingTargetProof =
   | "relative-explicit"
-  | "alias-explicit";
+  | "alias-explicit"
+  | "module-internal";
 
 export type SourceGraphStatus =
   | "completed"
