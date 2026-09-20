@@ -10,6 +10,7 @@ const MAX_DATABASE_TIMEOUT_MS = 3_600_000;
 
 interface AuditCommandOptions extends RepositoryCommandOptions {
   withDatabase: boolean;
+  withAdvisories: boolean;
   databaseSchema: string[];
   databaseTimeout: string;
 }
@@ -49,6 +50,7 @@ function databaseRequest(options: AuditCommandOptions): Partial<ScanRequest> {
     includeDatabaseAudit: true,
     includeSecurityAudit: true,
     withDatabase: options.withDatabase,
+    withAdvisories: options.withAdvisories,
     databaseSchemas: normalizeDatabaseSchemas(options.databaseSchema),
     databaseTimeoutMs: parseDatabaseTimeout(options.databaseTimeout),
   };
@@ -72,6 +74,11 @@ export function createAuditCommand(): Command {
       "--database-timeout <ms>",
       "PostgreSQL catalog statement timeout in milliseconds",
       String(DEFAULT_DATABASE_TIMEOUT_MS),
+    )
+    .option(
+      "--with-advisories",
+      "permit one opt-in OSV advisory lookup over resolved npm packages (network)",
+      false,
     );
 
   return configureRepositoryCommand<AuditCommandOptions>(command, databaseRequest);

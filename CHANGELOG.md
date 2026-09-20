@@ -2,6 +2,22 @@
 
 All notable changes to Codebase Doctor are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Add the opt-in `security/advisories` module (`--with-advisories`): one bounded
+  OSV lookup over resolved npm lockfile packages, reporting advisory id,
+  aliases, severity, and a fixed version when available. It sends only package
+  names and versions, is point-in-time by design, and keeps coverage partial
+  when the lookup fails. The MCP server never enables it.
+
+### Security
+
+- Add the least-privilege `network:advisories` capability so advisory lookups
+  cannot grant live-database network access, and gate the module behind the
+  explicit `--with-advisories` flag.
+
 ## [0.1.8] - 2026-09-20
 
 ### Added
