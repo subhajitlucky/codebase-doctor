@@ -2,6 +2,21 @@
 
 All notable changes to Codebase Doctor are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Add the `verify` command: compares a prior schema-1 JSON report with a fresh
+  audit and reports each baseline fingerprint as `resolved`, `unchanged`, or
+  `unresolved`. Absence under incomplete coverage is never resolved. New
+  findings are listed separately, and `--allow-unchanged` relaxes unchanged
+  failures.
+- Add `--format brief`: token-bounded, findings-only output with scope, coverage,
+  truncation, and coverage-limitation lines, plus `--max-findings`
+  (default 100).
+- Add the `verify_changes` and `explain_finding` MCP tools with the same
+  read-only, offline, bounded-payload contract as `audit_codebase`.
+
 ## [0.1.7] - 2026-09-20
 
 ### Added

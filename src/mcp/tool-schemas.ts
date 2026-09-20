@@ -2,6 +2,8 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 export const AUDIT_TOOL_NAME = "audit_codebase";
 export const CAPABILITIES_TOOL_NAME = "describe_capabilities";
+export const VERIFY_TOOL_NAME = "verify_changes";
+export const EXPLAIN_TOOL_NAME = "explain_finding";
 
 export type McpAuditFormat = "json" | "summary";
 
@@ -12,6 +14,30 @@ const AUDIT_TOOL_ARGUMENTS = new Set(["path", "format", "changed", "base"]);
 export interface AuditToolArgs {
   path?: string;
   format: McpAuditFormat;
+  changed?: boolean;
+  base?: string;
+}
+
+export type McpVerifyFormat = "json" | "summary";
+
+const MCP_VERIFY_FORMATS = new Set<McpVerifyFormat>(["json", "summary"]);
+
+const VERIFY_TOOL_ARGUMENTS = new Set(["path", "baseline", "format", "changed", "base"]);
+
+export interface VerifyToolArgs {
+  path?: string;
+  baseline: string;
+  format: McpVerifyFormat;
+  changed?: boolean;
+  base?: string;
+}
+
+const EXPLAIN_TOOL_ARGUMENTS = new Set(["path", "fingerprint", "ruleId", "changed", "base"]);
+
+export interface ExplainToolArgs {
+  path?: string;
+  fingerprint?: string;
+  ruleId?: string;
   changed?: boolean;
   base?: string;
 }
@@ -82,6 +108,99 @@ export const TOOL_DEFINITIONS: readonly Tool[] = [
     },
     annotations: {
       title: "Describe Codebase Doctor capabilities",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: VERIFY_TOOL_NAME,
+    description:
+      "Verify that findings from a prior schema-1 JSON report are repaired. " +
+      "Runs a fresh read-only audit, compares fingerprints, and reports each " +
+      "baseline finding as resolved, unchanged, or unresolved. Absence under " +
+      "incomplete coverage is unresolved, never resolved. Read-only and offline " +
+      "by default; it never enables validation commands or live database access.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Repository path to verify. Defaults to the server working directory.",
+        },
+        baseline: {
+          type: "string",
+          description:
+            "Path to a prior codebase-doctor schema-1 JSON report on this machine.",
+        },
+        format: {
+          type: "string",
+          enum: ["json", "summary"],
+          description:
+            'Report rendering: "json" returns the structured verification ' +
+            'result; "summary" returns the deterministic text report.',
+        },
+        changed: {
+          type: "boolean",
+          description:
+            "Verify against Git changes and their selected scope instead of the " +
+            "full repository.",
+        },
+        base: {
+          type: "string",
+          description: "Git ref to compare against from the merge base; requires changed.",
+        },
+      },
+      required: ["baseline"],
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "Verify repairs against a baseline",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: EXPLAIN_TOOL_NAME,
+    description:
+      "Return the full evidence, remediation guidance, and verification command " +
+      "for one finding, selected by fingerprint or rule id. Read-only and offline.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Repository path to audit. Defaults to the server working directory.",
+        },
+        fingerprint: {
+          type: "string",
+          description: "Exact finding fingerprint from a prior JSON report.",
+        },
+        ruleId: {
+          type: "string",
+          description:
+            "Rule id, for example database/drizzle/raw-sql-date-parameter. " +
+            "Returns the highest-severity match.",
+        },
+        changed: {
+          type: "boolean",
+          description: "Audit Git changes and their selected scope instead of the full repository.",
+        },
+        base: {
+          type: "string",
+          description: "Git ref to compare against from the merge base; requires changed.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "Explain one finding",
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
@@ -175,4 +294,95 @@ export function parseCapabilitiesToolArgs(input: unknown): void {
       `Invalid ${CAPABILITIES_TOOL_NAME} arguments: expected no arguments.`,
     );
   }
+}
+
+function rejectUnknownArguments(
+  args: Map<string, unknown>,
+  allowed: ReadonlySet<string>,
+  toolName: string,
+): void {
+  for (const key of args.keys()) {
+    if (!allowed.has(key)) {
+      throw new Error(
+        `Invalid ${toolName} argument "${key}": supported arguments are ` +
+          `${[...allowed].sort().join(", ")}.`,
+      );
+    }
+  }
+}
+
+function readRequiredString(
+  args: Map<string, unknown>,
+  key: string,
+  toolName: string,
+): string {
+  const value = readString(args, key, toolName);
+  if (value === undefined) {
+    throw new Error(`Missing required ${toolName} argument "${key}".`);
+  }
+  return value;
+}
+
+function readChangedAndBase(
+  args: Map<string, unknown>,
+  toolName: string,
+): { changed: boolean; base?: string } {
+  const changed = readBoolean(args, "changed", toolName) === true;
+  const base = readString(args, "base", toolName);
+  if (base !== undefined && !changed) {
+    throw new Error("The --base option requires --changed.");
+  }
+  return { changed, ...(base === undefined ? {} : { base }) };
+}
+
+/** Validate and normalize raw verify_changes arguments. */
+export function parseVerifyToolArgs(input: unknown): VerifyToolArgs {
+  const args = requireObject(input, VERIFY_TOOL_NAME);
+  rejectUnknownArguments(args, VERIFY_TOOL_ARGUMENTS, VERIFY_TOOL_NAME);
+
+  const baseline = readRequiredString(args, "baseline", VERIFY_TOOL_NAME);
+  const path = readString(args, "path", VERIFY_TOOL_NAME);
+  const formatValue = args.get("format");
+  if (
+    formatValue !== undefined &&
+    (typeof formatValue !== "string" ||
+      !MCP_VERIFY_FORMATS.has(formatValue as McpVerifyFormat))
+  ) {
+    throw new Error(
+      `Invalid ${VERIFY_TOOL_NAME} argument "format": expected "json" or "summary".`,
+    );
+  }
+  const { changed, base } = readChangedAndBase(args, VERIFY_TOOL_NAME);
+
+  return {
+    baseline,
+    format: (formatValue as McpVerifyFormat | undefined) ?? "json",
+    ...(path === undefined ? {} : { path }),
+    ...(changed ? { changed: true } : {}),
+    ...(base === undefined ? {} : { base }),
+  };
+}
+
+/** Validate and normalize raw explain_finding arguments. */
+export function parseExplainToolArgs(input: unknown): ExplainToolArgs {
+  const args = requireObject(input, EXPLAIN_TOOL_NAME);
+  rejectUnknownArguments(args, EXPLAIN_TOOL_ARGUMENTS, EXPLAIN_TOOL_NAME);
+
+  const path = readString(args, "path", EXPLAIN_TOOL_NAME);
+  const fingerprint = readString(args, "fingerprint", EXPLAIN_TOOL_NAME);
+  const ruleId = readString(args, "ruleId", EXPLAIN_TOOL_NAME);
+  if (fingerprint === undefined && ruleId === undefined) {
+    throw new Error(
+      `${EXPLAIN_TOOL_NAME} requires a "fingerprint" or a "ruleId" argument.`,
+    );
+  }
+  const { changed, base } = readChangedAndBase(args, EXPLAIN_TOOL_NAME);
+
+  return {
+    ...(path === undefined ? {} : { path }),
+    ...(fingerprint === undefined ? {} : { fingerprint }),
+    ...(ruleId === undefined ? {} : { ruleId }),
+    ...(changed ? { changed: true } : {}),
+    ...(base === undefined ? {} : { base }),
+  };
 }
