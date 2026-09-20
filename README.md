@@ -130,7 +130,7 @@ A normal semver range such as `^5.0.0` is not a finding when lock metadata agree
 
 ### `security/advisories` (opt-in network lookup)
 
-`audit . --with-advisories` performs one bounded OSV lookup for resolved npm lockfile v2/v3 packages. It sends only package names and versions to api.osv.dev; no source, credentials, or file contents leave the machine, and nothing is written. Without the flag the module is not registered, so an unrequested lookup never marks the security domain incomplete; the MCP server never enables it.
+`audit . --with-advisories` performs one bounded OSV lookup for resolved packages from every discovered supported lockfile: `package-lock.json` (v2/v3), `pnpm-lock.yaml` (v5+), `yarn.lock` (v1 and Berry), `bun.lock` (text form), `poetry.lock`, and `uv.lock`. It sends only package names, versions, and ecosystems to api.osv.dev; no source, credentials, or file contents leave the machine, and nothing is written. Without the flag the module is not registered, so an unrequested lookup never marks the security domain incomplete; the MCP server never enables it.
 
 Results are point-in-time: coverage records that advisory data can change as new advisories publish, and a failed or partial lookup is never a clean result. Findings are high-confidence and report the advisory id, aliases, severity, and a fixed version when the advisory provides one. Remediation is an external upgrade through the repository's authorized package manager, followed by rerunning the same scope with `--with-advisories`. Advisory lookup uses the least-privilege `network:advisories` capability, which does not grant live-database access.
 

@@ -1,4 +1,7 @@
+import type { LockEcosystem } from "./parser.js";
+
 export interface OsvQuery {
+  readonly ecosystem: LockEcosystem;
   readonly name: string;
   readonly version: string;
 }
@@ -135,7 +138,8 @@ export function createOsvClient(options: OsvClientOptions = {}): OsvClient {
       const limitations: string[] = [];
       const perPackage = new Map<string, OsvAdvisory[]>();
       const advisoryIds = new Map<string, Set<string>>();
-      const identity = (query: OsvQuery): string => `${query.name}@${query.version}`;
+      const identity = (query: OsvQuery): string =>
+        `${query.ecosystem}:${query.name}@${query.version}`;
       const failed = (message: string): OsvLookupResult => ({ status: "failed", message });
 
       try {
@@ -146,7 +150,7 @@ export function createOsvClient(options: OsvClientOptions = {}): OsvClient {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               queries: chunk.map((query) => ({
-                package: { name: query.name, ecosystem: "npm" },
+                package: { name: query.name, ecosystem: query.ecosystem },
                 version: query.version,
               })),
             }),
