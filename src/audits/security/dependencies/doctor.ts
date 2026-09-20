@@ -9,6 +9,12 @@ import {
   type Finding,
 } from "../../../core/findings.js";
 import { analyzeDependencyTarget, type InternalPackage } from "./analyzer.js";
+import {
+  analyzeCrossEcosystemTarget,
+  isNodeManagerEcosystem,
+  selectCrossEcosystemTargets,
+} from "./ecosystems.js";
+import { parseNodeLock } from "./node-locks.js";
 import { parseNpmLock, type NpmLockParseResult } from "./parser.js";
 import { selectDependencyAuditTargets } from "./selection.js";
 import { safeNpmPackageName } from "./source.js";
@@ -36,6 +42,7 @@ const TITLE_BY_FAMILY: Record<DependencyFindingFamily, string> = {
   "missing-integrity": "Resolved npm tarball lacks valid integrity evidence",
   "workspace-registry-resolution": "Internal workspace name resolves outside its member",
   "competing-npm-lockfiles": "Competing npm lockfiles can diverge",
+  "competing-lockfiles": "Competing package-manager lockfiles can diverge",
 };
 
 const IMPACT_BY_FAMILY: Record<DependencyFindingFamily, string> = {
@@ -46,6 +53,7 @@ const IMPACT_BY_FAMILY: Record<DependencyFindingFamily, string> = {
   "missing-integrity": "The lockfile does not provide valid local integrity evidence for the resolved tarball.",
   "workspace-registry-resolution": "An internal package name resolving externally can install unintended registry content.",
   "competing-npm-lockfiles": "Different npm lock authorities can silently describe different install graphs.",
+  "competing-lockfiles": "Different package-manager lock authorities can silently describe different install graphs.",
 };
 
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {
@@ -156,6 +164,7 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
       const selection = selectDependencyAuditTargets(snapshot);
+      const crossSelection = selectCrossEcosystemTargets(snapshot);
       const findings: Finding[] = [];
       const coverageRecords: AuditCoverage[] = [];
       const internalPackages: InternalPackage[] = snapshot.projects.flatMap((project) => {
@@ -164,9 +173,16 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
           : safeNpmPackageName(project.packageName);
         return name === undefined ? [] : [{ name, root: project.root }];
       });
+      const internalNames = new Set(internalPackages.map(({ name }) => name));
       let totalBytes = 0;
 
       for (const unsupported of selection.unsupportedScopes) {
+        if (
+          isNodeManagerEcosystem(unsupported.ecosystem) &&
+          crossSelection.handledProjectIds.has(unsupported.projectId)
+        ) {
+          continue;
+        }
         coverageRecords.push(coverage(
           "unsupported",
           `${selection.scope}:${unsupported.projectId}`,
@@ -189,6 +205,7 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
       if (
         selection.scope === "changed" &&
         selection.targets.length === 0 &&
+        crossSelection.targets.length === 0 &&
         selection.unsupportedScopes.length === 0 &&
         selection.notApplicableScopes.length === 0
       ) {
@@ -291,6 +308,105 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
         ));
         coverageRecords.push(coverage(
           targetLimitations.length > 0 ? "partial" : "completed",
+          scope,
+          target.coveredProjects.length + lockExamined,
+          statementsExamined,
+          emittedMatches.length,
+          targetLimitations,
+        ));
+      }
+
+      for (const target of crossSelection.targets) {
+        const targetLimitations = [...crossSelection.limitations, ...target.limitations];
+        const scope = `${selection.scope}:${target.lockRoot}:${target.manager}`;
+        let summary;
+        let lockExamined = 0;
+        let statementsExamined = 0;
+
+        if (findings.length >= maxFindings) {
+          targetLimitations.push(
+            `Dependency audit finding limit of ${maxFindings} was reached; additional matches and remaining lock roots were not reported.`,
+          );
+          coverageRecords.push(coverage(
+            "partial",
+            scope,
+            target.coveredProjects.length,
+            0,
+            0,
+            targetLimitations,
+          ));
+          continue;
+        }
+
+        if (target.lockfile !== undefined) {
+          const path = target.lockfile.path;
+          if (target.lockfile.size > maxFileBytes) {
+            targetLimitations.push(
+              `${path}: file exceeds the ${maxFileBytes}-byte dependency audit size limit.`,
+            );
+          } else if (totalBytes + target.lockfile.size > maxTotalBytes) {
+            targetLimitations.push(
+              `${path}: total dependency audit content limit of ${maxTotalBytes} bytes was reached; remaining lockfiles were not examined.`,
+            );
+          } else {
+            let bytes: Uint8Array | undefined;
+            try {
+              bytes = await readSelectedFile(join(snapshot.root, ...path.split("/")));
+            } catch {
+              targetLimitations.push(`${path}: unable to read selected dependency metadata.`);
+            }
+            if (bytes !== undefined) {
+              if (bytes.byteLength > maxFileBytes) {
+                targetLimitations.push(
+                  `${path}: file exceeds the ${maxFileBytes}-byte dependency audit size limit.`,
+                );
+              } else if (totalBytes + bytes.byteLength > maxTotalBytes) {
+                targetLimitations.push(
+                  `${path}: total dependency audit content limit of ${maxTotalBytes} bytes was reached; remaining lockfiles were not examined.`,
+                );
+              } else {
+                totalBytes += bytes.byteLength;
+                lockExamined = 1;
+                summary = parseNodeLock(path, Buffer.from(bytes).toString("utf8"));
+                statementsExamined = summary?.packages.length ?? 0;
+              }
+            }
+          }
+        }
+
+        const canAnalyze = target.lockfile === undefined || summary !== undefined;
+        const analysis = canAnalyze
+          ? analyzeCrossEcosystemTarget({
+              target,
+              ...(summary === undefined ? {} : { lock: summary }),
+              manifests: snapshot.manifests,
+              internalNames,
+            })
+          : { matches: [], limitations: [] };
+        targetLimitations.push(...analysis.limitations);
+
+        const targetMatches = analysis.matches.slice(0, maxFindingsPerTarget);
+        if (analysis.matches.length > maxFindingsPerTarget) {
+          targetLimitations.push(
+            `${target.lockfile?.path ?? target.lockRoot}: dependency finding limit of ${maxFindingsPerTarget} was reached; additional matches were withheld.`,
+          );
+        }
+        const remaining = maxFindings - findings.length;
+        const emittedMatches = targetMatches.slice(0, remaining);
+        if (targetMatches.length > remaining) {
+          targetLimitations.push(
+            `Dependency audit finding limit of ${maxFindings} was reached; additional matches and remaining lock roots were not reported.`,
+          );
+        }
+        findings.push(...emittedMatches.map((match) =>
+          findingFor(match, snapshot.auditScope.mode === "changed")
+        ));
+        coverageRecords.push(coverage(
+          targetLimitations.length > 0
+            ? "partial"
+            : analysis.matches.length === 0 && target.coveredProjects.length === 0
+              ? "not-applicable"
+              : "completed",
           scope,
           target.coveredProjects.length + lockExamined,
           statementsExamined,

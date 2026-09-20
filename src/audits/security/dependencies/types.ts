@@ -39,7 +39,8 @@ export type DependencyFindingFamily =
   | "mutable-git-source"
   | "missing-integrity"
   | "workspace-registry-resolution"
-  | "competing-npm-lockfiles";
+  | "competing-npm-lockfiles"
+  | "competing-lockfiles";
 
 export interface DependencyMatch {
   readonly family: DependencyFindingFamily;

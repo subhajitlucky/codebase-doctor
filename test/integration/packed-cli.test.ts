@@ -454,7 +454,11 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
       )).toEqual([]);
       expect(unsupportedDependencyReport.coverage).toContainEqual(expect.objectContaining({
         moduleId: "security/dependencies",
-        status: "unsupported",
+        status: "partial",
+        scope: "full:.:pnpm",
+        limitations: expect.arrayContaining([
+          expect.stringContaining("no importers section"),
+        ]),
       }));
 
       const sourceRepository = join(temporaryRoot, "source-impact-repository");

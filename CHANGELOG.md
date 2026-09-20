@@ -6,6 +6,12 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Extend the read-only, offline `security/dependencies` module beyond npm:
+  projects that declare or expose pnpm, Yarn (v1 and Berry), or Bun lock
+  authority are now covered for insecure sources, mutable git references,
+  missing integrity or checksums, manifest-lock drift where the lock records
+  ranges, missing lockfiles, and `competing-lockfiles`. Only recorded
+  dimensions are compared; everything else stays visible as partial coverage.
 - Add the read-only `database/rls-drift` module (`--with-database`): compares
   reconstructed static migration state with the live catalog for table
   existence, RLS and FORCE RLS enablement, policy names, and explicit migration

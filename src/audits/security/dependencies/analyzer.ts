@@ -39,7 +39,7 @@ function objectValue(value: unknown): JsonObject | undefined {
     : undefined;
 }
 
-function manifestSections(
+export function manifestSections(
   manifest: Extract<ManifestRecord, { status: "valid" }>,
   limitations: Set<string>,
 ): Record<DependencySection, Map<string, string>> {
@@ -90,7 +90,7 @@ function driftMatch(
   };
 }
 
-function hasExternalInstallGraph(
+export function hasExternalInstallGraph(
   sections: Readonly<Record<DependencySection, ReadonlyMap<string, string>>>,
   internalNames: ReadonlySet<string>,
 ): boolean {

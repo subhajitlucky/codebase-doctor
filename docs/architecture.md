@@ -371,22 +371,33 @@ independent verification.
 
 The combined audit registers `security/dependencies` as a read-only, offline
 Doctor immediately after `security/secrets`. It supports npm lockfile versions
-2 and 3. pnpm, Yarn, Bun, Python, and other dependency ecosystems are detected
-as unsupported coverage until a native parser exists; the Doctor does not guess
-their graph state.
+2 and 3. Projects that declare or expose pnpm, Yarn, or Bun lock authority are
+covered by a cross-ecosystem path: `pnpm-lock.yaml` (v5+), `yarn.lock` (v1 and
+Berry), and text `bun.lock` are parsed for resolved sources, integrity or
+checksum evidence, and the manifest ranges the lock actually records. Python
+and other dependency ecosystems remain unsupported coverage; the Doctor does not
+guess their graph state.
 
 The module never invokes npm or another package manager, never launches a shell,
 installer, or lifecycle script, and never uses the network. It reads only
-inventoried regular `package.json`, `package-lock.json`, and
-`npm-shrinkwrap.json` metadata. Lockfile reads are limited to 20 MB each and
-100 MB per audit; output is limited to 100 findings per lock root and 1,000 per
-audit. Every ceiling or read/parse limitation produces partial coverage.
+inventoried regular `package.json`, `package-lock.json`,
+`npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, and `bun.lock` metadata,
+plus the governed `package.json` manifests for those roots. Lockfile reads are
+limited to 20 MB each and 100 MB per audit; output is limited to 100 findings
+per lock root and 1,000 per audit. Every ceiling or read/parse limitation
+produces partial coverage.
 
 Full selection groups standalone npm projects and workspace members under their
 governing npm lock root, with nested independent locks analyzed separately.
-`npm-shrinkwrap.json` takes precedence when both npm lock forms exist. Changed
-selection analyzes affected projects with their governing lock root and reports
-unrelated dependency graphs as not-selected.
+`npm-shrinkwrap.json` takes precedence when both npm lock forms exist. The
+cross-ecosystem path groups Node projects under the nearest root that exposes a
+non-npm lockfile, prefers the declared `packageManager` lockfile, reports other
+lockfiles at the same root as `competing-lockfiles`, and withholds drift claims
+when multiple non-npm lockfiles exist without a declared manager. Yarn
+descriptor keys include transitive ranges, so reverse drift is restricted to
+pnpm importer and Bun workspace records. Changed selection analyzes affected
+projects with their governing lock root and reports unrelated dependency graphs
+as not-selected.
 
 The implemented high-confidence rule families are:
 
@@ -397,9 +408,13 @@ The implemented high-confidence rule families are:
 - `security/dependencies/missing-integrity`
 - `security/dependencies/workspace-registry-resolution`
 - `security/dependencies/competing-npm-lockfiles`
+- `security/dependencies/competing-lockfiles`
 
 Exact manifest/lock comparison does not resolve semver. A normal semver range is
-not a finding when the supported lock metadata agrees. The module makes no CVE
+not a finding when the supported lock metadata agrees. Source and integrity
+rules for pnpm, Yarn, and Bun reuse the same classifier as npm; a lock entry
+whose source is not integrity-bearing (git, file, link, workspace) is never
+reported as missing integrity. The module makes no CVE
 or current advisory claim because it has no current advisory source.
 
 Raw dependency specifications and resolved URLs are analyzer-local, withheld
