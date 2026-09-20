@@ -29,6 +29,7 @@ export interface RepositoryCommandOptions {
   baseline?: string;
   timeout: string;
   failOn: string;
+  requireComplete: boolean;
 }
 
 type OutputFormat = "text" | "json" | "sarif";
@@ -115,7 +116,18 @@ async function executeScan(
           noColor: process.env.NO_COLOR !== undefined,
         });
     process.stdout.write(report);
-    process.exitCode = classifyScanExit(result, failOn);
+    process.exitCode = classifyScanExit(result, failOn, {
+      requireComplete: options.requireComplete,
+    });
+    if (
+      options.requireComplete &&
+      process.exitCode === 2 &&
+      result.domainCoverage.some((domain) => !domain.coverageComplete)
+    ) {
+      process.stderr.write(
+        "codebase-doctor: audit coverage is incomplete and --require-complete was set; failing with exit code 2.\n",
+      );
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`codebase-doctor: ${message}\n`);
@@ -145,6 +157,11 @@ export function configureRepositoryCommand<Options extends RepositoryCommandOpti
       "--fail-on <severity>",
       "failure threshold: info, low, medium, high, critical, or none",
       "high",
+    )
+    .option(
+      "--require-complete",
+      "fail with exit code 2 when audit coverage is incomplete",
+      false,
     )
     .action((path: string, options: Options) =>
       executeScan(path, options, () => requestOptions(options))

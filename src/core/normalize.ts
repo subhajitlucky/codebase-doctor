@@ -251,11 +251,22 @@ export function normalizeScanResult(
   };
 }
 
+export interface ExitClassificationOptions {
+  requireComplete?: boolean;
+}
+
 export function classifyScanExit(
   result: ScanResult,
   failOn: FindingThreshold,
+  options: ExitClassificationOptions = {},
 ): 0 | 1 | 2 {
   if (result.doctorRuns.some(({ status }) => status === "failed")) return 2;
+  if (
+    options.requireComplete === true &&
+    result.domainCoverage.some((domain) => !domain.coverageComplete)
+  ) {
+    return 2;
+  }
   const findings = result.comparison === undefined
     ? result.findings
     : result.findings.filter(({ fingerprint }) => result.comparison?.new.includes(fingerprint));

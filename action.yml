@@ -1,0 +1,69 @@
+name: Codebase Doctor
+description: Audit a repository with codebase-doctor and produce text, JSON, or SARIF output.
+author: Subhajit Pradhan
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  path:
+    description: Repository path to audit.
+    required: false
+    default: "."
+  format:
+    description: "Output format: text, json, or sarif."
+    required: false
+    default: sarif
+  output:
+    description: File to write the report to.
+    required: false
+    default: codebase-doctor.sarif
+  fail-on:
+    description: "Failure threshold: info, low, medium, high, critical, or none."
+    required: false
+    default: high
+  require-complete:
+    description: "Fail with exit code 2 when audit coverage is incomplete (\"true\" or \"false\")."
+    required: false
+    default: "false"
+  run-checks:
+    description: "Permit execution of detected validation commands (\"true\" or \"false\")."
+    required: false
+    default: "false"
+  version:
+    description: codebase-doctor version to install from npm.
+    required: false
+    default: latest
+  node-version:
+    description: Node.js version used to run the CLI.
+    required: false
+    default: "20"
+
+outputs:
+  report:
+    description: Path to the generated report file.
+    value: ${{ inputs.output }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install codebase-doctor
+      shell: bash
+      run: npm install --global "codebase-doctor@${{ inputs.version }}"
+
+    - name: Run codebase-doctor
+      shell: bash
+      run: |
+        args=(scan "${{ inputs.path }}" --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
+        if [ "${{ inputs.require-complete }}" = "true" ]; then args+=(--require-complete); fi
+        if [ "${{ inputs.run-checks }}" = "true" ]; then args+=(--run-checks); fi
+
+        codebase-doctor "${args[@]}" > "${{ inputs.output }}" && status=0 || status=$?
+        cat "${{ inputs.output }}"
+        echo "codebase-doctor exit code: $status"
+        exit $status

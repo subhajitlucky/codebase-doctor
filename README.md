@@ -450,6 +450,7 @@ Available options:
 --baseline <path>     Compare with a prior Codebase Doctor JSON report
 --timeout <ms>        Set the per-command timeout (default: 120000)
 --fail-on <severity>  info|low|medium|high|critical|none (default: high)
+--require-complete    Fail with exit code 2 when audit coverage is incomplete
 --with-database       Permit live PostgreSQL catalog access
 --database-schema     Select a database schema; repeatable (default: public)
 --database-timeout    Catalog statement timeout in ms (default: 10000)
@@ -529,9 +530,22 @@ The release package is checked with `npm pack`, installed into a clean temporary
 | --- | --- |
 | `0` | Requested audits completed and no finding met the configured threshold. |
 | `1` | Requested audits completed and at least one finding met the threshold. |
-| `2` | A requested audit could not be completed. |
+| `2` | A requested audit could not be completed, or coverage was incomplete while `--require-complete` was set. |
 
-Exit `2` is an operational failure, not a clean result. `--fail-on none` disables finding-based failure but does not hide findings or operational failures.
+Exit `2` is an operational failure, not a clean result. `--fail-on none` disables finding-based failure but does not hide findings or operational failures. `--require-complete` makes partial domain coverage fail the run so a skipped or unsupported audit area is never reported as clean.
+
+## GitHub Action
+
+A composite action is included at the repository root. It installs the published CLI, runs a scan, writes the report, and fails the job according to `fail-on` (and `require-complete` when enabled). See [docs/github-action.md](docs/github-action.md) for a full workflow with SARIF upload to GitHub code scanning.
+
+```yaml
+- uses: subhajitlucky/codebase-doctor@main
+  with:
+    format: sarif
+    output: codebase-doctor.sarif
+    fail-on: high
+    require-complete: "true"
+```
 
 ## Safety model
 
@@ -661,10 +675,10 @@ Architecture and safety decisions are documented in [docs/architecture.md](docs/
 - Expand source topology beyond the current deterministic JavaScript/TypeScript
   subset and add built-in frontend, backend, security, infrastructure,
   performance, and AI audit coverage without separate doctor installations.
-- Report which applicable areas were audited, skipped, unsupported, or blocked
-  so an agent never mistakes partial coverage for a clean codebase.
-- Add reusable GitHub Action, pull-request annotations, hooks, and agent
-  plugins around the same CLI and report schema.
+- Extend coverage guarantees (for example, per-domain completeness modes)
+  beyond the current global `--require-complete` gate.
+- Add pull-request annotations, hooks, and agent plugins around the same CLI
+  and report schema.
 - Run approved validation in read-only mounts or disposable copies so target
   command side effects cannot alter the audited workspace.
 - Publish cross-model benchmarks that measure defects found, false positives,
