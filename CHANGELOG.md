@@ -7,6 +7,12 @@ All notable changes to Codebase Doctor are documented here.
 ### Added
 
 - Extend the read-only, offline source-impact graph and source-integrity proof
+  to Go: single and block `import` declarations are parsed with a bounded
+  tokenizer, resolved against each project's `go.mod` module path, and missing
+  internal packages carry the `module-internal` proof only when the module has
+  no `replace` directive; `go.work`-only layouts and unreadable metadata stay
+  limitations.
+- Extend the read-only, offline source-impact graph and source-integrity proof
   to Python: statement-level `import`, `from`-imports with relative dots, and
   literal `importlib.import_module`/`__import__` calls are parsed with a
   bounded tokenizer that ignores comments and strings. Relative module imports

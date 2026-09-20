@@ -74,7 +74,7 @@ describe("source file selection", () => {
   it("reports no applicable source when the inventory contains no supported file", () => {
     const result = selectSourceFiles(inventory([
       { path: "README.md", kind: "file", size: 10 },
-      { path: "src/main.go", kind: "file", size: 10 },
+      { path: "src/main.rb", kind: "file", size: 10 },
     ]));
 
     expect(result).toEqual({
