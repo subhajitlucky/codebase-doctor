@@ -182,6 +182,16 @@ package outside the repository. `go.work`-only layouts and unreadable module
 metadata are limitations; standard library and third-party paths are external
 boundaries.
 
+Java `.java` files contribute the package declaration and import statements
+through a bounded tokenizer that ignores line and block comments, strings,
+characters, and text blocks. Package roots are derived from standard
+Maven/Gradle layouts (`src/main/java`, `src/test/java`, and `src/*/java`);
+normal imports resolve to `Root/package/Class.java`, static imports fall back
+from a member path to the declaring class file, and wildcard imports are never
+edges (an internal wildcard becomes a limitation). Missing Java classes are
+unproven internal edges or external boundaries because classes can be generated
+at build time or provided by a dependency with the same package.
+
 Selection admits supported regular JavaScript, TypeScript, and Python source
 files from the bounded, symlink-safe inventory. Resolution covers internal
 relative, extension, index, selected alias, unique workspace-package, and

@@ -5,6 +5,7 @@ import type {
 
 export const SOURCE_IMPORT_KINDS = [
   "static",
+  "static-import",
   "re-export",
   "type-only",
   "require",
