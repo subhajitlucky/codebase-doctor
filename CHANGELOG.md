@@ -6,6 +6,10 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Add the read-only, offline `security/secrets-history` module: bounded Git
+  history scanning for credential-shaped values deleted from the working tree,
+  with the value withheld, subtree-scoped `git log`, and no duplicate finding
+  when the same detector still matches current tracked content.
 - Add the read-only, offline `ai/agent-surface` module: audits MCP client
   configurations (unpinned package runners, shell commands, inline credentials
   with the value withheld, broad filesystem grants) and `SKILL.md` frontmatter.
