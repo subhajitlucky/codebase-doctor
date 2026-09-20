@@ -133,16 +133,23 @@ export function handleDescribeCapabilities(): CallToolResult {
         })),
         auditDomains: AUDIT_DOMAINS,
         doctorCapabilities: {
-          vocabulary: ["filesystem:read", "process:execute", "network:access"],
+          vocabulary: [
+            "filesystem:read",
+            "process:execute",
+            "network:access",
+            "network:advisories",
+          ],
           grantedByThisServer: {
             "filesystem:read": true,
             "process:execute": false,
             "network:access": false,
+            "network:advisories": false,
           },
           note:
             "The MCP surface is read-only and offline. It never enables " +
-            "--run-checks validation commands or --with-database live catalog " +
-            "access; run the CLI explicitly to grant those separately.",
+            "--run-checks validation commands, --with-database live catalog " +
+            "access, or --with-advisories network lookups; run the CLI " +
+            "explicitly to grant those separately.",
         },
         usage:
           "Prefer audit_codebase with changed=true after edits and a full audit " +
