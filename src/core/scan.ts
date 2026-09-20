@@ -8,6 +8,7 @@ import { createRlsDoctor } from "../audits/database/rls/doctor.js";
 import { createDrizzleDoctor } from "../audits/database/drizzle/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
+import { createAgentSurfaceDoctor } from "../audits/ai/agent-surface/doctor.js";
 import { createAdvisoriesDoctor } from "../audits/security/advisories/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
 import { inventoryFiles } from "../workspace/file-inventory.js";
@@ -102,6 +103,7 @@ const defaultDependencies: ScanDependencies = {
       projectDoctor,
       sourceGraphDoctor,
       sourceIntegrityDoctor,
+      createAgentSurfaceDoctor(),
       createCheckDoctor({
         timeoutMs: request.timeoutMs,
         plans,
