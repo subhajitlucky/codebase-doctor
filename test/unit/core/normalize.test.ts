@@ -359,4 +359,26 @@ describe("scan normalization", () => {
     expect(classifyScanExit(result, "high")).toBe(1);
     expect(classifyScanExit(result, "none")).toBe(0);
   });
+
+  it("fails as incomplete under requireComplete when any domain coverage is partial", () => {
+    const incomplete: DomainCoverage[] = [
+      {
+        domain: "frontend",
+        applicability: "detected",
+        status: "partial",
+        coverageComplete: false,
+        evidence: [],
+        modules: [],
+        limitations: ["frontend analysis is not implemented"],
+      },
+    ];
+
+    const complete = normalizeScanResult("/repo", [], fullAuditScope(), []);
+    expect(classifyScanExit(complete, "high", { requireComplete: true })).toBe(0);
+
+    const partial = normalizeScanResult("/repo", [], fullAuditScope(), [], [], incomplete);
+    expect(classifyScanExit(partial, "high")).toBe(0);
+    expect(classifyScanExit(partial, "high", { requireComplete: true })).toBe(2);
+    expect(classifyScanExit(partial, "critical", { requireComplete: true })).toBe(2);
+  });
 });

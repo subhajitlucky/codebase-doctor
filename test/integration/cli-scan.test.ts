@@ -247,6 +247,23 @@ describe("scan CLI", () => {
     expect(result.stderr).toMatch(/does not exist/i);
   });
 
+  it("gates exit code on incomplete coverage with --require-complete", async () => {
+    const root = await createTempProject("codebase-doctor-require-complete-");
+    temporaryRoots.push(root);
+    await writeProjectFile(root, "package.json", JSON.stringify({ private: true }));
+
+    const tolerant = cli(["scan", root, "--json", "--fail-on", "none"], repositoryRoot, root);
+    expect(tolerant.status).toBe(0);
+
+    const strict = cli(
+      ["scan", root, "--json", "--fail-on", "none", "--require-complete"],
+      repositoryRoot,
+      root,
+    );
+    expect(strict.status).toBe(2);
+    expect(strict.stderr).toMatch(/coverage is incomplete/i);
+  });
+
   it.each([
     ["--timeout", "not-a-number"],
     ["--timeout", "0"],
