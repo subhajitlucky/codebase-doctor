@@ -16,6 +16,9 @@ All notable changes to Codebase Doctor are documented here.
   (default 100).
 - Add the `verify_changes` and `explain_finding` MCP tools with the same
   read-only, offline, bounded-payload contract as `audit_codebase`.
+- Add `codebase-doctor instructions`: prints ready-to-paste agent instruction
+  snippets for `AGENTS.md`, `CLAUDE.md`, Cursor rules, Windsurf, Cline, Copilot,
+  and MCP client configuration. The command only prints; it never writes files.
 
 ## [0.1.7] - 2026-09-20
 
