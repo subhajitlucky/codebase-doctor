@@ -1,6 +1,8 @@
 # Codebase Doctor
 
+[![npm version](https://img.shields.io/npm/v/codebase-doctor.svg)](https://www.npmjs.com/package/codebase-doctor)
 [![npm downloads](https://img.shields.io/npm/dm/codebase-doctor?label=npm%20downloads)](https://www.npmjs.com/package/codebase-doctor)
+[![CI](https://github.com/subhajitlucky/codebase-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/subhajitlucky/codebase-doctor/actions/workflows/ci.yml)
 
 Codebase Doctor is a model-independent, full-codebase auditor for developers and coding agents. It turns repository evidence into deterministic findings that a human or model can inspect and act on.
 
@@ -8,15 +10,16 @@ Codebase Doctor is a model-independent, full-codebase auditor for developers and
 
 It exposes no direct target-file write API, has no direct filesystem-write capability, and includes no remediation executor. It can never be granted direct target-write or remediation authority. A human or separately authorized external coding agent makes changes; Codebase Doctor is read-only and never modifies, fixes, or repairs target files, then reruns independently to verify the resulting state. Separately authorized `--run-checks` launches repository-owned validation subprocesses; they are not filesystem- or network-isolated and may have side effects. That is validation execution, not Doctor repair authority.
 
-**Status:** published on npm; stable line `0.1.x`, with source, package contents, and clean tarball installation verified in CI.
+**Status:** published on npm; stable line `0.1.x`, with source, package contents, and clean tarball installation verified in CI. Portfolio case study: <https://subhajitpradhan.vercel.app/projects/codebase-doctor>.
 
 ## Quick start
 
 ```bash
-npm install -g codebase-doctor
-codebase-doctor audit . --json                                  # full audit
-codebase-doctor audit . --changed --json                        # after edits
-codebase-doctor audit . --changed --base main --json            # branch review
+npx -y codebase-doctor audit . --json                   # run without installing
+npm install -g codebase-doctor                          # or install globally
+codebase-doctor audit . --json                          # full audit
+codebase-doctor audit . --changed --json                # after edits
+codebase-doctor audit . --changed --base main --json    # branch review
 ```
 
 Options:
@@ -34,7 +37,7 @@ Options:
 --require-complete    Fail with exit code 2 when audit coverage is incomplete
 --max-findings <n>    Maximum findings rendered in brief output (default: 100)
 --with-database       Permit live PostgreSQL catalog access
---with-advisories     Permit one opt-in OSV advisory lookup over resolved npm packages
+--with-advisories     Permit one opt-in OSV advisory lookup over resolved supported lockfile packages
 --database-schema     Select a database schema; repeatable (default: public)
 --database-timeout    Catalog statement timeout in ms (default: 10000)
 ```
@@ -56,15 +59,15 @@ A full audit examines the full requested repository scope for applicable impleme
 
 | Domain | Current source coverage | North star |
 | --- | --- | --- |
-| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, visible-test diagnostics, JS/TS source-impact graph, precision-first missing-target findings | Cross-language dependency and behavioral topology |
+| Repository structure | Bounded inventory, project/framework detection, manifests, workspaces, lockfiles, visible-test diagnostics, JS/TS + Python + Go + Java + Rust source-impact graph, precision-first missing-target findings | Cross-language dependency and behavioral topology |
 | Configured validation | JS/TS and Python command planning; execution only with `--run-checks` | Sandboxed validation across ecosystems |
-| Database | Offline PostgreSQL migration RLS, Drizzle/postgres-js raw-Date diagnostics, live PostgreSQL RLS | Schemas, migrations, queries, permissions, drift, more engines |
-| Frontend | Framework detection only; repository-owned checks may provide evidence | React, Next.js, accessibility, SEO, bundle analysis |
+| Database | Offline PostgreSQL migration RLS, Drizzle/postgres-js raw-Date diagnostics, live PostgreSQL RLS, static-to-live drift comparison | Schemas, migrations, queries, permissions, drift, more engines |
+| Frontend | JSX/HTML accessibility (alt text, iframe titles, lang, tab order) and static-HTML SEO checks; framework detection | React, Next.js, bundle analysis, broader a11y and SEO |
 | Backend and authorization | NestJS detection only; repository-owned checks may provide evidence | API, auth, worker, webhook, cron, permission, rate-limit analysis |
-| Security | Secrets analysis, offline npm dependency metadata, command-output redaction, RLS findings; no permission or current advisory analyzer yet | Secrets, cross-ecosystem dependency, permission, vulnerability, supply-chain analysis |
-| Infrastructure | Configuration files may be inventoried; no semantic analyzer | Docker, CI, hosting, deployment analysis |
+| Security | Secrets in the working tree and Git history, cross-ecosystem dependency rules, opt-in OSV advisories, command-output redaction; no permission analyzer yet | Secrets, permission, vulnerability, supply-chain analysis |
+| Infrastructure | Dockerfile and GitHub Actions analysis | Hosting, deployment, and broader CI analysis |
 | Performance | No semantic analyzer | Cache, query, memory, profiling analysis with explicit runtime permissions |
-| AI systems | Agent-surface audit: MCP client configs (pinning, shell commands, inline credentials, filesystem scope) and `SKILL.md` frontmatter; no prompt/model/grounding analyzer yet | Prompt, token, model, grounding analysis with honest statistical limits |
+| AI systems | Agent-surface audit: MCP configs (pinning, shell commands, inline credentials, filesystem scope), `SKILL.md` frontmatter and tool grants, permission settings, instruction-file bypass flags; no prompt/model/grounding analyzer yet | Prompt, token, model, grounding analysis with honest statistical limits |
 
 North-star entries are planned internal modules, not separately installed Doctor products and not shipped behavior.
 
@@ -94,14 +97,11 @@ const rows = await db.select().from(jobs).where(lte(jobs.runAt, date));
 
 An external authorized human or coding agent must preserve timestamp and timezone semantics, make the repair, and rerun the same scope. Codebase Doctor never modifies the query or receives target-write authority.
 
-```bash
-codebase-doctor audit . --changed --json
-codebase-doctor audit . --json
-```
+### `repository/source-graph` (source impact for JS/TS, Python, Go, Java, Rust)
 
-### `repository/source-graph` (JS/TS and Python source impact)
+The read-only, offline `repository/source-graph` Doctor recognizes static `import`, re-export, type-only import, literal `require`, and literal dynamic import edges with a real syntax parser that never executes repository code. Local `tsconfig` and `jsconfig` files contribute a deterministic subset of relative aliases; this is not complete Node or TypeScript module resolution.
 
-The read-only, offline `repository/source-graph` Doctor recognizes static `import`, re-export, type-only import, literal `require`, and literal dynamic import edges with a real syntax parser that never executes repository code. Local `tsconfig` and `jsconfig` files contribute a deterministic subset of relative aliases; this is not complete Node or TypeScript module resolution. Python `.py` files contribute statement-level `import`, `from`-imports with relative dots, and literal `importlib.import_module`/`__import__` edges through a bounded tokenizer that ignores comments and string content; attribute-only bare-dot imports and namespace-package layouts stay limitations instead of guessed edges. Go `.go` files contribute single and block `import` declarations resolved against the owning project's `go.mod` module path; `go.work`-only layouts and `replace`-redirected missing packages stay limitations. Java `.java` files contribute package and import statements resolved from Maven/Gradle package roots (`src/main/java`, `src/test/java`); static imports fall back to the declaring class file, wildcard imports are never edges, and missing classes carry no missing-target proof because Java classes can be generated or come from a dependency with the same package. Rust `.rs` files contribute `mod` declarations and `use` paths (brace groups expanded) resolved against `src/lib.rs` or `src/main.rs`; missing modules and use targets stay unproven because build scripts, macros, and path attributes can generate or relocate them.
+Beyond JS/TS, each language gets a bounded tokenizer over its import forms: Python (`import`, relative `from`, literal dynamic calls), Go (single and block imports resolved through `go.mod`), Java (package imports from Maven/Gradle roots), and Rust (`mod` and `use` with `crate::`/`self::`/`super::`). Unprovable cases - attribute-only Python imports, namespace packages, Go `go.work` layouts, Java wildcards or generated classes, Rust macros or path attributes - stay limitations instead of guessed edges.
 
 Dynamic non-literal imports, ambiguous targets, unsupported configuration or syntax, unreadable input, and graph ceilings are coverage limitations, not findings. Cycles are valid topology and are not findings. The Doctor intentionally emits no bug findings.
 
@@ -153,10 +153,9 @@ With `--with-database`, the read-only `database/rls-drift` module compares recon
 
 The read-only, offline `ai/agent-surface` module audits the repository's agent configuration surface. It never executes a configured command, never connects to an MCP server, and never prints a suspected credential value.
 
-- MCP client configs (`mcp.json`, `.mcp.json`, `mcp_config.json`, `mcp-config.json`, `claude_desktop_config.json`, including `.cursor/`, `.vscode/`, and `.github/copilot/` variants): unpinned package runners (`npx`, `pnpm dlx`, `uvx` without an exact version), shell commands, inline credential values (value withheld and never fingerprinted), and broad filesystem grants such as `/`, home directories, or `--allow-write`.
-- `SKILL.md` files: non-empty `name` and `description` frontmatter is required, and unscoped `allowed-tools` grants such as `Bash(*)`, bare `Bash`, `Write`, or `Edit` are reported as `skill-broad-tool-grant`.
-- Documented permission settings: `permissions.defaultMode: bypassPermissions` in `.claude/settings.json` or `.claude/settings.local.json`, `chat.tools.autoApprove` in `.vscode/settings.json`, `yes-always` or `yes` in `.aider.conf.yml`, unscoped `permissions.allow` rules (`Bash(*)`, `Read(//**)`, and similar), and hook `command` entries (command text withheld) are reported as `permission-bypass`, `broad-permission-allow`, or `hook-shell-command`.
-- Instruction and prompt files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`, `.github/copilot-instructions.md`, `.cursor/rules/*.mdc`, `*.prompt`, `prompts/`): permission-bypass flags such as `--dangerously-skip-permissions` or `--yolo` are reported as `instruction-permission-bypass` only when they appear inside fenced code blocks or inline code, never from prose mentions.
+- MCP client configs (`mcp.json`, `.mcp.json`, `claude_desktop_config.json`, and `.cursor/`, `.vscode/`, `.github/copilot/` variants): unpinned package runners, shell commands, inline credential values (withheld and never fingerprinted), and broad filesystem grants.
+- `SKILL.md` files: non-empty `name` and `description` frontmatter, and no unscoped `allowed-tools` grants (`Bash(*)`, bare `Bash`, `Write`, `Edit`) - reported as `skill-broad-tool-grant`.
+- Permission settings and instruction files: `bypassPermissions`/`chat.tools.autoApprove`/`yes-always` modes, unscoped `permissions.allow` rules, hook commands (text withheld), and `--dangerously-skip-permissions`/`--yolo` flags inside instruction or prompt code content are reported as `permission-bypass`, `broad-permission-allow`, `hook-shell-command`, or `instruction-permission-bypass`. Prose mentions are not findings.
 
 Malformed configurations stay visible as coverage limitations, not findings. Nothing on this surface is executed or contacted.
 
@@ -189,7 +188,7 @@ Schema-1 reports bound repeated evidence without hiding its size: `coverageSumma
 - `codebase-doctor instructions` prints ready-to-paste snippets for `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/codebase-doctor.mdc`, `.windsurfrules`, `.clinerules/`, `.github/copilot-instructions.md`, and MCP client setup. It only prints; it never writes files.
 - `--format brief` is token-bounded, findings-only output with scope/coverage header, truncation notice, and coverage limitations; `--max-findings` (default 100) caps it, and baseline runs mark `+` new and `=` unchanged.
 - `verify . --baseline before.json` reports each baseline fingerprint as `resolved` (absent + all applicable coverage completed), `unchanged`, `unresolved` (absent under incomplete coverage - never a repair), or `new`. Exit 1 unless everything is verifiably resolved (`--allow-unchanged` relaxes unchanged entries).
-- `codebase-doctor mcp` serves read-only tools over stdio: `audit_codebase`, `verify_changes`, `explain_finding`, and `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
+- `codebase-doctor mcp` serves read-only tools over stdio: `audit_codebase`, `verify_changes`, `explain_finding`, and `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access. Register it with `claude mcp add codebase-doctor -- npx -y codebase-doctor mcp` or the equivalent client config.
 - The npm package includes the provider-neutral skill at `.agents/skills/codebase-doctor/`: prefer a changed audit after edits, a full audit at trust boundaries, one evidence-backed fix at a time, and rerun the same scope.
 
 Workflow: `audit . --changed --format brief` after edits; full `audit .` at trust or release boundaries; save a baseline with `audit . --json > baseline.json`; after external repair, `verify . --baseline baseline.json`; never claim resolution outside completed applicable coverage.
@@ -197,6 +196,12 @@ Workflow: `audit . --changed --format brief` after edits; full `audit .` at trus
 ## Baselines, SARIF, and GitHub Action
 
 `--baseline` classifies fingerprints as new, unchanged, or resolved and applies `--fail-on` only to new findings; changed audits never report absent baseline findings as resolved. `--format sarif` emits SARIF 2.1.0 for code scanning. The composite GitHub Action at the repository root installs the published CLI, writes the report, and fails per `fail-on`/`require-complete`; see [docs/github-action.md](docs/github-action.md) for a workflow with SARIF upload.
+
+```yaml
+- uses: subhajitlucky/codebase-doctor@v0.1.9
+  with:
+    fail-on: high
+```
 
 ## Exit codes
 
@@ -210,13 +215,11 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 
 ## Safety model
 
-- Read-only discovery is the default. Codebase Doctor has no direct target-file write API, filesystem-write capability, remediation executor, or target-write/remediation authority, and never modifies, fixes, or repairs target files.
-- `--changed` grants no check execution, network, or database permission. Target commands require `--run-checks`; live database access requires `--with-database`; database credentials are read from `DATABASE_URL` or `SUPABASE_DB_URL`, not a connection-string option.
-- SQL auditing reads only inventoried migration files, applies a size ceiling, and never evaluates or executes SQL. The RLS module uses a read-only, repeatable-read transaction and never executes suggested SQL.
-- Dependency auditing reads bounded npm metadata, never invokes npm or another package manager, and never installs or changes dependencies.
-- Source analysis parses bounded JS/TS syntax but never executes source, loads plugins, uses the network, or writes target files.
-- Agent configuration analysis parses bounded MCP config and `SKILL.md` files but never executes configured commands or connects to MCP servers.
-- Commands use argument arrays with `shell: false`, minimal environments, and per-command time and output limits. The scanner never installs target-project dependencies, and apart from an explicitly requested `--with-advisories` OSV lookup it makes no external network calls.
+- Read-only discovery is the default. No permission is implied by an audit: `--changed` grants no check execution, network, or database access.
+- Target commands require `--run-checks`; live database access requires `--with-database`; database credentials come from `DATABASE_URL` or `SUPABASE_DB_URL`, never a connection-string option.
+- SQL auditing reads inventoried migration files only and never executes SQL; the live RLS modules use read-only transactions.
+- Dependency auditing reads bounded lockfile metadata and never invokes a package manager or changes dependencies. Source analysis parses bounded syntax and never executes source. Agent configuration is parsed but never executed or contacted.
+- Validation commands use argument arrays with `shell: false`, minimal environments, and per-command time and output limits. Apart from an explicitly requested `--with-advisories` OSV lookup, the scanner makes no external network calls.
 
 ## Roadmap
 
