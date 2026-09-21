@@ -496,6 +496,25 @@ prompt files are reported only when a permission-bypass flag such as
 or inline code span, so prose warnings are not findings. Malformed
 configuration stays visible as a coverage limitation, never a guessed finding.
 
+## Built-in frontend audit
+
+The combined audit registers `frontend/accessibility` and `frontend/seo` as
+read-only, offline Doctors over renderable sources. Neither launches a browser,
+a build, or a rendering pipeline.
+
+`frontend/accessibility` parses JSX/TSX with the same Babel parser used by the
+source graph and reports images without `alt`, iframes without `title`, a root
+`html` element without `lang`, and positive `tabIndex` values. JSX spread
+attributes suppress these findings because a provider could supply the
+attribute; unparsable JSX becomes a coverage limitation. Static HTML documents
+are scanned with comment blocks stripped so commented-out tags cannot produce
+findings.
+
+`frontend/seo` checks static HTML documents for a non-empty `title` element and
+a non-empty `meta name="description"` tag. Framework-generated documents are
+out of scope because their metadata lives in application code. Malformed input,
+unreadable files, and reached limits become limitations, never findings.
+
 ## Built-in infrastructure audit
 
 The combined audit registers `infrastructure/docker` and
@@ -622,8 +641,8 @@ The following are not implemented behavior:
   approved checks;
 - a lifecycle-hook installer or hosted service;
 - deployment drift comparison between expected migrations and live state;
-- additional built-in frontend, backend, security, performance, and AI
-  semantic analyzers.
+- additional built-in backend, security, performance, and AI semantic
+  analyzers.
 
 Future integrations must preserve the same permanent boundary: Models build.
 Codebase Doctor verifies.
