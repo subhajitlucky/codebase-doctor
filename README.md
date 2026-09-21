@@ -160,6 +160,15 @@ The read-only, offline `ai/agent-surface` module audits the repository's agent c
 
 Malformed configurations stay visible as coverage limitations, not findings. Nothing on this surface is executed or contacted.
 
+### `frontend/accessibility` and `frontend/seo`
+
+The read-only, offline frontend modules analyze renderable sources without running a browser or a build:
+
+- `frontend/accessibility` inspects JSX/TSX and static HTML for `img-missing-alt`, `iframe-missing-title`, `html-missing-lang`, and `positive-tabindex` (a positive `tabIndex` overrides natural focus order). JSX elements with spread props are skipped because a provider could supply the attribute, and unparsable JSX becomes a limitation.
+- `frontend/seo` inspects static HTML for a non-empty `title` (`missing-title`, medium) and a non-empty `meta description` (`missing-meta-description`, low). Framework-generated documents are out of scope because their metadata lives in application code.
+
+HTML comments are ignored so commented-out tags are not findings. Malformed JSX, unreadable files, and reached limits become partial coverage.
+
 ### `infrastructure/docker` and `infrastructure/github-actions`
 
 The read-only, offline infrastructure modules analyze deployment configuration without building, running, or rewriting anything:
@@ -211,7 +220,7 @@ Exit `2` is an operational failure, not a clean result. `--fail-on none` disable
 
 ## Roadmap
 
-- Add built-in frontend, backend, performance, and AI semantic audit coverage without separate doctor installations.
+- Add built-in backend, performance, and AI semantic audit coverage without separate doctor installations.
 - Extend coverage guarantees beyond the current global `--require-complete` gate.
 - Add pull-request annotations, hooks, and agent plugins around the same CLI and report schema.
 - Run approved validation in read-only mounts or disposable copies.

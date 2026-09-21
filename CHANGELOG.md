@@ -6,6 +6,11 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Add read-only, offline frontend analyzers: `frontend/accessibility`
+  (JSX/HTML images without alt, iframes without title, html without lang,
+  positive tabIndex; spread props suppress findings) and `frontend/seo`
+  (static HTML missing title or meta description). The frontend domain now
+  reports module coverage instead of a blanket unsupported status.
 - Add read-only, offline infrastructure analyzers: `infrastructure/docker`
   (unpinned base images, remote ADD, pipe-to-shell installs, world-writable
   permissions, explicit root users) and `infrastructure/github-actions`
