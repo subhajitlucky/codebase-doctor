@@ -1,0 +1,40 @@
+# Codebase Doctor
+
+Model-independent repository auditor for humans and coding agents.
+
+## What it does
+
+Audits a repository and returns deterministic findings as text, JSON, or SARIF with stable fingerprints. Covers secrets (working tree and Git history), dependencies with OSV advisories, PostgreSQL RLS, Dockerfiles, GitHub Actions, and a multi-language source graph (JS/TS, Python, Go, Java, Rust) for impact analysis and missing-target detection.
+
+## Install
+
+```bash
+npx codebase-doctor audit .
+```
+
+## One command
+
+```bash
+codebase-doctor audit .              # full audit
+codebase-doctor audit . --changed    # after edits
+codebase-doctor audit . --format sarif
+```
+
+## What it does not do
+
+It never writes to the target repository, never runs repository-owned checks without `--run-checks`, and never connects to a database without `--with-database`. Remediation is guidance, not an executed repair.
+
+## Limits
+
+Coverage is reported per domain in every report. `coverageComplete` does not mean the code is bug-free. Reflection, runtime wiring, and generated sources are out of scope.
+
+## For agents
+
+- Skill: `.claude/skills/codebase-doctor/SKILL.md` (also `.agents/skills/`)
+- MCP: `claude mcp add codebase-doctor -- npx -y codebase-doctor mcp`
+
+## Docs
+
+- https://github.com/subhajitlucky/codebase-doctor
+- https://www.npmjs.com/package/codebase-doctor
+- https://subhajitpradhan.vercel.app/writing/what-breaks-if-i-change-this-file
