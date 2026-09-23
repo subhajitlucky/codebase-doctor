@@ -1,0 +1,34 @@
+<svg width="920" height="566" viewBox="0 0 920 566" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Codebase Doctor terminal report preview</title>
+  <desc id="desc">A terminal preview showing Codebase Doctor audit domain coverage, doctor runs, and a medium severity secret finding.</desc>
+  <rect width="920" height="566" fill="#0f1115"/>
+  <rect x="24" y="24" width="872" height="518" rx="10" fill="#171a21" stroke="#2a2f3a"/>
+  <circle cx="52" cy="52" r="6" fill="#ff5f57"/>
+  <circle cx="74" cy="52" r="6" fill="#ffbd2e"/>
+  <circle cx="96" cy="52" r="6" fill="#28c840"/>
+  <text x="40" y="78" fill="#d7dde8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+    <tspan x="40" dy="0" fill="#7ee787" xml:space="preserve">$ codebase-doctor audit . --fail-on none</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve"> </tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">Domain coverage</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">repository: completed (applicability: detected; coverage complete: yes)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">security: partial (applicability: detected; coverage complete: no)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  Module limitation: npm lock ownership is unresolved.</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">infrastructure: unsupported (applicability: detected; coverage complete: no)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  Evidence: file docker — Dockerfile</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  Limitation: semantic infrastructure analysis is not implemented.</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve"> </tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">Doctor runs</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">checks: skipped (0 findings, 0 ms)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  Reason: Doctor requires denied capabilities: process:execute.</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">security/secrets: completed (1 findings, 11 ms)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">project: completed (1 findings, 1 ms)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve"> </tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">Findings</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">[MEDIUM] Sensitive assignment may contain a credential (security/secrets/sensitive-assignment)</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  Location: src/server.js:4:18</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  A credential-shaped value was found in repository-shareable content.</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">  Impact: A shared credential can permit unauthorized access to external systems.</tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve"> </tspan>
+    <tspan x="40" dy="20" fill="#d7dde8" xml:space="preserve">Summary: 2 findings — critical 0, high 0, medium 1, low 0, info 1</tspan>
+  </text>
+</svg>
