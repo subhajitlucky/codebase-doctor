@@ -8,9 +8,30 @@ Codebase Doctor is a model-independent, full-codebase auditor for developers and
 
 > **Models build. Codebase Doctor verifies.**
 
+## When to use this
+
+You want this tool when you are asking any of:
+
+- **What breaks if I change this file?** — reverse-reachable impact set across JS/TS, Python, Go, Java, and Rust
+- **Is this repo safe to ship?** — secrets in the working tree and Git history, dependency advisories, Dockerfiles, GitHub Actions
+- **I just changed a lot — verify the result** — changed-scope audit with stable fingerprints
+- **Give me SARIF** — GitHub code scanning output
+- **Why is this finding here?** — evidence, impact, and verification commands per finding
+
+Do not use it to edit or repair code. It reports; a human or separately authorized agent fixes.
+
+
 It exposes no direct target-file write API, has no direct filesystem-write capability, and includes no remediation executor. It can never be granted direct target-write or remediation authority. A human or separately authorized external coding agent makes changes; Codebase Doctor is read-only and never modifies, fixes, or repairs target files, then reruns independently to verify the resulting state. Separately authorized `--run-checks` launches repository-owned validation subprocesses; they are not filesystem- or network-isolated and may have side effects. That is validation execution, not Doctor repair authority.
 
 **Status:** published on npm; stable line `0.1.x`, with source, package contents, and clean tarball installation verified in CI. Portfolio case study: <https://subhajitpradhan.vercel.app/projects/codebase-doctor>.
+
+## MCP server
+
+```bash
+claude mcp add codebase-doctor -- npx -y codebase-doctor mcp
+```
+
+Read-only tools: `audit_codebase`, `verify_changes`, `explain_finding`, `describe_capabilities`.
 
 ## Quick start
 
