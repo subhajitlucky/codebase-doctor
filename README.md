@@ -22,6 +22,8 @@ codebase-doctor audit . --changed --json                # after edits
 codebase-doctor audit . --changed --base main --json    # branch review
 ```
 
+![Codebase Doctor terminal preview](docs/assets/terminal-preview.svg)
+
 Options:
 
 ```text
