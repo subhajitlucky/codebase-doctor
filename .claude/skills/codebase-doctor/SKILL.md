@@ -1,6 +1,6 @@
 ---
 name: codebase-doctor
-description: Audit a repository and return evidence-backed findings. Use when asked what breaks if I change a file, whether a codebase is safe to ship, to verify agent-written changes, to find secrets or dependency risks, or to review coverage and limitations after an audit. Also use for SARIF or JSON code audits, impact analysis after a rename or delete, and baseline-based CI review gates.
+description: Run evidence-backed, model-independent codebase diagnostics on a repository. Use when asked what breaks if I change this file, whether a codebase is safe to ship, to validate agent-written changes, to scan for secrets or dependency risks, or to review findings and coverage.
 ---
 
 # Codebase Doctor
@@ -33,66 +33,224 @@ Use a trusted, already-installed `codebase-doctor` binary, or the explicit local
 update is a separate, pinned, user-authorized step that may use the network and
 perform cache writes. Do not use an on-demand package runner as the audit step.
 
-## When to use this
-
-Answer yes to any of these and this skill applies:
-
-- "What breaks if I change this file?" or "what imports this?"
-- "Is this repo safe to ship?" / "audit this before I merge"
-- "I just changed a lot — verify the result"
-- "Find secrets in the working tree or git history"
-- "Check dependencies for known advisories"
-- "Is my Dockerfile / GitHub Actions workflow risky?"
-- "Give me SARIF for GitHub code scanning"
-- "Why is this finding here, and how do I fix it?"
-
-Do not use this skill when the task is a code edit, a style rewrite, or a
-feature build. Codebase Doctor reports; it does not repair.
-
 ## Workflow
 
 1. After edits, run the default changed audit with the trusted installed binary:
 
    ```bash
-   codebase-doctor audit . --changed --format brief
+   codebase-doctor audit . --changed --json
    ```
 
-2. At trust or release boundaries, run the full audit:
+   This default compares with `HEAD` and includes staged, unstaged, and
+   untracked paths. For branch review, provide the required ref value:
 
    ```bash
-   codebase-doctor audit .
+   codebase-doctor audit . --changed --base main --json
    ```
 
-3. Read `domainCoverage` before summarizing. State which domains completed,
-   which are partial, and which are not implemented.
+   `--base` is optional as a changed-audit mode. If `--base` is present, a
+   missing operand or invalid ref is an operational exit `2`. An explicit ref
+   uses its merge base and includes committed branch changes plus staged,
+   unstaged, and untracked worktree changes. Git commands are fixed and
+   read-only.
 
-4. For every finding you act on, fix it outside this tool, then rerun the
-   matching command to confirm the fingerprint is gone.
-
-5. To gate CI on new problems only, write a baseline once and verify against it:
+2. At a trust, integration, or release boundary, run the full audit:
 
    ```bash
-   codebase-doctor audit . --json > baseline.json
-   codebase-doctor verify . --baseline baseline.json
+   codebase-doctor audit . --json
    ```
 
-## MCP
+3. Inspect `auditScope`, then `domainCoverage`, then `doctorRuns`, then
+   low-level `coverage`, then `findings`. For every domain, read applicability
+   separately from status and inspect its module details, evidence, and
+   limitations. `unsupported`, `unknown`, and `not-selected` are explicit gaps,
+   not successful audits.
 
-If the MCP server is registered, prefer its tools over shell calls. It never
-enables `--run-checks` or live database access:
+   Changed mode is mixed-scope, not a universal file filter. Project Doctor
+   structural rules run with the full repository snapshot and may report
+   findings outside changed paths or projects for manifests, lockfiles,
+   workspaces, and test visibility. Configured validation command plans are
+   built from the full topology and then filtered to `affectedProjectIds`.
+   Static SQL selects affected migration streams and replays full current
+   history for every selected stream, with partial or skipped topology
+   limitations. Live database remains a full observed schema-set audit only
+   when separately requested with `--with-database`.
 
-- `audit_codebase` — full report
-- `verify_changes` — compare against a baseline
-- `explain_finding` — one finding in detail
-- `describe_capabilities` — current coverage map
+   Unaffected source behavior and domain checks are not broadly covered, while
+   full-context structural doctors may inspect unaffected areas. Never treat
+   zero changed findings as a full repository clean result. Read every partial,
+   skipped, failed, and limitation record to understand each doctor's scope.
 
-## Safety
+4. Inspect the optional schema-1 `sourceImpact` object and
+   `repository/source-graph` coverage. This read-only, offline JavaScript and
+   TypeScript graph recognizes static import, re-export, type-only import,
+   literal require, and literal dynamic import edges with a real syntax parser
+   that never executes repository code. Local `tsconfig` and `jsconfig` files
+   supply a deterministic subset of aliases; this is not complete Node or
+   TypeScript resolution.
 
-- Never treat a clean report as proof the code is correct.
-- Surface every `Limitation` line to the user. Do not summarize them away.
-- Suggested repair steps are guidance. Do not execute them automatically.
+   Changed impact adds `source-dependent` projects and shows a deterministic
+   shortest impact path for each serialized dependant. It preserves full
+   impacted-file counts while emitting bounded records. Dynamic, ambiguous,
+   unsupported, unreadable, or ceiling-limited topology is a coverage
+   limitation, not a finding; cycles are not findings. Inspect source graph
+   coverage before calling changed source scope clean or verified. Source
+   impact does not prove code is bug-free, correct, or completely reachable.
+   Raw import specifiers and source text are withheld from reports and
+   fingerprints. The graph uses no plugins, network requests, or writes.
 
-## References
+   Also inspect the separate precision-first source-integrity Doctor:
+   `repository/source-graph` remains finding-free, while
+   `repository/source-integrity` emits only `source/import-target-missing`. It
+   proves only an explicit relative target
+   with a supported source extension, a single deterministic alias whose
+   configured target explicitly names a supported source file, or a unique
+   workspace whose explicit entry names a supported source file.
 
-- `README.md`
-- `docs/architecture.md`
+   Extensionless, JSON, custom-loader, conditional, ambiguous, external, and
+   dynamic references and cycles are not findings. The Doctor does not check
+   named exports. Full mode examines all qualifying edges; changed mode examines
+   changed importers and complete reverse-impacted importers. A deleted
+   or renamed target can therefore select its unchanged importer. Raw import
+   specifiers and source text are withheld from findings and fingerprints.
+
+   The source-integrity Doctor emits at most 1,000 findings and reports partial
+   coverage when limited. Partial coverage is not clean. Never invent or guess
+   a target or repair. Ask an external authorized human or coding agent to
+   correct or restore the intended target, then rerun the same scope. Codebase
+   Doctor does not modify or repair files.
+
+5. Read each finding's evidence and machine-readable `impact`,
+   `remediationConstraints`, and `verification` guidance. Expected repair
+   requires the fingerprint to be absent on rerun and all applicable coverage
+   to be completed. Do not claim a finding resolved outside coverage. A changed
+   baseline comparison never calls absent baseline findings resolved; a
+   comparable full audit can.
+
+6. Ask a human or external coding agent to fix one evidence-backed finding.
+   Then rerun the same scope and compare fingerprints, evidence, coverage, and
+   severity totals. Codebase Doctor does not execute remediation or verification.
+
+7. Request separate permission before adding `--run-checks`:
+
+   ```bash
+   codebase-doctor audit . --changed --run-checks --json
+   ```
+
+   `--changed` alone grants no command execution, network, or database
+   permission and no direct Doctor target-write authority. Separately authorized
+   `--run-checks` launches repository-owned validation subprocesses. They are
+   not filesystem- or network-isolated and may have side effects. That
+   permission is validation execution, not Doctor repair authority. Do not use
+   `--run-checks` on an untrusted repository.
+
+8. Interpret the automatic, read-only, offline `database/drizzle` module before
+   requesting live database access. Its
+   `database/drizzle/raw-sql-date-parameter` rule means a statically proven
+   JavaScript `Date` reached a raw Drizzle SQL interpolation on a confirmed
+   postgres-js path. Raw interpolation can bypass the timestamp encoder, so
+   postgres-js may throw `ERR_INVALID_ARG_TYPE` even when equivalent SQL works
+   in psql.
+
+   Applicability requires an exact `drizzle-orm/postgres-js` adapter import or
+   scoped owning/workspace dependencies on both `drizzle-orm` and `postgres`.
+   `Date()`, `Date.now()`, `toISOString()`, name-based guesses,
+   `lte(column, date)`, and a fresh inline encoder object with no spreads and a
+   callable `mapToDriverValue` passed directly to `sql.param` are not findings.
+   Encoder identifiers, aliases, member accesses, and calls—including `const`
+   objects—are partial coverage, not assumed safety. Unsupported syntax or
+   unresolved and unclassified Date flow is also a partial coverage limitation; partial
+   coverage is not clean.
+
+   The finding is medium severity and high confidence. Treat it as evidence,
+   not automatic truth. Raw SQL, raw expressions, Date values, and secrets are
+   withheld; never copy or request them from Doctor. Ask an external authorized
+   human or coding agent to preserve timestamp semantics and repair the query
+   with a typed comparison such as `lte(column, date)` or an explicit encoder,
+   then rerun the same scope. Only a fresh inline callable encoder is recognized
+   as safe by this static audit; all other encoder forms remain partial. Never ask for or grant
+   Codebase Doctor target-write authority. Doctor never performs the change.
+
+9. Static `database/sql-rls` coverage runs automatically and offline for
+   supported migration streams. It reports expected migration state, never
+   executes SQL, and may be partial for dynamic, malformed, or unsupported SQL.
+   Partial coverage is not clean. Live `database/rls` reports observed catalog
+   state and requires separate database and network permission:
+
+   ```bash
+   codebase-doctor audit . --with-database --json
+   ```
+
+   Supply credentials through `DATABASE_URL` or `SUPABASE_DB_URL`; never print,
+   echo, log, or expose a credential or connection string. Use
+   `--database-schema` repeatedly for non-default schemas and
+   `--database-timeout` to change the catalog statement timeout. A skipped or
+   failed live doctor is not a clean database audit.
+
+10. The combined audit automatically runs the read-only, offline
+   `security/secrets` module. It is precision-first and not exhaustive. A
+   Git-ignored local `.env` file is normal and is not a finding; a tracked
+   `.env`, template, source file, or other repository-shareable file containing
+   a real credential is a finding. Changed mode scans only current changed
+   files.
+
+   The matched value is withheld and never enters a fingerprint, message,
+   evidence record, error, text, JSON, or SARIF output. Never ask Doctor to show
+   or validate it. Treat partial, failed, or not-selected secrets coverage as an
+   unresolved verification gap. Have an external authorized human or coding
+   agent remediate the shareable content, rotate or revoke the credential
+   outside Codebase Doctor, and then rerun the same audit. Doctor never performs
+   those actions.
+
+11. The combined audit also automatically runs the read-only, offline
+   `security/dependencies` module for npm lockfile versions 2 and 3. pnpm, Yarn,
+   Bun, Python, and other ecosystems remain explicit unsupported coverage for
+   this module. It never invokes npm or another package manager, runs a shell or
+   lifecycle script, uses the network, installs packages, or changes dependency
+   metadata.
+
+   Its rules are `missing-lockfile`, `manifest-lock-drift`, `insecure-source`,
+   `mutable-git-source`, `missing-integrity`,
+   `workspace-registry-resolution`, and `competing-npm-lockfiles`. A normal
+   semver range is not a finding when supported lock metadata agrees. This
+   offline module makes no CVE or current advisory claim.
+
+   Raw dependency specifications and resolved URLs are withheld and never enter
+   a fingerprint, finding, evidence record, limitation, error, text, JSON, or
+   SARIF output. Never ask Doctor to reveal a source value. Read completed,
+   partial, unsupported, failed, and not-selected dependency coverage before
+   calling a graph clean. Have an external authorized human or coding agent
+   correct the metadata and rerun the same scope; Doctor never performs that
+   remediation.
+
+12. Apply the precision and bounded-report contract. Workspace publication
+    entries, generated targets, and fixture-controlled paths are coverage
+    limitations unless independently proven broken; they are not missing-target
+    findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive
+    npm-specific findings. Only a cryptographic match to an inventoried
+    localhost-only certificate can classify a private key as an intentional
+    local test key; every other matched private key remains a high-severity
+    finding.
+
+    In schema-1 reports, `coverageSummary` preserves exact `total`, `emitted`,
+    and `omitted` record counts. `limitationGroups` preserve each fixed reason,
+    deterministic sample paths, and the number of omitted paths. Treat omitted
+    evidence as bounded output, not absent evidence. Codebase Doctor never
+    modifies, fixes, or repairs target files.
+
+`scan` is the backward-compatible repository-only command. Use `--exclude` or
+`.codebase-doctor.json` for intentional exclusions, `--baseline` to classify
+fingerprints, `--format sarif` for SARIF 2.1.0, `--timeout` for configured check
+limits, and `--fail-on` only for finding-based process status.
+
+## Interpret results
+
+- Exit `0`: requested audits completed and no finding met the threshold. This
+  does not override partial, skipped, limited, or changed-only coverage.
+- Exit `1`: requested audits completed and a finding met the threshold.
+- Exit `2`: invalid input or an operational failure prevented a requested
+  audit. Never treat exit `2` as clean.
+
+Keep operational failures separate from findings and preserve redacted evidence.
+Request user direction whenever repository trust, check execution, or live
+database access is unclear.
