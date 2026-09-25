@@ -59,7 +59,7 @@ runs:
     - name: Run codebase-doctor
       shell: bash
       run: |
-        args=(scan "${{ inputs.path }}" --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
+        args=(audit "${{ inputs.path }}" --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
         if [ "${{ inputs.require-complete }}" = "true" ]; then args+=(--require-complete); fi
         if [ "${{ inputs.run-checks }}" = "true" ]; then args+=(--run-checks); fi
 

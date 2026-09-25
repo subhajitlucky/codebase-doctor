@@ -237,6 +237,13 @@ describe("independent auditor product boundary", () => {
     }
   });
 
+  it("runs the unified audit command from the GitHub Action", async () => {
+    const action = await readFile("action.yml", "utf8");
+
+    expect(action).toMatch(/args=\(audit "\$\{\{ inputs\.path \}\}" --format "\$\{\{ inputs\.format \}\}" --fail-on "\$\{\{ inputs\.fail-on \}\}"/);
+    expect(action).not.toMatch(/args=\(scan /);
+  });
+
   it("does not leave superseded external protocols as executable next steps", async () => {
     for (const { path, text } of await documents(supersededPlans)) {
       expect(text, path).not.toMatch(
