@@ -4,6 +4,20 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Classify a relative import that resolves to an inventoried non-source file
+  (`.css`, `.json`, images, fonts) as an external asset boundary instead of
+  `unsupported`. Candidate paths were filtered to supported source extensions
+  before resolution, so every stylesheet import produced a "relative source
+  target is unsupported" limitation, and any frontend repository with CSS
+  imports reported `partial` source-graph coverage. On a React/Vite sample this
+  moved one repository from 14 limitations to 0 and from `partial` to
+  `completed`, with asset edges correctly counted as external boundaries.
+  Missing source targets still resolve as provable `targetExists: false`
+  findings, and specifiers that escape the repository still report
+  `unsupported`.
+
 ### Added
 
 - Add read-only, offline frontend analyzers: `frontend/accessibility`
