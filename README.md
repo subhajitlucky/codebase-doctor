@@ -188,6 +188,16 @@ Audits the agent configuration surface without executing or contacting any of it
 
 JSX/TSX and static HTML accessibility (`img-missing-alt`, `iframe-missing-title`, `html-missing-lang`, `positive-tabindex`) and static SEO (`missing-title`, `missing-meta-description`). No browser, no build.
 
+### Backend and auth
+
+`backend/auth` is read-only and offline over JavaScript and TypeScript sources. It never starts a server, sends a request, or issues a token — it reads source text only.
+
+Rules: `cors-wildcard-origin-with-credentials` (wildcard `origin: "*"`, reflected `origin: true`, or an allowlist containing `*`, with credentials enabled), `session-cookie-security-disabled` (cookie `secure` or `httpOnly` explicitly `false`), `jwt-decode-without-verify` (a `decode` call in a file containing no `verify` call), and `jwt-verify-algorithm-unrestricted` (no `algorithms` allowlist).
+
+A rule fires only when the callee provably resolves to the audited package through an import declaration or CommonJS `require`, so an unrelated local helper named `cors` or `decode` is never reported. Configuration that cannot be resolved statically — a non-literal options expression, a computed cookie flag, or a spread property that could supply the value — is a **coverage limitation, never a guessed finding**, so inspect `backend` coverage before calling a codebase clean. The `decode` and algorithm rules are file-scoped: a `verify` call in middleware in another file does not suppress them. Configured origin and secret literals are withheld from reports and never enter a fingerprint.
+
+Not covered: API shape, worker, webhook, cron, and rate-limit analysis. An external authorized human or agent corrects the configuration, then reruns the same scope.
+
 ---
 
 ## Current coverage versus north star
@@ -212,7 +222,7 @@ That means:
 | Configured validation | JS/TS and Python command planning; execution only with `--run-checks` | Sandboxed validation across ecosystems |
 | Database | Offline migration RLS, Drizzle Date hazards, live RLS, static-to-live drift | Schemas, queries, permissions, more engines |
 | Frontend | JSX/HTML a11y and static-HTML SEO | React, Next.js, bundle analysis, broader a11y |
-| Backend and authz | NestJS detection only | API, auth, worker, webhook, cron, rate-limit analysis |
+| Backend and authz | Read-only, offline `backend/auth` analysis of CORS, session-cookie, and JWT hazards in JS/TS; NestJS detection | API, worker, webhook, cron, rate-limit analysis |
 | Security | Secrets (tree + history), dependency rules, opt-in OSV | Secrets, permission, vulnerability, supply chain |
 | Infrastructure | Dockerfile and GitHub Actions | Hosting and deployment analysis |
 | Performance | No semantic analyzer | Cache, query, memory, profiling |

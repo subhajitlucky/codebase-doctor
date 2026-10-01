@@ -213,10 +213,13 @@ describe("domain coverage planning", () => {
         { type: "framework", value: "vite", projectId: "root" },
       ],
     });
+    // No backend module registered: NestJS evidence is detected but unsupported.
     expect(coverage.find(({ domain }) => domain === "backend")).toMatchObject({
       applicability: "detected",
       status: "unsupported",
+      coverageComplete: false,
       evidence: [{ type: "framework", value: "nestjs", projectId: "root" }],
+      modules: [],
     });
     expect(coverage.find(({ domain }) => domain === "infrastructure")).toMatchObject({
       applicability: "detected",
@@ -319,6 +322,94 @@ describe("domain coverage planning", () => {
           limitations: [],
         },
       ],
+    });
+  });
+
+  it("maps registered backend module coverage instead of reporting the domain unsupported", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot({
+        projects: [{
+          id: "root",
+          root: "",
+          ecosystems: ["node"],
+          languages: ["typescript"],
+          frameworks: ["nestjs"],
+          dependencyNames: [],
+          manifestPaths: ["package.json"],
+          executionSupport: "detected-only",
+        }],
+      }),
+      registeredResults: [
+        {
+          doctorId: "backend/auth",
+          result: {
+            status: "completed",
+            findings: [],
+            durationMs: 3,
+            coverage: [{
+              moduleId: "backend/auth",
+              status: "completed",
+              scope: "full",
+              filesExamined: 4,
+              statementsExamined: 40,
+              statementsRecognized: 1,
+              limitations: [],
+            }],
+          },
+        },
+      ],
+      plans: [],
+      includeDatabaseAudit: false,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "backend")).toMatchObject({
+      applicability: "detected",
+      status: "completed",
+      coverageComplete: true,
+      evidence: [
+        { type: "framework", value: "nestjs", projectId: "root" },
+        { type: "module", value: "backend/auth" },
+      ],
+      modules: [{ moduleId: "backend/auth", status: "completed", scopes: ["full"] }],
+      limitations: [],
+    });
+  });
+
+  it("keeps backend partial when the module reports a coverage limitation", () => {
+    const coverage = planDomainCoverage({
+      snapshot: snapshot(),
+      registeredResults: [
+        {
+          doctorId: "backend/auth",
+          result: {
+            status: "completed",
+            findings: [],
+            durationMs: 2,
+            coverage: [{
+              moduleId: "backend/auth",
+              status: "partial",
+              scope: "full",
+              filesExamined: 2,
+              statementsExamined: 12,
+              statementsRecognized: 0,
+              limitations: ["src/server.ts: CORS options could not be resolved statically."],
+            }],
+          },
+        },
+      ],
+      plans: [],
+      includeDatabaseAudit: false,
+    });
+
+    expect(coverage.find(({ domain }) => domain === "backend")).toMatchObject({
+      applicability: "detected",
+      status: "partial",
+      coverageComplete: false,
+      modules: [{
+        moduleId: "backend/auth",
+        status: "partial",
+        limitations: ["src/server.ts: CORS options could not be resolved statically."],
+      }],
     });
   });
 

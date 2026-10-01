@@ -536,6 +536,40 @@ branches (commit SHAs and version tags are accepted, local and docker actions
 are skipped). Malformed YAML and unreadable files become coverage limitations,
 never findings.
 
+## Built-in backend audit
+
+The combined audit registers `backend/auth` as a read-only, offline Doctor over
+JavaScript and TypeScript backend sources. It never starts a server, sends a
+request, or issues a token.
+
+A rule fires only when the callee provably resolves to the audited package:
+import declarations and CommonJS `require` calls are resolved to their local
+binding names, so an unrelated local helper named `cors` or `decode` is never
+reported. `backend/auth` reports four rules:
+
+- `cors-wildcard-origin-with-credentials` — CORS middleware configured with a
+  wildcard (`origin: "*"`), a reflected origin (`origin: true`), or an allowlist
+  containing `*`, while `credentials` is enabled.
+- `session-cookie-security-disabled` — session configuration that explicitly
+  sets the cookie `secure` or `httpOnly` flag to `false`.
+- `jwt-decode-without-verify` — a `decode` call on a JWT package in a file that
+  contains no `verify` call, so the decoded claims are unverified input.
+- `jwt-verify-algorithm-unrestricted` — a `verify` call that passes no
+  `algorithms` allowlist.
+
+Every rule rests on an observed construct rather than an inferred absence:
+configuration that cannot be resolved statically — a non-literal options
+expression, a computed cookie flag, or a spread that could supply the property —
+becomes a coverage limitation, never a finding. An explicit origin string or a
+literal allowlist is fully resolved and is not a limitation. Because a
+`verify` call in the same file is evidence, `decode` and the algorithm rule are
+both file-scoped.
+
+JSX parsing stays off for plain `.ts` files so a generic arrow such as
+`<T>(items: T[]) => items` is read as TypeScript rather than a JSX element.
+Configured origin and secret literals are never copied into evidence, and the
+fingerprint never contains the raw source text.
+
 ## Precision and bounded-report contract
 
 Workspace publication entries, generated targets, and fixture-controlled paths
@@ -641,8 +675,8 @@ The following are not implemented behavior:
   approved checks;
 - a lifecycle-hook installer or hosted service;
 - deployment drift comparison between expected migrations and live state;
-- additional built-in backend, security, performance, and AI semantic
-  analyzers.
+- additional built-in security, performance, and AI semantic analyzers, and
+  broader backend API, worker, webhook, and rate-limit analysis.
 
 Future integrations must preserve the same permanent boundary: Models build.
 Codebase Doctor verifies.
