@@ -346,8 +346,9 @@ describe("scan orchestration", () => {
       doctorId: "repository/source-graph",
       status: "completed",
     }));
-    expect(scanned.doctorRuns.slice(0, 9).map(({ doctorId }) => doctorId)).toEqual([
+    expect(scanned.doctorRuns.slice(0, 10).map(({ doctorId }) => doctorId)).toEqual([
       "ai/agent-surface",
+      "backend/auth",
       "checks",
       "frontend/accessibility",
       "frontend/seo",

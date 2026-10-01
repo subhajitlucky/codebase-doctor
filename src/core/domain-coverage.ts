@@ -440,6 +440,29 @@ function frontendCoverage(
   };
 }
 
+function backendCoverage(
+  modules: readonly DomainModuleCoverage[],
+  snapshot: ProjectSnapshot,
+): DomainCoverage {
+  const status = aggregateStatuses(modules.map(({ status }) => status));
+  const applicability = status === "not-applicable" ? "not-detected" : "detected";
+  return {
+    domain: "backend",
+    applicability,
+    status,
+    coverageComplete: status === "completed" || status === "not-applicable",
+    evidence: sortEvidence([
+      ...frameworkEvidence(snapshot, BACKEND_FRAMEWORKS),
+      ...modules.map(({ moduleId }) => ({
+        type: "module" as const,
+        value: moduleId,
+      })),
+    ]),
+    modules,
+    limitations: [...new Set(modules.flatMap(({ limitations }) => limitations))].sort(),
+  };
+}
+
 function infrastructureCoverage(
   modules: readonly DomainModuleCoverage[],
   snapshot: ProjectSnapshot,
@@ -527,11 +550,14 @@ export function planDomainCoverage(
           "Frontend framework evidence was detected, but semantic frontend analysis is not implemented.",
         )
       : frontendCoverage(modulesByDomain.get("frontend")!, input.snapshot);
-  const backend = unsupportedEntry(
-    "backend",
-    frameworkEvidence(input.snapshot, BACKEND_FRAMEWORKS),
-    "Backend framework evidence was detected, but semantic backend analysis is not implemented.",
-  );
+  const backend =
+    (modulesByDomain.get("backend") ?? []).length === 0
+      ? unsupportedEntry(
+          "backend",
+          frameworkEvidence(input.snapshot, BACKEND_FRAMEWORKS),
+          "Backend framework evidence was detected, but semantic backend analysis is not implemented.",
+        )
+      : backendCoverage(modulesByDomain.get("backend")!, input.snapshot);
   const infrastructure =
     (modulesByDomain.get("infrastructure") ?? []).length === 0
       ? unsupportedEntry(
