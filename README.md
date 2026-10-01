@@ -6,6 +6,8 @@
 
 **It finds the thing, and it never guesses.**
 
+> **Models build. Codebase Doctor verifies.**
+
 Most repository scanners fail in one of two ways: they flood you with false positives, or they silently skip the hard case and report "clean." Codebase Doctor does neither. Every finding carries evidence, every audit reports what it *couldn't* analyze, and a clean run means the scope was actually checked.
 
 ```bash
@@ -43,8 +45,8 @@ npm install -g codebase-doctor         # global
 
 ```bash
 codebase-doctor audit . --json                   # full audit
-codebase-doctor audit . --changed                # just my diff
-codebase-doctor audit . --changed --base main    # PR review
+codebase-doctor audit . --changed --json         # just my diff
+codebase-doctor audit . --changed --base main --json    # PR review
 codebase-doctor audit . --format sarif           # GitHub code scanning
 codebase-doctor verify . --baseline before.json  # confirm fixes landed
 ```
@@ -95,23 +97,41 @@ Findings appear in the Security tab. See [docs/github-action.md](docs/github-act
 
 ### Secrets — working tree and history
 
-Precision-first detection of private-key material, provider-token shapes, paired AWS credentials, credential-bearing URLs, and high-confidence sensitive assignments. A Git-ignored `.env` is normal storage and is **not** a finding; a tracked one containing a real credential is.
+Precision-first and not exhaustive: it detects private-key material, provider-token shapes, paired AWS credentials, credential-bearing URLs, and high-confidence sensitive assignments. A Git-ignored `.env` is normal storage and is **not** a finding; a tracked one containing a real credential is.
 
 `security/secrets-history` catches the case that matters most: a secret committed and later deleted from the working tree, so a rotated-looking repo doesn't hide an exposure. It inspects the most recent 200 commits across all branches without ever checking out, rewriting, or executing repository content.
 
-**Matched values are withheld from every finding, fingerprint, error, and report.** Codebase Doctor never prints your secrets — including in its own SARIF.
+**Matched values are withheld from every finding, fingerprint, error, and report.** Codebase Doctor never prints your secrets — including in its own SARIF. An external authorized human or agent must remediate the shareable content and rotate or revoke the credential, then rerun the same audit.
 
 ### Dependencies
 
-Lockfile-aware for npm (v2/v3), pnpm (v5+), Yarn (classic and Berry), and Bun. Rule families cover missing lockfiles, manifest–lock drift, insecure or mutable Git sources, missing integrity hashes, and competing lockfiles.
+`security/dependencies` is read-only and offline. Lockfile-aware for npm lockfile versions 2 and 3, pnpm (v5+), Yarn (classic and Berry), and Bun. Python and other ecosystems remain explicitly unsupported rather than receiving guessed findings.
 
-A normal `^5.0.0` range is **not** a finding when the lock agrees. Unsupported ecosystems stay visible as coverage limits rather than guessed drift. It never invokes a package manager or touches your `node_modules`.
+Rule families: `security/dependencies/missing-lockfile`, `security/dependencies/manifest-lock-drift`, `security/dependencies/insecure-source`, `security/dependencies/mutable-git-source`, `security/dependencies/missing-integrity`, `security/dependencies/workspace-registry-resolution`, `security/dependencies/competing-npm-lockfiles`, and `security/dependencies/competing-lockfiles`.
+
+A normal semver range such as `^5.0.0` is **not** a finding when the lock agrees. Raw dependency specifications and resolved URLs are withheld from reports and never enter a fingerprint. An external authorized human or agent must correct the metadata and rerun the same scope. Inspect coverage before calling the dependency graph clean or verified.
+
+It never invokes npm, another package manager, a shell, an installer, or a lifecycle script, and makes no network request. It makes no CVE or advisory claim on its own.
 
 `--with-advisories` performs one bounded OSV lookup against resolved packages. Only names, versions, and ecosystems leave the machine.
 
 ### Source impact — what breaks if I change this file
 
-A real syntax parser (never executes your code) builds a static import graph across **JS/TS, Python, Go, Java, and Rust**. In changed mode it walks reverse edges and reports a deterministic shortest impact path from each changed file.
+`repository/source-graph` uses a real syntax parser (never executes your code) to build a static import graph across **JS/TS, Python, Go, Java, and Rust**. In changed mode it walks reverse edges and reports a deterministic shortest impact path from each changed file.
+
+Changed mode is mixed-scope per doctor, not a universal file filter: Project Doctor structural rules run with the full repository snapshot and may report findings outside changed paths for manifests, lockfiles, workspaces, and test visibility. Configured validation check plans are built from full project topology and then filtered to `affectedProjectIds`. Static SQL selects affected migration streams and replays full current history for every selected stream. Live database remains a full observed schema-set audit only with separately requested `--with-database`. Zero changed findings is not a full clean result.
+
+`repository/source-graph` recognizes static `import`, re-export, type-only import, literal `require`, and literal dynamic import edges across JavaScript and TypeScript (plus Python, Go, Java, and Rust) with a real syntax parser that never executes repository code. Cycles are valid topology, not findings, and this module is finding-free by design.
+
+A separate precision-first `repository/source-integrity` Doctor emits only the `source/import-target-missing` rule, keeping topology limitations from becoming guessed bugs. It diagnoses only four proof classes: an explicit relative target with a supported source extension; a single deterministic alias whose configured target explicitly names a supported source file; a unique workspace package whose explicit entry names a supported source file; and an internal Go package under a module path without a `replace` directive.
+
+Extensionless, JSON, custom-loader, conditional, ambiguous, external, and dynamic references and cycles are not findings. It does not check named exports or validate that a referenced export name exists.
+
+Full mode examines all qualifying edges; changed mode examines changed importers and complete reverse-impacted importers. A deleted or renamed target selects its unchanged importer.
+
+It emits at most 1,000 findings per audit and reports partial coverage whenever that ceiling or any upstream graph limitation applies. Partial coverage is not a clean source-integrity result. Raw import specifiers and source text are withheld from findings, which expose only normalized paths, import kind, proof class, and safe location.
+
+An external authorized human or agent must correct or restore the intended target and rerun the same scope.
 
 ```bash
 codebase-doctor audit . --changed --base main
@@ -122,7 +142,11 @@ src/db/schema.ts → src/repositories/user.ts → src/api/users/[id]/route.ts
 → src/app/dashboard/page.tsx → tests/integration/user.test.ts
 ```
 
-Cycles are valid topology, not findings. The graph module intentionally emits no bug findings — a separate precision-first `repository/source-integrity` module reports only *provably* missing import targets, so topology limits never become guessed bugs.
+Cycles are valid topology, not findings. The graph module intentionally emits no bug findings — `repository/source-graph` is finding-free by design, and the separate precision-first `repository/source-integrity` Doctor reports only *provably* missing import targets, so topology limits never become guessed bugs.
+
+Schema-1 reports may include `sourceImpact` (schema `1`). Changed mode walks reverse internal edges, adds impacted projects to `affectedProjectIds`, and reports a deterministic shortest impact path per changed source root. Reports preserve full impacted-file counts while serializing only bounded impact records. A path proves only the static edge chain, not a bug in the dependant. Raw import specifiers and source text are withheld; the module uses no plugins, network requests, or writes.
+
+Local `tsconfig` and `jsconfig` files contribute a deterministic subset of relative aliases; this is not complete Node or TypeScript module resolution. Dynamic non-literal imports, ambiguous targets, unsupported configuration or syntax, unreadable input, and graph ceilings are coverage limitations, not findings.
 
 ### Workflow and infrastructure
 
@@ -130,25 +154,27 @@ Cycles are valid topology, not findings. The graph module intentionally emits no
 
 ### PostgreSQL and Supabase RLS
 
-Offline `database/sql-rls` reconstructs expected table, policy, RLS, and grant state from your migrations — no credentials, no network, never executes SQL. With `--with-database` it inspects live catalog state and can diff the two:
+Offline `database/sql-rls` runs automatically when a supported PostgreSQL migration stream is discovered: it requires no credentials, makes no network request, and never executes migration SQL, reconstructing expected table, policy, RLS, and grant state from supported migrations. Partial coverage is not a clean static SQL result.
 
-> your migrations say X, production says Y
+Live `database/rls` inspects observed database state through a read-only catalog of policies, privileges, roles, memberships, enforcement, and bypass paths, permissioned separately with `--with-database` using environment credentials and a read-only, repeatable-read transaction.
 
-reported as `table-missing-live`, `rls-disabled-live`, `policy-missing-live`, `grant-missing-live`, `rls-enabled-live-only`, `policy-unmanaged-live`, and more.
+`database/rls-drift` compares the two — expected migration state against observed live state — and reports `table-missing-live`, `rls-disabled-live`, `force-rls-disabled-live`, `policy-missing-live`, `grant-missing-live`, `rls-enabled-live-only`, and `policy-unmanaged-live`.
 
 ### Database and Drizzle hazards
 
-The `database/drizzle` module catches a real runtime boundary where a JS `Date` interpolated into a raw `sql` template bypasses the column encoder:
+The read-only, offline `database/drizzle` module and its `database/drizzle/raw-sql-date-parameter` rule catch a runtime boundary: a JavaScript `Date` interpolated into a raw Drizzle `sql` template can bypass the column's timestamp encoder, so postgres-js may throw `ERR_INVALID_ARG_TYPE`, while equivalent SQL can still work in psql.
 
 ```ts
-// Before — throws ERR_INVALID_ARG_TYPE on postgres-js, works fine in psql
+// Before: raw interpolation can bypass the timestamp column encoder.
 const rows = await db.execute(sql`select * from jobs where run_at <= ${date}`);
 
-// After
+// After: guidance for a human or separately authorized external coding agent.
 const rows = await db.select().from(jobs).where(lte(jobs.runAt, date));
 ```
 
-Applicability requires proven `drizzle-orm/postgres-js` usage. It reports only statically proven `Date` flows and never infers from a variable name.
+Applicability requires an exact `drizzle-orm/postgres-js` adapter import, or scoped owning/workspace evidence for both `drizzle-orm` and `postgres`. It reports only statically proven `Date` flows and never infers from a variable name. Findings are medium severity, high confidence.
+
+Not findings: `Date()`, `Date.now()`, an encoded `toISOString()` string, typed comparisons such as `lte(column, date)`, and a fresh inline encoder object passed directly to `sql.param(value, encoder)`. Encoder identifiers and aliases are not statically proven safe even when declared `const`, because their objects may be mutated elsewhere; those interpolations and unresolved flows become partial coverage limitations rather than guessed findings. Partial coverage is not a clean Drizzle audit. Raw SQL and parameter values are withheld from findings, fingerprints, and reports. An external authorized human or agent must make the repair and rerun the same scope.
 
 ### Agent surface — the newest attack target
 
@@ -164,11 +190,15 @@ JSX/TSX and static HTML accessibility (`img-missing-alt`, `iframe-missing-title`
 
 ---
 
-## Coverage is reported, not assumed
+## Current coverage versus north star
 
 This is the part most scanners skip.
 
-Every report includes `domainCoverage` — a checklist of nine domains separating *not-applicable* from *detected-but-unsupported*, *skipped*, and *failed*. `coverageComplete` is true only when each applicable domain either completed or was justified as not applicable.
+There is one unified auditor — one doctor for the whole codebase, not a collection of separate products. Framework- and domain-specific knowledge lives inside it as built-in internal audit modules.
+
+A full audit examines the full requested repository scope for applicable implemented modules. It is not complete or universal — it is not every-domain analyzer coverage. Inspect `coverage` before calling a codebase verified or clean.
+
+Every report includes `domainCoverage` — a checklist of nine domains separating *applicability* from *status*, so *not-detected* differs from detected-but-unsupported, skipped, failed, or not-selected, with module-level status details, evidence, and limitations. `coverageComplete` does not mean the code is bug-free or correct.
 
 That means:
 
@@ -176,7 +206,7 @@ That means:
 - `--require-complete` exits `2` rather than letting a skipped area report as clean.
 - A truncated or bounded scan says so in `coverageSummary` with exact `total` / `emitted` / `omitted` counts and deterministic sample paths.
 
-| Domain | Current coverage | North star |
+| Domain | Current source coverage | North star |
 | --- | --- | --- |
 | Repository structure | Inventory, framework detection, manifests, workspaces, lockfiles, test visibility, JS/TS + Python + Go + Java + Rust impact graph | Cross-language dependency and behavioral topology |
 | Configured validation | JS/TS and Python command planning; execution only with `--run-checks` | Sandboxed validation across ecosystems |
@@ -188,11 +218,21 @@ That means:
 | Performance | No semantic analyzer | Cache, query, memory, profiling |
 | AI systems | Agent-surface audit: MCP configs, `SKILL.md` grants, permission settings | Prompt, token, grounding analysis |
 
-North-star entries are planned modules, not shipped behavior. Read [docs/architecture.md](docs/architecture.md) for the full precision and bounded-report contract.
+North-star entries are planned modules, not shipped behavior. Built-in source-impact graph, secrets analysis, and dependency analysis ship together in `0.1.4` and are not part of the historical `0.1.3` package.
+
+## Precision and bounded-report contract
+
+Workspace publication entries, generated targets, and fixture-controlled paths are coverage limitations unless independently proven broken; they are not missing-target findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive npm-specific findings. Only a cryptographic match to an inventoried localhost-only certificate can classify a private key as an intentional local test key; every other matched private key remains high severity.
+
+Schema-1 reports bound repeated evidence without hiding its size: `coverageSummary` preserves exact `total`, `emitted`, and `omitted` counts, and `limitationGroups` preserve each reason, deterministic sample paths, and omitted path counts.
+
+Inspect `coverage` before calling a codebase verified or clean. Read [docs/architecture.md](docs/architecture.md) for the full contract.
 
 ## Read-only by design
 
-Codebase Doctor reports. It never edits, repairs, or removes files, and it holds no write authority over your target files — a human or a separately authorized agent makes changes, then reruns the same scope to verify.
+Codebase Doctor reports. It exposes no direct target-file write API, has no direct filesystem-write capability, and includes no remediation executor. It can never be granted direct target-write or remediation authority, and never modifies, fixes, or repairs target files. A human or a separately authorized agent makes changes, then reruns the same scope to verify.
+
+Separately authorized `--run-checks` launches repository-owned validation subprocesses; they are not filesystem- or network-isolated and may have side effects. That is validation execution, not Doctor repair authority.
 
 - `--changed` grants no command execution, network, or database access
 - validation commands need `--run-checks`; live database needs `--with-database`; OSV lookup needs `--with-advisories`
