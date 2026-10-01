@@ -20,6 +20,19 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Add the read-only, offline `backend/auth` module: reports
+  `cors-wildcard-origin-with-credentials` (wildcard, reflected, or
+  allowlist-containing-`*` origin with credentials enabled),
+  `session-cookie-security-disabled` (cookie `secure` or `httpOnly` explicitly
+  `false`), `jwt-decode-without-verify` (a `decode` call in a file with no
+  `verify` call), and `jwt-verify-algorithm-unrestricted` (no `algorithms`
+  allowlist). A rule fires only when the callee provably resolves to the audited
+  package through import declarations or CommonJS `require`, so an unrelated
+  local `cors` or `decode` helper is never reported. Configuration that cannot be
+  resolved statically becomes a coverage limitation rather than a guessed
+  finding, while an explicit origin string or literal allowlist resolves
+  cleanly. The backend domain now reports module coverage instead of a
+  hardcoded unsupported status.
 - Add read-only, offline frontend analyzers: `frontend/accessibility`
   (JSX/HTML images without alt, iframes without title, html without lang,
   positive tabIndex; spread props suppress findings) and `frontend/seo`

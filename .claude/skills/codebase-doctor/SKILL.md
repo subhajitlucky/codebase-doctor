@@ -223,7 +223,37 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    correct the metadata and rerun the same scope; Doctor never performs that
    remediation.
 
-12. Apply the precision and bounded-report contract. Workspace publication
+12. The combined audit automatically runs the read-only, offline
+   `backend/auth` module over JavaScript and TypeScript sources. It never starts
+   a server, never sends a request, and never issues a token; it reads source
+   text only. A rule fires only when the callee provably resolves to the
+   audited package through an import declaration or CommonJS `require`, so an
+   unrelated local helper named `cors` or `decode` is not evidence and is never
+   reported.
+
+   Its rules are `cors-wildcard-origin-with-credentials`,
+   `session-cookie-security-disabled`, `jwt-decode-without-verify`, and
+   `jwt-verify-algorithm-unrestricted`. A wildcard, reflected, or
+   allowlist-containing origin with credentials enabled, a session cookie
+   `secure` or `httpOnly` flag explicitly set to `false`, a `decode` call in a
+   file containing no `verify` call, and a `verify` call with no `algorithms`
+   allowlist are findings. An explicit origin string or a literal allowlist
+   resolves cleanly and is not a finding.
+
+   Configuration that cannot be resolved statically—a non-literal options
+   expression, a computed cookie flag, or a spread property that could supply the
+   value—is a coverage limitation, never a guessed finding. Treat partial,
+   unsupported, failed, or not-selected backend coverage as an unresolved
+   verification gap; partial coverage is not clean. `jwt-decode-without-verify`
+   and `jwt-verify-algorithm-unrestricted` are scoped to one file, so a `verify`
+   call in middleware in another file does not suppress them. Configured origin
+   and secret literals are withheld and never enter evidence or a fingerprint;
+   never ask Doctor to reveal them. Backend API, worker, webhook, cron, and
+   rate-limit analysis is not implemented. Ask an external authorized human or
+   coding agent to correct the configuration, then rerun the same scope. Doctor
+   never performs the change.
+
+13. Apply the precision and bounded-report contract. Workspace publication
     entries, generated targets, and fixture-controlled paths are coverage
     limitations unless independently proven broken; they are not missing-target
     findings by themselves. Detected pnpm, Yarn, and Bun scopes never receive
