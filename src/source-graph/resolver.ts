@@ -38,6 +38,7 @@ export interface SourceResolverContext {
 
 export interface SourceResolverIndex extends SourceResolverContext {
   readonly sourcePaths: ReadonlySet<string>;
+  readonly nonSourcePaths: ReadonlySet<string>;
   readonly projectsByPackageName: ReadonlyMap<string, readonly DetectedProject[]>;
   readonly manifestByProjectId: ReadonlyMap<
     string,
@@ -88,7 +89,12 @@ function preferredExtensions(importerPath: string): readonly string[] {
     : JAVASCRIPT_EXTENSIONS;
 }
 
-function candidatePaths(basePath: string, target: string, importerPath: string): string[] | undefined {
+function candidatePaths(
+  basePath: string,
+  target: string,
+  importerPath: string,
+  includeNonSource = false,
+): string[] | undefined {
   const normalized = normalizedRepositoryPath(basePath, target);
   if (normalized === undefined) return undefined;
   const extension = posix.extname(normalized).toLowerCase();
@@ -110,17 +116,21 @@ function candidatePaths(basePath: string, target: string, importerPath: string):
     };
     for (const substitute of substitutions[extension] ?? []) candidates.push(`${stem}${substitute}`);
   }
-  return [...new Set(candidates)].filter(isSupportedSourcePath);
+  const deduplicated = [...new Set(candidates)];
+  return includeNonSource ? deduplicated : deduplicated.filter(isSupportedSourcePath);
 }
 
 export function createSourceResolverIndex(
   context: SourceResolverContext,
 ): SourceResolverIndex {
   const sourcePaths = new Set<string>();
+  const nonSourcePaths = new Set<string>();
   for (const file of context.files) {
     const kind = file.kind;
     const path = file.path;
-    if (kind === "file" && isSupportedSourcePath(path)) sourcePaths.add(path);
+    if (kind !== "file") continue;
+    if (isSupportedSourcePath(path)) sourcePaths.add(path);
+    else nonSourcePaths.add(path);
   }
   const projectsByPackageName = new Map<string, DetectedProject[]>();
   for (const project of context.projects) {
@@ -145,6 +155,7 @@ export function createSourceResolverIndex(
   return {
     ...context,
     sourcePaths,
+    nonSourcePaths,
     projectsByPackageName,
     manifestByProjectId,
   };
@@ -383,6 +394,15 @@ export function resolveSourceImport(
     }
     const resolved = resolveCandidates(candidates, sourcePaths);
     if (resolved === undefined) {
+      // A relative specifier that resolves to an inventoried non-source file (CSS,
+      // JSON, images, fonts) is an asset boundary, not an unanalyzed source edge.
+      // Reporting it as unsupported would mark every stylesheet import in a
+      // frontend repository as incomplete coverage.
+      const assetCandidates =
+        candidatePaths(posix.dirname(importerPath), specifier, importerPath, true) ?? [];
+      if (assetCandidates.some((candidate) => index.nonSourcePaths.has(candidate))) {
+        return { kind: "external", limitations: [] };
+      }
       return {
         kind: "unsupported",
         limitations: [`${importerPath}: relative source target is unsupported.`],

@@ -427,4 +427,68 @@ describe("source import resolver", () => {
       missingTargetProof: "alias-explicit",
     });
   });
+
+  it("treats an inventoried non-source relative import as an external asset boundary", () => {
+    const context = {
+      files: files(
+        "client/src/App.jsx",
+        "client/src/styles/global.css",
+        "client/src/data/fixtures.json",
+        "client/src/assets/logo.svg",
+      ),
+      manifests: [],
+      projects: [project("client", "client")],
+      configs: [],
+    };
+
+    for (const specifier of ["./styles/global.css", "./data/fixtures.json", "./assets/logo.svg"]) {
+      const result = resolveSourceImport(
+        "client/src/App.jsx",
+        reference("client/src/App.jsx", `import "${specifier}";`),
+        context,
+      );
+
+      // A stylesheet, JSON, or image import is an asset boundary, not an
+      // unanalyzed source edge. Reporting it as unsupported would mark every
+      // frontend repository as incomplete coverage.
+      expect(result).toEqual({ kind: "external", limitations: [] });
+    }
+  });
+
+  it("keeps a missing source target as a provable finding rather than an asset boundary", () => {
+    const result = resolveSourceImport(
+      "client/src/App.jsx",
+      reference("client/src/App.jsx", `import "./missing/thing.jsx";`),
+      {
+        files: files("client/src/App.jsx"),
+        manifests: [],
+        projects: [project("client", "client")],
+        configs: [],
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "internal",
+      targetPath: "client/src/missing/thing.jsx",
+      targetExists: false,
+    });
+  });
+
+  it("still reports unsupported when a relative target escapes the repository", () => {
+    const result = resolveSourceImport(
+      "client/src/App.jsx",
+      reference("client/src/App.jsx", `import "../../../../outside.js";`),
+      {
+        files: files("client/src/App.jsx"),
+        manifests: [],
+        projects: [project("client", "client")],
+        configs: [],
+      },
+    );
+
+    expect(result.kind).toBe("unsupported");
+    expect(result.kind === "unsupported" ? result.limitations[0] : "").toContain(
+      "escapes the repository",
+    );
+  });
 });
