@@ -155,10 +155,6 @@ function findingFor(path: string, spec: FindingSpec, location: { line?: number; 
   };
 }
 
-function analyzeJsx(path: string, source: string): { elementsExamined: number; findings: Omit<FindingSpec, "ruleId">[] & never[] } | "parse-failed" {
-  return "parse-failed";
-}
-
 export interface AccessibilityAnalysis {
   readonly elementsExamined: number;
   readonly findings: readonly Finding[];
