@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 
 const skillPath = ".agents/skills/codebase-doctor/SKILL.md";
 
+/**
+ * Collapses Markdown line wrapping so prose assertions are not coupled to where
+ * a sentence happens to wrap.
+ */
+function unwrap(text: string): string {
+  return text.replace(/\s+/gu, " ");
+}
+
 describe("Codebase Doctor agent skill contract", () => {
   it("teaches agents to interpret Drizzle Date evidence without granting repair authority", async () => {
     const skill = await readFile(skillPath, "utf8");
@@ -201,6 +209,38 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/never.*(?:invent|guess).*(?:target|repair)/is);
   });
 
+  it("teaches agents the backend auth audit boundary without claiming coverage it lacks", async () => {
+    const skill = await readFile(skillPath, "utf8");
+
+    expect(skill).toMatch(/backend\/auth/);
+    for (const rule of [
+      "cors-wildcard-origin-with-credentials",
+      "session-cookie-security-disabled",
+      "jwt-decode-without-verify",
+      "jwt-verify-algorithm-unrestricted",
+    ]) {
+      expect(skill, rule).toContain(rule);
+    }
+    // The binding requirement is the precision guarantee: an unrelated local
+    // helper sharing the name must never become a finding.
+    expect(skill).toMatch(/provably resolves.*package|resolves.*provably.*package/is);
+    expect(skill).toMatch(/import declaration.*(?:require|CommonJS)|(?:require|CommonJS).*import declaration/is);
+    expect(skill).toMatch(/local helper.*(?:cors|decode)|(?:cors|decode).*local helper/is);
+    // Unresolved configuration stays a limitation rather than a guessed finding.
+    expect(skill).toMatch(/coverage limitation.*(?:never|not).*(?:finding|guess)/is);
+    expect(skill).toMatch(/non-literal|computed/i);
+    expect(skill).toMatch(/read-only.*offline|offline.*read-only/is);
+    // It reads source only, and never overstates what is implemented.
+    const flat = unwrap(skill);
+    expect(flat).toMatch(/never starts? a server/i);
+    expect(flat).toMatch(/never sends? a request/i);
+    expect(flat).toMatch(/never issues? a token/i);
+    expect(skill).toMatch(/worker.*webhook.*cron|webhook.*cron.*worker/is);
+    expect(skill).toMatch(/external.*(?:human|agent).*(?:correct|change|remediat).*rerun.*same.*scope/is);
+    expect(skill).toMatch(/partial coverage.*not clean|not clean.*partial coverage/is);
+    expect(skill).toMatch(/literal.*withheld|withheld.*literal/i);
+  });
+
   it("teaches the precision hardening and bounded report contracts", async () => {
     const skill = await readFile(skillPath, "utf8");
 
@@ -216,6 +256,15 @@ describe("Codebase Doctor agent skill contract", () => {
     expect(skill).toMatch(/limitationGroups.*sample.*omitted/is);
   });
 
+  it("keeps the Claude mirror byte-identical to the canonical skill", async () => {
+    const [canonical, mirror] = await Promise.all([
+      readFile(".agents/skills/codebase-doctor/SKILL.md", "utf8"),
+      readFile(".claude/skills/codebase-doctor/SKILL.md", "utf8"),
+    ]);
+
+    expect(mirror).toBe(canonical);
+  });
+
   it("ships OpenAI display metadata without provider-specific workflow logic", async () => {
     const metadata = await readFile(
       ".agents/skills/codebase-doctor/agents/openai.yaml",
@@ -224,5 +273,35 @@ describe("Codebase Doctor agent skill contract", () => {
 
     expect(metadata).toMatch(/display_name: "Codebase Doctor"/);
     expect(metadata).toMatch(/short_description:/);
+  });
+
+  it("describes the skill in agent-generic terms with no unimplemented CLI flags", async () => {
+    const metadata = await readFile(
+      ".agents/skills/codebase-doctor/agents/openai.yaml",
+      "utf8",
+    );
+    const skill = await readFile(skillPath, "utf8");
+
+    // Display metadata must not imply a provider-specific workflow.
+    expect(metadata).not.toMatch(/claude|cursor|copilot|windsurf|gemini|openai/i);
+
+    const implemented = [
+      "--base",
+      "--baseline",
+      "--changed",
+      "--database-schema",
+      "--database-timeout",
+      "--exclude",
+      "--fail-on",
+      "--format",
+      "--json",
+      "--run-checks",
+      "--timeout",
+      "--with-database",
+    ];
+    expect([...new Set(metadata.match(/--[a-z][a-z-]*/g) ?? [])]).toEqual(
+      implemented.filter((option) => metadata.includes(option)),
+    );
+    expect([...new Set(skill.match(/--[a-z][a-z-]*/g) ?? [])].sort()).toEqual(implemented);
   });
 });

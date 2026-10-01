@@ -212,7 +212,7 @@ That means:
 | Configured validation | JS/TS and Python command planning; execution only with `--run-checks` | Sandboxed validation across ecosystems |
 | Database | Offline migration RLS, Drizzle Date hazards, live RLS, static-to-live drift | Schemas, queries, permissions, more engines |
 | Frontend | JSX/HTML a11y and static-HTML SEO | React, Next.js, bundle analysis, broader a11y |
-| Backend and authz | NestJS detection only | API, auth, worker, webhook, cron, rate-limit analysis |
+| Backend and authz | CORS, session-cookie, and JWT auth hazards in JS/TS; NestJS detection | API, worker, webhook, cron, rate-limit analysis |
 | Security | Secrets (tree + history), dependency rules, opt-in OSV | Secrets, permission, vulnerability, supply chain |
 | Infrastructure | Dockerfile and GitHub Actions | Hosting and deployment analysis |
 | Performance | No semantic analyzer | Cache, query, memory, profiling |
@@ -276,7 +276,7 @@ Workflow: `audit . --changed --format brief` after edits, full `audit .` at trus
 
 ## Roadmap
 
-- Built-in backend, performance, and AI semantic audit coverage
+- Built-in performance and AI semantic audit coverage, and broader backend API, worker, webhook, and rate-limit analysis
 - Per-domain coverage guarantees beyond the global `--require-complete` gate
 - Pull-request annotations, hooks, and agent plugins on the same report schema
 - Approved validation in read-only mounts or disposable copies

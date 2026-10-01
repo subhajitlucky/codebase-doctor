@@ -36,6 +36,10 @@ MCP tools: `audit_codebase`, `verify_changes`, `explain_finding`, `describe_capa
 - After a fix, rerun the matching command and confirm the fingerprint is gone.
 - Never claim a codebase is "verified" or "clean" without listing coverage limits.
 
+## Backend audit limits
+
+`backend/auth` reads source only. It does not run the app, send requests, or check live token issuance. Configuration it cannot resolve statically (non-literal options, computed cookie flags, spread properties) is reported as a coverage limitation, never as a finding. `decode` and the JWT algorithm rule are scoped to a single file, so a verify call in middleware in another file does not suppress them. Backend API, worker, webhook, cron, and rate-limit analysis is not implemented.
+
 ## Coverage limits
 
 Reflection, runtime/DI wiring, generated sources, and cross-language process edges are not source edges. The report marks these as dynamic boundaries or limitations.
