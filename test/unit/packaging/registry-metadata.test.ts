@@ -31,8 +31,14 @@ describe("agent distribution metadata", () => {
     expect(packages[0]).not.toHaveProperty("environmentVariables");
   });
 
-  it("names a Glama maintainer for ownership claim", async () => {
-    const glama = await json("glama.json");
+  it("ships a sandbox Dockerfile that serves the MCP server over stdio", async () => {
+    const dockerfile = await readFile("Dockerfile", "utf8");
+
+    expect(dockerfile).toMatch(/FROM node:20-slim/);
+    expect(dockerfile).toMatch(/CMD \["node", "dist\/cli\.js", "mcp"\]/);
+  });
+
+  it("names a Glama maintainer for ownership claim", async () => {    const glama = await json("glama.json");
 
     expect(glama["$schema"]).toBe("https://glama.ai/mcp/schemas/server.json");
     const maintainers = glama["maintainers"] as unknown;
