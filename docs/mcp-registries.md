@@ -18,7 +18,11 @@ Prerequisites: the npm version being published is already public, and
 `package.json` carries the matching `mcpName`.
 
 ```bash
-npm install -g mcp-publisher@latest
+# Do NOT npm install mcp-publisher: that npm name belongs to an unrelated
+# package. Install the official Go binary instead:
+curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher && sudo mv mcp-publisher /usr/local/bin/
+# ...or with Homebrew: brew install mcp-publisher
+mcp-publisher --help
 mcp-publisher login github
 mcp-publisher publish
 curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.subhajitlucky/codebase-doctor"

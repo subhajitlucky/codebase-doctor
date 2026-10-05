@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.subhajitlucky/codebase-doctor",
-  "description": "Evidence-backed, read-only codebase diagnostics for coding agents: secrets, dependency, PostgreSQL RLS, Docker, Actions, and source-impact audits with stable fingerprints, a verify loop, and PR review verdicts. No writes, no network by default.",
+  "description": "Read-only codebase audits for coding agents: secrets, RLS, deps, review verdicts. No writes.",
   "repository": {
     "url": "https://github.com/subhajitlucky/codebase-doctor",
     "source": "github"
