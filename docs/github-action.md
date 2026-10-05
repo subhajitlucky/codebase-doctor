@@ -41,11 +41,14 @@ jobs:
 | Input | Default | Description |
 | --- | --- | --- |
 | `path` | `.` | Repository path to audit |
-| `format` | `sarif` | `text`, `json`, or `sarif` |
+| `command` | `audit` | `audit` (full repository) or `review` (changed code with a PR verdict) |
+| `base` | `""` | Base ref for review/changed scope (for example, `origin/main`); empty means working-tree changes against `HEAD` |
+| `format` | `sarif` | `text`, `json`, `sarif`, `brief`, `markdown`, or `github` |
 | `output` | `codebase-doctor.sarif` | File to write the report to |
 | `fail-on` | `high` | Threshold that fails the job: `info`, `low`, `medium`, `high`, `critical`, `none` |
 | `require-complete` | `"false"` | Fail with exit code 2 when audit coverage is incomplete |
 | `run-checks` | `"false"` | Permit execution of detected validation commands |
+| `comment` | `"false"` | Post the markdown report as a pull-request comment; requires `format: markdown` and `pull-requests: write` |
 | `version` | `latest` | codebase-doctor version to install from npm |
 | `node-version` | `20` | Node.js version used to run the CLI |
 
@@ -64,6 +67,37 @@ To audit only what a pull request touches, pass `--changed` through the CLI dire
 ```yaml
       - run: npx --yes codebase-doctor scan . --changed --base origin/${{ github.base_ref }} --format sarif > codebase-doctor.sarif
 ```
+
+## Reviewing pull requests
+
+`review` narrows findings to added diff lines and prints an `APPROVE`,
+`COMMENT`, or `REQUEST_CHANGES` verdict, so unrelated old issues never fail a
+PR. Pair `format: markdown` with `comment: "true"` to post the review body, or
+use `format: github` for inline `::error` diff annotations with no extra step:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - uses: actions/checkout@v4
+    with:
+      fetch-depth: 0
+
+  - uses: subhajitlucky/codebase-doctor@main
+    with:
+      command: review
+      base: origin/${{ github.base_ref }}
+      format: markdown
+      output: review.md
+      fail-on: high
+      comment: "true"
+```
+
+A finding on an unchanged line is out of scope for the verdict and counted as
+omitted; the full `audit` still reports it. Inspect coverage before calling
+the reviewed diff verified or clean.
 
 ## Notes
 

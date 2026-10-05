@@ -638,6 +638,26 @@ current full result as resolved.
 not the findings themselves. Partial and skipped coverage still qualify an exit
 `0` interpretation.
 
+## Review command
+
+The `codebase-doctor review` subcommand is the pull-request interface over the
+same read-only pipeline. It always audits changed scope (changed mode is
+mixed-scope per doctor, exactly as in `audit --changed`), then narrows findings
+to the diff with an added-line index built from a zero-context diff of the
+working tree against the resolved base commit; untracked files count every line
+as changed. Findings without a location stay in scope as repository-level
+results, findings on a changed path stay in scope when they carry no line
+number or touch an added line, and everything else is counted as omitted rather
+than resolved. The verdict is `APPROVE` when nothing in the diff is flagged,
+`COMMENT` below `--fail-on`, and `REQUEST_CHANGES` at or above it; with
+`--baseline`, only new findings in the diff gate the verdict. Review-only
+`markdown` output renders a PR-comment-ready body and the `github` output emits
+`::error`/`::warning`/`::notice` workflow commands, both bounded by
+`--max-findings`, while `json` carries a machine-readable `review` envelope
+with the same narrowed findings. The review never modifies, fixes, or repairs
+target files: a human or separately authorized external coding agent performs
+the fix, then reruns the same review. Models build. Codebase Doctor verifies.
+
 ## Model Context Protocol server
 
 The `codebase-doctor mcp` subcommand serves the same normalized audit over an
@@ -653,8 +673,9 @@ verifies.
 ## Public package boundary
 
 The package entry point exports the normalized audit, finding, coverage,
-baseline comparison, Git discovery, and scope-planning contracts needed by API
-consumers. It also exposes the safe additive `SourceGraphEdge` and
+baseline comparison, Git discovery, scope-planning, and review (changed-line
+index, diff filter, verdict, Markdown, and workflow-command rendering)
+contracts needed by API consumers. It also exposes the safe additive `SourceGraphEdge` and
 `MissingTargetProof` types, but not private complete-impact selection.
 `GitRunner` injection, command runners, database adapters, and other unsafe
 execution internals remain private implementation details.

@@ -6,6 +6,7 @@ import { Command } from "commander";
 import { createAuditCommand } from "./commands/audit.js";
 import { createInstructionsCommand } from "./commands/instructions.js";
 import { createMcpCommand } from "./commands/mcp.js";
+import { createReviewCommand } from "./commands/review.js";
 import { createScanCommand } from "./commands/scan.js";
 import { createVerifyCommand } from "./commands/verify.js";
 import { VERSION } from "./version.js";
@@ -17,6 +18,7 @@ export function createProgram(): Command {
     .version(VERSION);
   program.addCommand(createScanCommand());
   program.addCommand(createAuditCommand());
+  program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());
   program.addCommand(createInstructionsCommand());
   program.addCommand(createMcpCommand());

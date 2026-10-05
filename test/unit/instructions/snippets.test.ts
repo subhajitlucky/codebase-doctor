@@ -25,6 +25,9 @@ describe("instruction snippets", () => {
     expect(agents.file).toBe("AGENTS.md");
     expect(agents.content).toContain("--changed --format brief");
     expect(agents.content).toContain("verify . --baseline");
+    expect(agents.content).toContain("review . --base main --format brief");
+    expect(agents.content).toContain("REQUEST_CHANGES");
+    expect(agents.content).toContain("--format markdown");
     expect(agents.content).toContain("partial, skipped, unsupported, or failed coverage as unverified");
     expect(agents.content).toContain("read-only");
     expect(agents.content).toContain("--run-checks");

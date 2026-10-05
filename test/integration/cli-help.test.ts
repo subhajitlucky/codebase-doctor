@@ -18,7 +18,7 @@ describe("codebase-doctor help", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Usage: codebase-doctor [options] [command]");
-    for (const command of ["audit", "scan", "verify", "instructions", "mcp"]) {
+    for (const command of ["audit", "scan", "review", "verify", "instructions", "mcp"]) {
       expect(result.stdout).toContain(command);
     }
   });

@@ -273,6 +273,37 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
 fingerprints, `--format sarif` for SARIF 2.1.0, `--timeout` for configured check
 limits, and `--fail-on` only for finding-based process status.
 
+## Code review
+
+For pull-request review, run the `review` command instead of `audit --changed`.
+It always audits changed scope, narrows findings to added diff lines, and
+prints a verdict:
+
+```bash
+codebase-doctor review . --base main --format markdown
+```
+
+- The verdict is `APPROVE` when nothing in the diff is flagged, `COMMENT`
+  when findings sit below `--fail-on`, and `REQUEST_CHANGES` when a finding
+  meets the threshold. Exit `1` means the review requests changes; exit `2`
+  is an operational failure and is never a clean result.
+- Findings on unchanged lines are out of scope for the verdict and are
+  counted as omitted; the full audit still reports them. Never treat zero
+  review findings as a full repository clean result.
+- `--format markdown` renders a PR-comment-ready body with the verdict,
+  findings, impact, and coverage limitations. The workflow-commands format
+  annotates pull-request diffs inline from Actions logs without network
+  access, and `--format sarif` carries the same narrowed findings for code
+  scanning.
+- With `--baseline`, only new findings in the diff gate the verdict,
+  mirroring the audit comparison contract. Inspect `domainCoverage` before
+  calling the reviewed diff verified or clean; incomplete coverage qualifies
+  the verdict rather than passing it.
+- Codebase Doctor reports the review only. A human or separately authorized
+  external coding agent performs the fix; rerun the same review to confirm the
+  fingerprint is gone. Codebase Doctor never modifies, fixes, or repairs
+  target files.
+
 ## Interpret results
 
 - Exit `0`: requested audits completed and no finding met the threshold. This

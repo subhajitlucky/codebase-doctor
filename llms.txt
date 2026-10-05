@@ -18,6 +18,7 @@ npx codebase-doctor audit .
 codebase-doctor audit .              # full audit
 codebase-doctor audit . --changed    # after edits
 codebase-doctor audit . --format sarif
+codebase-doctor review . --base main --format markdown  # PR verdict on diff lines
 ```
 
 ## What it does not do

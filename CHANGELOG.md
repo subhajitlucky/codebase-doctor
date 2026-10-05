@@ -4,6 +4,31 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-05
+
+### Added
+
+- Add the `codebase-doctor review` command: the pull-request interface over the
+  same read-only, offline pipeline. It always audits changed scope, builds an
+  added-line index from a zero-context working-tree diff against the resolved
+  base commit (untracked files count every line), and narrows findings to the
+  diff, so unrelated old issues never fail a PR. The verdict is `APPROVE`
+  when nothing in the diff is flagged, `COMMENT` below `--fail-on`, and
+  `REQUEST_CHANGES` at or above it; with `--baseline`, only new findings in
+  the diff gate the verdict. Review-only `--format markdown` renders a
+  PR-comment-ready body and `--format github` emits `::error`/`::warning`/
+  `::notice` workflow commands for inline diff annotations, both bounded by
+  `--max-findings`, while `--format json` carries a machine-readable `review`
+  envelope. `--all-findings` disables narrowing and `--output <file>` writes
+  the report to a file as well as stdout. Findings outside the diff are
+  counted as omitted, never resolved. The GitHub Action gains matching
+  `command`, `base`, and `comment` inputs for PR reviews.
+- Add agent-distribution packaging: official MCP registry `server.json` with
+  a matching `mcpName`, a Glama ownership manifest, a Claude Code plugin
+  (`.claude-plugin/` plus a mirrored skill), a registry publishing runbook in
+  `docs/mcp-registries.md`, and the `review` verdict loop in the
+  `instructions` snippets.
+
 ### Fixed
 
 - Classify a relative import that resolves to an inventoried non-source file
