@@ -34,19 +34,26 @@ before publishing; the packaging test fails if they diverge.
 ## Smithery
 
 Smithery publishes hosted URLs or `.mcpb` stdio bundles, not bare npm
-packages, so listing here is a maintainer dashboard/CLI step rather than a
-repository file:
+packages. This repository builds the bundle locally (no hosting needed):
+
+```bash
+npm run bundle  # builds dist/ and packs codebase-doctor.mcpb (gitignored)
+```
+
+The bundle contains `manifest.json` (version and tool list generated from
+`package.json`, so it cannot drift), the built CLI under `server/`, and
+production `node_modules` (the MCPB spec requires bundled dependencies).
+`test/integration/mcpb-bundle.test.ts` rebuilds and verifies the bundle
+end to end. Then publish with your Smithery credentials:
 
 ```bash
 npm install -g smithery@latest
 smithery login
-# Option A: dashboard import of the GitHub repository (recommended)
-# Option B: publish a prepared stdio bundle
 smithery mcp publish ./codebase-doctor.mcpb -n subhajitlucky/codebase-doctor
 ```
 
-Keep the listing's install command as `npx -y codebase-doctor mcp` so clients
-run the audited npm artifact with no extra services.
+Keep the listing's install path as the local bundle so clients run the
+audited artifact with no extra services.
 
 ## Glama
 
