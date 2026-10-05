@@ -4,6 +4,13 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add `npm run bundle`: packs a self-contained Smithery-ready `.mcpb` bundle
+  (generated manifest, built CLI, production dependencies) with an
+  end-to-end integration test.
+
+
 ## [0.1.10] - 2026-10-05
 
 ### Added
