@@ -310,6 +310,8 @@ Read-only tools: `audit_codebase`, `verify_changes`, `explain_finding`, `describ
 
 Registry metadata ships in `server.json` (`io.github.subhajitlucky/codebase-doctor`); publishing steps for the official MCP registry, Smithery, and Glama are in [docs/mcp-registries.md](docs/mcp-registries.md).
 
+Live listings: [Glama](https://glama.ai/mcp/servers/subhajitlucky/codebase-doctor) · official MCP registry (`io.github.subhajitlucky/codebase-doctor`).
+
 A Claude Code plugin ships in this repository (`.claude-plugin/` + `skills/`):
 
 ```bash
