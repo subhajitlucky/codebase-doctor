@@ -58,6 +58,31 @@ export { renderJsonReport } from "./reporters/json.js";
 export { renderSarifReport } from "./reporters/sarif.js";
 export { renderTextReport } from "./reporters/text.js";
 export type { TextReportOptions } from "./reporters/text.js";
+export { renderBriefReport } from "./reporters/brief.js";
+export type { BriefRenderOptions } from "./reporters/brief.js";
+export { renderMarkdownReview } from "./reporters/markdown.js";
+export type { MarkdownReviewOptions } from "./reporters/markdown.js";
+export { renderGithubAnnotations } from "./reporters/github.js";
+export type { GithubAnnotationsOptions } from "./reporters/github.js";
+export {
+  getChangedLines,
+  parseUnifiedDiffZeroContext,
+} from "./review/changed-lines.js";
+export type {
+  ChangedLines,
+  ChangedLineSet,
+  ChangedLinesOptions,
+  ChangedLinesRunner,
+} from "./review/changed-lines.js";
+export { filterFindingsToDiff } from "./review/filter.js";
+export type { DiffFilterOptions, DiffFilterResult } from "./review/filter.js";
+export {
+  classifyReviewExit,
+  decideReviewVerdict,
+  REVIEW_VERDICTS,
+  selectVerdictFindings,
+} from "./review/verdict.js";
+export type { ReviewVerdict } from "./review/verdict.js";
 export {
   CodebaseConfigError,
   loadCodebaseConfig,

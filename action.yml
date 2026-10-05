@@ -1,5 +1,5 @@
 name: Codebase Doctor
-description: Audit a repository with codebase-doctor and produce text, JSON, or SARIF output.
+description: Audit a repository with codebase-doctor and produce text, JSON, SARIF, brief, Markdown, or workflow-command output.
 author: Subhajit Pradhan
 branding:
   icon: shield
@@ -10,8 +10,16 @@ inputs:
     description: Repository path to audit.
     required: false
     default: "."
+  command:
+    description: "Command to run: audit (full repository) or review (changed code with a PR verdict)."
+    required: false
+    default: audit
+  base:
+    description: "Base ref for review/changed scope (for example, origin/main). Empty means working-tree changes against HEAD."
+    required: false
+    default: ""
   format:
-    description: "Output format: text, json, or sarif."
+    description: "Output format: text, json, sarif, brief, markdown, or github."
     required: false
     default: sarif
   output:
@@ -28,6 +36,10 @@ inputs:
     default: "false"
   run-checks:
     description: "Permit execution of detected validation commands (\"true\" or \"false\")."
+    required: false
+    default: "false"
+  comment:
+    description: "Post the markdown report as a pull-request comment (\"true\" or \"false\"). Requires format markdown and pull-requests write permission."
     required: false
     default: "false"
   version:
@@ -63,7 +75,8 @@ runs:
     - name: Run codebase-doctor
       shell: bash
       run: |
-        args=(audit "${{ inputs.path }}" --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
+        args=("${{ inputs.command }}" "${{ inputs.path }}" --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
+        if [ -n "${{ inputs.base }}" ]; then args+=(--base "${{ inputs.base }}"); fi
         if [ "${{ inputs.require-complete }}" = "true" ]; then args+=(--require-complete); fi
         if [ "${{ inputs.run-checks }}" = "true" ]; then args+=(--run-checks); fi
 
@@ -71,6 +84,18 @@ runs:
         cat "${{ inputs.output }}"
         echo "codebase-doctor exit code: $status"
         exit $status
+
+    - name: Comment PR with review
+      if: ${{ inputs.comment == 'true' && inputs.format == 'markdown' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [ -z "${{ github.event.pull_request.number }}" ]; then
+          echo "codebase-doctor: no pull request context; skipping PR comment."
+          exit 0
+        fi
+        gh pr comment "${{ github.event.pull_request.number }}" --body-file "${{ inputs.output }}"
 
     - name: Upload SARIF to code scanning
       if: ${{ inputs.upload == 'true' && inputs.format == 'sarif' }}

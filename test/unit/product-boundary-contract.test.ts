@@ -240,7 +240,7 @@ describe("independent auditor product boundary", () => {
   it("runs the unified audit command from the GitHub Action", async () => {
     const action = await readFile("action.yml", "utf8");
 
-    expect(action).toMatch(/args=\(audit "\$\{\{ inputs\.path \}\}" --format "\$\{\{ inputs\.format \}\}" --fail-on "\$\{\{ inputs\.fail-on \}\}"/);
+    expect(action).toMatch(/args=\("\$\{\{ inputs\.command \}\}" "\$\{\{ inputs\.path \}\}" --format "\$\{\{ inputs\.format \}\}" --fail-on "\$\{\{ inputs\.fail-on \}\}"/);
     expect(action).not.toMatch(/args=\(scan /);
   });
 

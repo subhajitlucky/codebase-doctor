@@ -57,10 +57,12 @@ codebase-doctor verify . --baseline before.json  # confirm fixes landed
 
 ```text
 --run-checks          Permit configured validation commands
---changed             Audit Git changes and their affected scope
+--changed             Audit Git changes and their affected scope (implied by review)
 --base <ref>          Compare changed scope from the merge base with this ref
 --json                Emit schema-versioned JSON
---format <format>     Output format: text, json, sarif, or brief
+--format <format>     Output format: text, json, sarif, or brief (review adds markdown, github)
+--all-findings        Review only: include findings outside the changed lines
+--output <file>       Review only: write the report to a file as well as stdout
 --exclude <glob>      Exclude a repository-relative path glob; repeatable
 --baseline <path>     Compare with a prior Codebase Doctor JSON report
 --timeout <ms>        Per-command timeout (default: 120000)
@@ -73,6 +75,32 @@ codebase-doctor verify . --baseline before.json  # confirm fixes landed
 --database-timeout    Catalog statement timeout in ms (default: 10000)
 ```
 
+## Code review
+
+`review` is the pull-request command. It always audits changed scope, narrows
+findings to added diff lines, and prints a verdict — `APPROVE`, `COMMENT`, or
+`REQUEST_CHANGES` — so unrelated old issues never fail a PR:
+
+```bash
+codebase-doctor review . --base origin/main --format markdown > review.md
+codebase-doctor review . --base origin/main --format github
+codebase-doctor review . --format json  # includes a machine-readable review envelope
+```
+
+- `--format markdown` renders a PR-comment-ready body with the verdict,
+  findings, source impact, and coverage limitations.
+- `--format github` emits `::error` / `::warning` / `::notice` workflow
+  commands that annotate pull-request diffs inline from Actions logs, with no
+  network access.
+- A finding on an unchanged line is out of scope for the verdict and counted
+  as omitted; the full `audit` still reports it. `--all-findings` disables
+  narrowing, and `--output <file>` writes the report to a file as well as
+  stdout.
+- With `--baseline`, only *new* findings in the diff gate the verdict.
+- Exit `1` means the review requests changes; exit `2` is an operational
+  failure, never a clean result. Inspect coverage before calling the reviewed
+  diff verified or clean.
+
 ## GitHub Action
 
 ```yaml
@@ -82,7 +110,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v4
-  - uses: subhajitlucky/codebase-doctor@v0.1.9
+  - uses: subhajitlucky/codebase-doctor@v0.1.10
     with:
       format: sarif
       upload: "true"
@@ -280,9 +308,18 @@ claude mcp add codebase-doctor -- npx -y codebase-doctor mcp
 
 Read-only tools: `audit_codebase`, `verify_changes`, `explain_finding`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
 
-`codebase-doctor instructions` prints ready-to-paste snippets for `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.windsurfrules`, `.clinerules/`, and copilot instructions. It only prints — it never writes files.
+Registry metadata ships in `server.json` (`io.github.subhajitlucky/codebase-doctor`); publishing steps for the official MCP registry, Smithery, and Glama are in [docs/mcp-registries.md](docs/mcp-registries.md).
 
-Workflow: `audit . --changed --format brief` after edits, full `audit .` at trust boundaries, `verify` after an external fix.
+A Claude Code plugin ships in this repository (`.claude-plugin/` + `skills/`):
+
+```bash
+/plugin marketplace add subhajitlucky/codebase-doctor
+/plugin install codebase-doctor
+```
+
+`codebase-doctor instructions` prints ready-to-paste snippets for `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.windsurfrules/`, `.clinerules/`, and copilot instructions. It only prints — it never writes files.
+
+Workflow: `audit . --changed --format brief` after edits, `review . --base main --format brief` for a PR verdict, full `audit .` at trust boundaries, `verify` after an external fix.
 
 ## Roadmap
 

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Codebase Doctor"
+  short_description: "Evidence-backed repository diagnostics"

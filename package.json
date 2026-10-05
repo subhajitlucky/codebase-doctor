@@ -1,6 +1,7 @@
 {
   "name": "codebase-doctor",
-  "version": "0.1.9",
+  "version": "0.1.10",
+  "mcpName": "io.github.subhajitlucky/codebase-doctor",
   "description": "A model-independent CLI for evidence-backed codebase diagnostics.",
   "type": "module",
   "bin": {

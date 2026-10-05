@@ -49,7 +49,7 @@ function parseTimeout(value: string): number {
   return timeoutMs;
 }
 
-function parseThreshold(value: string): FindingThreshold {
+export function parseThreshold(value: string): FindingThreshold {
   if (!THRESHOLDS.has(value as FindingThreshold)) {
     throw new Error(`Invalid fail-on severity "${value}".`);
   }
@@ -70,7 +70,7 @@ function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-function parseMaxFindings(value: string): number {
+export function parseMaxFindings(value: string): number {
   if (!/^\d+$/.test(value)) {
     throw new Error(`Invalid max findings "${value}": expected a positive integer.`);
   }
