@@ -158,3 +158,18 @@ describe("baseline comparison", () => {
     await expect(loadBaseline(`${root}/baseline.json`)).rejects.toBeInstanceOf(BaselineError);
   });
 });
+
+describe("acknowledged findings", () => {
+  it("keeps acknowledged fingerprints present but never new", () => {
+    const comparison = compareFindingBaseline(
+      [finding("same"), finding("fresh")],
+      [finding("same"), finding("acked")],
+      { acknowledged: ["acked"] },
+    );
+
+    expect(comparison.new).toEqual(["fresh"]);
+    expect(comparison.unchanged).toEqual(["acked", "same"]);
+    expect(comparison.resolved).toEqual([]);
+    expect(comparison.newSummary).toMatchObject({ total: 1 });
+  });
+});

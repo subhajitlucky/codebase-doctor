@@ -1,5 +1,6 @@
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
+import { selectChangedCandidates } from "../../../scope/changed-files.js";
 import type { ChangedPath } from "../../../scope/types.js";
 import type { FileRecord, ProjectSnapshot } from "../../../workspace/types.js";
 
@@ -42,15 +43,16 @@ const BINARY_ASSET_EXTENSIONS = new Set([
   ".gz",
 ]);
 
+// Directory patterns are limited to what the inventory can yield: dist/,
+// build/, .next/, and node_modules/ never reach any doctor because the
+// workspace inventory skips them at every depth. An ignored directory that is
+// force-added to git is therefore outside this module's reach.
 const BUILD_OUTPUT_PATTERNS = [
   /\.map$/iu,
   /\.tsbuildinfo$/iu,
   /\.min\.js$/iu,
   /\.bundle\.js$/iu,
-  /(?:^|\/)dist\//u,
-  /(?:^|\/)build\//u,
   /(?:^|\/)coverage\//u,
-  /(?:^|\/)\.next\//u,
   /(?:^|\/)out\//u,
   /(?:^|\/)lcov\.info$/u,
 ];
@@ -118,46 +120,38 @@ function findingFor(
 }
 
 /**
- * Repository-relative paths worth examining in changed mode: changed paths
- * that still exist in the inventory. Deleted paths are skipped because a
- * removed file cannot slow down future clones or scans.
- */
-export function changedPerformancePaths(
-  changes: readonly ChangedPath[],
-  files: readonly FileRecord[],
-): string[] {
-  const inventoried = new Set(
-    files.filter((file) => file.kind === "file").map((file) => file.path),
-  );
-  const paths = new Set<string>();
-  for (const change of changes) {
-    if (change.status === "deleted") continue;
-    if (inventoried.has(change.path)) paths.add(change.path);
-  }
-  return [...paths].sort();
-}
-
-/**
  * Select the inventoried files to examine, mirroring the secrets audit: full
  * mode keeps only repository-shareable paths (tracked or unignored) so
  * ignored local build output is never reported; changed mode examines changed
  * paths present in the inventory.
  */
-function selectFiles(snapshot: ProjectSnapshot): { paths: string[]; limitations: string[] } {
+function selectFiles(
+  snapshot: ProjectSnapshot,
+): { paths: readonly string[]; limitations: string[]; scopeNote: boolean } {
   const sizes = new Map(
     snapshot.files
       .filter((file) => file.kind === "file")
       .map((file) => [file.path, file.size] as const),
   );
   if (snapshot.auditScope.mode === "changed") {
-    const paths = changedPerformancePaths(snapshot.auditScope.changes, snapshot.files);
-    return { paths, limitations: [] };
+    const selection = selectChangedCandidates(
+      snapshot.auditScope.changes,
+      snapshot.files,
+      (path) => isBuildOutput(path) || (sizes.get(path) ?? 0) > 0,
+      "performance",
+    );
+    return {
+      paths: [...selection.candidates],
+      limitations: [...selection.limitations],
+      scopeNote: selection.candidates.length > 0,
+    };
   }
   if (snapshot.repositoryFiles?.availability === "available") {
     const shareable = new Set(snapshot.repositoryFiles.paths);
     return {
       paths: [...sizes.keys()].filter((path) => shareable.has(path)).sort(),
       limitations: [...new Set(snapshot.repositoryFiles.limitations)].sort(),
+      scopeNote: false,
     };
   }
   return {
@@ -167,6 +161,7 @@ function selectFiles(snapshot: ProjectSnapshot): { paths: string[]; limitations:
         ? snapshot.repositoryFiles.limitations
         : ["Git shareable-file selection was unavailable; ignored local build output may be reported."]),
     ],
+    scopeNote: false,
   };
 }
 
@@ -188,20 +183,29 @@ export function createPerformanceDoctor(options: PerformanceDoctorOptions = {}):
       const limitations: string[] = [...selection.limitations];
 
       if (candidates.length === 0) {
+        const emptyLimitations = changed && snapshot.files.length > 0
+          ? [
+            ...limitations,
+            "No changed performance files were selected; unchanged files were not independently re-audited.",
+          ]
+          : limitations;
         return {
           status: "completed",
           findings: [],
           coverage: [{
             moduleId: DOCTOR_ID,
-            status: "not-applicable",
+            status: changed && snapshot.files.length > 0 ? "not-selected" : "not-applicable",
             scope,
             filesExamined: 0,
             statementsExamined: 0,
             statementsRecognized: 0,
-            limitations: [],
+            limitations: emptyLimitations,
           }],
           durationMs: Date.now() - startedAt,
         };
+      }
+      if (selection.scopeNote) {
+        limitations.push("Changed scope examined selected current changed files only; unchanged files were not independently re-audited.");
       }
 
       const findings: Finding[] = [];

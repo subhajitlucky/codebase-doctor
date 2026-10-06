@@ -15,6 +15,7 @@ import { VERSION } from "../version.js";
 import type { DetectedProject } from "../workspace/types.js";
 import type { PlannedCheckRecord } from "../execution/types.js";
 import type { FindingComparison } from "./baseline.js";
+import type { SuppressedFinding } from "./suppressions.js";
 import type { AuditScope, ChangedPath, ScopeReason } from "../scope/types.js";
 import type { SourceImpact, SourceImpactRecord } from "../source-graph/types.js";
 import {
@@ -50,6 +51,8 @@ export interface ScanResult {
   domainCoverage: readonly DomainCoverage[];
   doctorRuns: readonly DoctorRunRecord[];
   findings: readonly Finding[];
+  /** Acknowledged findings: excluded from gates, still listed, still present. */
+  suppressed: readonly SuppressedFinding[];
   summary: FindingSummary;
   coverage?: readonly AuditCoverage[];
   coverageSummary?: OmittedRecordSummary;
@@ -117,6 +120,7 @@ export function normalizeScanResult(
   plannedChecks: readonly PlannedCheckRecord[] = [],
   domainCoverage: readonly DomainCoverage[] = [],
   sourceImpact?: SourceImpact,
+  suppressed: readonly SuppressedFinding[] = [],
 ): ScanResult {
   const findings = uniqueFindings(registeredResults.flatMap(({ result }) => result.findings));
   const doctorRuns = registeredResults
@@ -242,6 +246,11 @@ export function normalizeScanResult(
     domainCoverage: normalizedDomainCoverage,
     doctorRuns,
     findings,
+    suppressed: [...suppressed].sort((left, right) =>
+      left.path.localeCompare(right.path) ||
+      left.ruleId.localeCompare(right.ruleId) ||
+      left.fingerprint.localeCompare(right.fingerprint)
+    ),
     summary: summarizeFindings(findings),
     ...(coverage.length === 0 ? {} : { coverage }),
     ...(boundedCoverage.summary.omitted === 0

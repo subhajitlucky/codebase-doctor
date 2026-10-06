@@ -74,7 +74,11 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    Static SQL selects affected migration streams and replays full current
    history for every selected stream, with partial or skipped topology
    limitations. Live database remains a full observed schema-set audit only
-   when separately requested with `--with-database`.
+   when separately requested with `--with-database`. File-local doctors
+   (backend, frontend, infrastructure, agent surface, performance) examine
+   only changed files present in the inventory, so changed audits stay
+   proportional to the change; deleted and uninventoried paths become explicit
+   limitations, and an empty selection reports `not-selected`.
 
    Unaffected source behavior and domain checks are not broadly covered, while
    full-context structural doctors may inspect unaffected areas. Never treat
@@ -125,7 +129,13 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    requires the fingerprint to be absent on rerun and all applicable coverage
    to be completed. Do not claim a finding resolved outside coverage. A changed
    baseline comparison never calls absent baseline findings resolved; a
-   comparable full audit can.
+   comparable full audit can. A finding a human has reviewed and accepted may
+   carry a `codebase-doctor-ignore` directive (rule id, doctor id, or
+   `doctor/*` prefix on the finding's line or above); acknowledged findings
+   leave `findings` but stay listed under `suppressed` with their reason,
+   still count as present for baseline and `verify` status, and are never
+   reported resolved. Never invent a directive to silence a finding you have
+   not reviewed with the user.
 
 6. Ask a human or external coding agent to fix one evidence-backed finding.
    Then rerun the same scope and compare fingerprints, evidence, coverage, and
@@ -204,7 +214,8 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
 
 11. The combined audit also automatically runs the read-only, offline
    `security/dependencies` module for npm lockfile versions 2 and 3. pnpm, Yarn,
-   Bun, Python, and other ecosystems remain explicit unsupported coverage for
+   and Bun lock authority plus Python poetry and uv locks are covered; remaining
+   ecosystems stay explicitly unsupported coverage for
    this module. It never invokes npm or another package manager, runs a shell or
    lifecycle script, uses the network, installs packages, or changes dependency
    metadata.
@@ -217,7 +228,11 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
 
    Raw dependency specifications and resolved URLs are withheld and never enter
    a fingerprint, finding, evidence record, limitation, error, text, JSON, or
-   SARIF output. Never ask Doctor to reveal a source value. Read completed,
+   SARIF output. Never ask Doctor to reveal a source value. Python poetry and
+   uv coverage parses lock package blocks and `pyproject.toml` Poetry and PEP
+   621 declarations without a TOML dependency; undecidable specifiers, markers,
+   direct-URL drift, and transitive-only entries stay partial coverage, never
+   guessed findings. Read completed,
    partial, unsupported, failed, and not-selected dependency coverage before
    calling a graph clean. Have an external authorized human or coding agent
    correct the metadata and rerun the same scope; Doctor never performs that
@@ -248,10 +263,22 @@ perform cache writes. Do not use an on-demand package runner as the audit step.
    and `jwt-verify-algorithm-unrestricted` are scoped to one file, so a `verify`
    call in middleware in another file does not suppress them. Configured origin
    and secret literals are withheld and never enter evidence or a fingerprint;
-   never ask Doctor to reveal them. Backend API, worker, webhook, cron, and
+   never ask Doctor to reveal them. The companion `backend/api` module applies
+   the same binding proof (plus `new BoundClass()` instance tracking) to
+   `sql-string-concat-query` (concatenated or interpolated SQL on a provably
+   bound database call; parameterized values arrays are safe) and
+   `child-process-exec-dynamic` (non-static shell commands, including `spawn`
+   with `shell: true`; `execFile` and plain `spawn` never fire). Unresolvable
+   query text stays a coverage limitation. Worker, webhook, cron, and
    rate-limit analysis is not implemented. Ask an external authorized human or
    coding agent to correct the configuration, then rerun the same scope. Doctor
    never performs the change.
+
+   The combined audit also runs the read-only, offline `frontend/security`
+   module over JSX sources: `dangerously-set-inner-html` fires for a dynamic
+   value without a provable sanitizer call (`DOMPurify.sanitize`,
+   `sanitizeHtml`); static literals are safe and spread props suppress the
+   check. Partial coverage is not clean.
 
 13. Apply the precision and bounded-report contract. Workspace publication
     entries, generated targets, and fixture-controlled paths are coverage

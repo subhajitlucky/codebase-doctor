@@ -291,6 +291,22 @@ export function renderTextReport(
     );
   }
 
+  if (result.suppressed.length > 0) {
+    lines.push("", "Suppressed findings");
+    lines.push(
+      `${result.suppressed.length} finding(s) acknowledged with codebase-doctor-ignore directives. ` +
+      "They are excluded from failure gates but still present: never call them resolved.",
+    );
+    for (const entry of result.suppressed) {
+      const location = entry.location === undefined
+        ? "(repository)"
+        : `${entry.location.path}${entry.location.line === undefined ? "" : `:${entry.location.line}`}`;
+      const reason = entry.reason.length === 0 ? "no reason recorded" : entry.reason;
+      lines.push(`- [${entry.severity}] ${entry.ruleId} ${location} — ${reason}`);
+      lines.push(`  Fingerprint: ${entry.fingerprint}`);
+    }
+  }
+
   const counts = result.summary.counts;
   lines.push(
     "",

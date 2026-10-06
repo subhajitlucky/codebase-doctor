@@ -17,6 +17,12 @@ export interface FindingComparison {
 
 export interface BaselineComparisonOptions {
   readonly includeResolved?: boolean;
+  /**
+   * Fingerprints acknowledged through suppressions. They count as present
+   * for unchanged/resolved classification but never as new, so an
+   * acknowledged finding can neither fail a gate nor be reported resolved.
+   */
+  readonly acknowledged?: readonly string[];
 }
 
 export class BaselineError extends Error {
@@ -71,9 +77,15 @@ export function compareFindingBaseline(
   baseline: readonly Finding[],
   options: BaselineComparisonOptions = {},
 ): FindingComparison {
-  const currentFingerprints = new Set(current.map(({ fingerprint }) => fingerprint));
+  const acknowledged = new Set(options.acknowledged ?? []);
+  const currentFingerprints = new Set([
+    ...current.map(({ fingerprint }) => fingerprint),
+    ...acknowledged,
+  ]);
   const baselineFingerprints = new Set(baseline.map(({ fingerprint }) => fingerprint));
-  const newFindings = current.filter(({ fingerprint }) => !baselineFingerprints.has(fingerprint));
+  const newFindings = current.filter(({ fingerprint }) =>
+    !baselineFingerprints.has(fingerprint) && !acknowledged.has(fingerprint)
+  );
   return {
     new: newFindings.map(({ fingerprint }) => fingerprint).sort(),
     unchanged: [...currentFingerprints].filter((fingerprint) =>
@@ -95,6 +107,9 @@ export function withBaselineComparison(
 ): ScanResult {
   return {
     ...result,
-    comparison: compareFindingBaseline(result.findings, baseline, options),
+    comparison: compareFindingBaseline(result.findings, baseline, {
+      ...options,
+      acknowledged: (result.suppressed ?? []).map(({ fingerprint }) => fingerprint),
+    }),
   };
 }

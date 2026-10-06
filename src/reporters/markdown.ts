@@ -127,6 +127,15 @@ export function renderMarkdownReview(
     );
   }
 
+  const suppressedCount = result.suppressed?.length ?? 0;
+  if (suppressedCount > 0) {
+    lines.push(
+      "",
+      `_${suppressedCount} finding(s) acknowledged via \`codebase-doctor-ignore\` ` +
+      `are excluded from this review's gates but still present; see \`--format json\`._`,
+    );
+  }
+
   const impact = result.sourceImpact;
   if (impact !== undefined && impact.mode === "changed") {
     lines.push("", "### Source impact");

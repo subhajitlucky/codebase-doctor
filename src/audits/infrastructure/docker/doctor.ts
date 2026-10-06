@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
+import { selectChangedCandidates } from "../../../scope/changed-files.js";
 
 const DOCTOR_ID = "infrastructure/docker";
 const DEFAULT_MAX_FILE_BYTES = 1_000_000;
@@ -264,11 +265,12 @@ export function createDockerDoctor(options: DockerDoctorOptions = {}): Doctor {
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
-      const candidates = snapshot.files
+      const changed = snapshot.auditScope.mode === "changed";
+      const allCandidates = snapshot.files
         .filter((file) => file.kind === "file" && isDockerfilePath(file.path))
         .map((file) => file.path)
         .sort();
-      if (candidates.length === 0) {
+      if (allCandidates.length === 0) {
         return {
           status: "completed",
           findings: [],
@@ -278,6 +280,34 @@ export function createDockerDoctor(options: DockerDoctorOptions = {}): Doctor {
       }
 
       const limitations: string[] = [];
+      const scopeNotes: string[] = [];
+      let candidates = allCandidates;
+      if (changed) {
+        const selection = selectChangedCandidates(
+          snapshot.auditScope.changes,
+          snapshot.files,
+          isDockerfilePath,
+          "Dockerfile",
+        );
+        candidates = [...selection.candidates];
+        limitations.push(...selection.limitations);
+        if (candidates.length === 0) {
+          return {
+            status: "completed",
+            findings: [],
+            coverage: [coverage(
+              "not-selected",
+              snapshot.auditScope.mode,
+              0,
+              0,
+              0,
+              [...limitations, "No changed Dockerfiles were selected; unchanged files were not independently re-audited."],
+            )],
+            durationMs: Date.now() - startedAt,
+          };
+        }
+        scopeNotes.push("Changed scope examined selected current changed files only; unchanged files were not independently re-audited.");
+      }
       const findings: Finding[] = [];
       let filesExamined = 0;
       let instructionsExamined = 0;
@@ -321,7 +351,7 @@ export function createDockerDoctor(options: DockerDoctorOptions = {}): Doctor {
           filesExamined,
           instructionsExamined,
           Math.min(findings.length, maxFindings),
-          limitations,
+          [...limitations, ...scopeNotes],
         )],
         durationMs: Date.now() - startedAt,
       };

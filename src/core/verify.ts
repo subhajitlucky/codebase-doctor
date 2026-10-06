@@ -105,6 +105,8 @@ export function coverageLimitations(result: ScanResult): string[] {
  * Compare a prior baseline with a fresh scan. A baseline finding is only
  * `resolved` when its fingerprint is absent and all applicable coverage
  * completed; absence under incomplete coverage is `unresolved`, never a fix.
+ * An acknowledged (suppressed) finding is still present, so it reports
+ * `unchanged`, never `resolved`.
  */
 export function verifyRepairs(
   baseline: readonly Finding[],
@@ -112,6 +114,9 @@ export function verifyRepairs(
 ): VerifyResult {
   const currentByFingerprint = new Map(
     result.findings.map((finding) => [finding.fingerprint, finding]),
+  );
+  const suppressedFingerprints = new Set(
+    (result.suppressed ?? []).map((entry) => entry.fingerprint),
   );
   const baselineFingerprints = new Set(
     baseline.map((finding) => finding.fingerprint),
@@ -124,7 +129,9 @@ export function verifyRepairs(
       const current = currentByFingerprint.get(finding.fingerprint);
       const source = current ?? finding;
       const status: VerifyStatus =
-        current !== undefined ? "unchanged" : coverageComplete ? "resolved" : "unresolved";
+        current !== undefined || suppressedFingerprints.has(finding.fingerprint)
+          ? "unchanged"
+          : coverageComplete ? "resolved" : "unresolved";
       return toEntry(source, status);
     })
     .sort(compareEntries);

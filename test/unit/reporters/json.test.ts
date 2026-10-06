@@ -69,6 +69,7 @@ function result(): ScanResult {
         fingerprint: "info",
       },
     ],
+    suppressed: [],
     summary: {
       total: 2,
       counts: { info: 1, low: 0, medium: 0, high: 1, critical: 0 },

@@ -132,13 +132,13 @@ Precision-first and not exhaustive: it detects private-key material, provider-to
 
 ### Dependencies
 
-`security/dependencies` is read-only and offline. Lockfile-aware for npm lockfile versions 2 and 3, pnpm (v5+), Yarn (classic and Berry), and Bun. Python and other ecosystems remain explicitly unsupported rather than receiving guessed findings.
+`security/dependencies` is read-only and offline. Lockfile-aware for npm lockfile versions 2 and 3, pnpm (v5+), Yarn (classic and Berry), Bun, and Python poetry and uv locks. Remaining ecosystems stay explicitly unsupported rather than receiving guessed findings.
 
 Rule families: `security/dependencies/missing-lockfile`, `security/dependencies/manifest-lock-drift`, `security/dependencies/insecure-source`, `security/dependencies/mutable-git-source`, `security/dependencies/missing-integrity`, `security/dependencies/workspace-registry-resolution`, `security/dependencies/competing-npm-lockfiles`, and `security/dependencies/competing-lockfiles`.
 
 A normal semver range such as `^5.0.0` is **not** a finding when the lock agrees. Raw dependency specifications and resolved URLs are withheld from reports and never enter a fingerprint. An external authorized human or agent must correct the metadata and rerun the same scope. Inspect coverage before calling the dependency graph clean or verified.
 
-It never invokes npm, another package manager, a shell, an installer, or a lifecycle script, and makes no network request. It makes no CVE or advisory claim on its own.
+It never invokes npm, another package manager, a shell, an installer, or a lifecycle script, and makes no network request. It makes no CVE or advisory claim on its own. Python coverage parses `poetry.lock` and `uv.lock` package blocks and `pyproject.toml` Poetry and PEP 621 declarations with a bounded line scanner (no TOML dependency): insecure transports, unpinned git references, missing hash evidence, missing lockfiles, competing lockfiles, and decidable manifest-lock drift are reported, while undecidable specifiers, markers, direct-URL drift, transitive-only entries, and requirements-only layouts stay visible as partial coverage.
 
 `--with-advisories` performs one bounded OSV lookup against resolved packages. Only names, versions, and ecosystems leave the machine.
 
@@ -146,7 +146,7 @@ It never invokes npm, another package manager, a shell, an installer, or a lifec
 
 `repository/source-graph` uses a real syntax parser (never executes your code) to build a static import graph across **JS/TS, Python, Go, Java, and Rust**. In changed mode it walks reverse edges and reports a deterministic shortest impact path from each changed file.
 
-Changed mode is mixed-scope per doctor, not a universal file filter: Project Doctor structural rules run with the full repository snapshot and may report findings outside changed paths for manifests, lockfiles, workspaces, and test visibility. Configured validation check plans are built from full project topology and then filtered to `affectedProjectIds`. Static SQL selects affected migration streams and replays full current history for every selected stream. Live database remains a full observed schema-set audit only with separately requested `--with-database`. Zero changed findings is not a full clean result.
+Changed mode is mixed-scope per doctor, not a universal file filter: Project Doctor structural rules run with the full repository snapshot and may report findings outside changed paths for manifests, lockfiles, workspaces, and test visibility. File-local doctors (backend, frontend, infrastructure, agent surface, performance) examine only changed files present in the inventory, so changed audits stay proportional to the change. Configured validation check plans are built from full project topology and then filtered to `affectedProjectIds`. Static SQL selects affected migration streams and replays full current history for every selected stream. Live database remains a full observed schema-set audit only with separately requested `--with-database`. Zero changed findings is not a full clean result.
 
 `repository/source-graph` recognizes static `import`, re-export, type-only import, literal `require`, and literal dynamic import edges across JavaScript and TypeScript (plus Python, Go, Java, and Rust) with a real syntax parser that never executes repository code. Cycles are valid topology, not findings, and this module is finding-free by design.
 
@@ -215,15 +215,19 @@ Audits the agent configuration surface without executing or contacting any of it
 
 JSX/TSX and static HTML accessibility (`img-missing-alt`, `iframe-missing-title`, `html-missing-lang`, `positive-tabindex`) and static SEO (`missing-title`, `missing-meta-description`). No browser, no build.
 
+`frontend/security` is read-only and offline over JSX sources: `dangerously-set-inner-html` fires for a dynamically computed value without a provable sanitizer call (`DOMPurify.sanitize`, `sanitizeHtml`). Static literals are safe and spread props suppress the check.
+
 ### Backend and auth
 
 `backend/auth` is read-only and offline over JavaScript and TypeScript sources. It never starts a server, sends a request, or issues a token — it reads source text only.
 
 Rules: `cors-wildcard-origin-with-credentials` (wildcard `origin: "*"`, reflected `origin: true`, or an allowlist containing `*`, with credentials enabled), `session-cookie-security-disabled` (cookie `secure` or `httpOnly` explicitly `false`), `jwt-decode-without-verify` (a `decode` call in a file containing no `verify` call), and `jwt-verify-algorithm-unrestricted` (no `algorithms` allowlist).
 
+`backend/api` is read-only and offline over the same sources: `sql-string-concat-query` fires for concatenated or interpolated SQL text passed to a provably bound `pg`, `postgres`, `mysql`, `mysql2`, `better-sqlite3`, or `sqlite3` query call (parameterized queries with a values array are safe), and `child-process-exec-dynamic` fires for non-static commands passed to a provably bound `child_process` `exec`/`execSync` (including `spawn` with `shell: true`), while `execFile` and plain `spawn` never fire. Instance calls through `new Pool()`-style construction resolve like direct imports. Unresolvable query text stays a coverage limitation.
+
 A rule fires only when the callee provably resolves to the audited package through an import declaration or CommonJS `require`, so an unrelated local helper named `cors` or `decode` is never reported. Configuration that cannot be resolved statically — a non-literal options expression, a computed cookie flag, or a spread property that could supply the value — is a **coverage limitation, never a guessed finding**, so inspect `backend` coverage before calling a codebase clean. The `decode` and algorithm rules are file-scoped: a `verify` call in middleware in another file does not suppress them. Configured origin and secret literals are withheld from reports and never enter a fingerprint.
 
-Not covered: API shape, worker, webhook, cron, and rate-limit analysis. An external authorized human or agent corrects the configuration, then reruns the same scope.
+Not covered: API shape validation, worker, webhook, cron, and rate-limit analysis. An external authorized human or agent corrects the configuration, then reruns the same scope.
 
 ---
 
@@ -248,8 +252,8 @@ That means:
 | Repository structure | Inventory, framework detection, manifests, workspaces, lockfiles, test visibility, JS/TS + Python + Go + Java + Rust impact graph | Cross-language dependency and behavioral topology |
 | Configured validation | JS/TS and Python command planning; execution only with `--run-checks` | Sandboxed validation across ecosystems |
 | Database | Offline migration RLS, Drizzle Date hazards, live RLS, static-to-live drift | Schemas, queries, permissions, more engines |
-| Frontend | JSX/HTML a11y and static-HTML SEO | React, Next.js, bundle analysis, broader a11y |
-| Backend and authz | Read-only, offline `backend/auth` analysis of CORS, session-cookie, and JWT hazards in JS/TS; NestJS detection | API, worker, webhook, cron, rate-limit analysis |
+| Frontend | JSX/HTML a11y, static-HTML SEO, and raw-HTML sinks | React, Next.js, bundle analysis, broader a11y |
+| Backend and authz | Read-only, offline `backend/auth` (CORS, session-cookie, JWT) plus `backend/api` (SQL concatenation, shell execution) analysis in JS/TS; NestJS detection | Worker, webhook, cron, rate-limit analysis |
 | Security | Secrets (tree + history), dependency rules, opt-in OSV | Secrets, permission, vulnerability, supply chain |
 | Infrastructure | Dockerfile and GitHub Actions | Hosting and deployment analysis |
 | Performance | Static file hygiene: committed build artifacts, oversized sources | Cache, query, memory, profiling |
@@ -297,7 +301,19 @@ codebase-doctor audit . --json > before.json
 codebase-doctor verify . --baseline before.json
 ```
 
-`verify` reports each fingerprint as `resolved`, `unchanged`, `unresolved`, or `new`, and exits `1` unless everything is verifiably resolved. `unresolved` means absent under incomplete coverage — never a repair.
+`verify` reports each fingerprint as `resolved`, `unchanged`, `unresolved`, or `new`, and exits `1` unless everything is verifiably resolved. `unresolved` means absent under incomplete coverage — never a repair. The fresh `verify` scan runs the same offline audit scope as `audit` so security and database findings are comparable; live database access stays ungranted.
+
+## Acknowledged findings (suppressions)
+
+A finding a human has reviewed and accepted can be acknowledged inline without hiding it from any report:
+
+```ts
+const API_KEY = "..."; // codebase-doctor-ignore: security/secrets/provider-token -- rotated test credential
+```
+
+- The directive names rule ids, doctor ids, or `doctor/*` prefixes, and applies on the finding's own line or the line immediately above it. Findings without a location cannot be acknowledged inline, and directives that match nothing are ignored.
+- Acknowledged findings leave `findings` (so failure gates pass) but stay fully listed under `suppressed` with their reason and directive location. They still count as present: baseline comparisons report them `unchanged` and `verify` never reports them `resolved`. Removing the directive brings the finding back as new.
+- Suppressed findings are excluded from SARIF uploads by design; inspect `suppressed` in JSON, text, or brief output instead.
 
 ## MCP server and agents
 
@@ -328,7 +344,8 @@ Workflow: `audit . --changed --format brief` after edits, `review . --base main 
 - Per-domain coverage guarantees beyond the global `--require-complete` gate
 - Pull-request annotations, hooks, and agent plugins on the same report schema
 - Approved validation in read-only mounts or disposable copies
-- Cross-model benchmarks: defects found, false positives, verification success, token cost
+- Deterministic doctor benchmark (`npm run benchmark`, see [docs/benchmark.md](docs/benchmark.md)): recall, medium+ false-positive rate, review verdicts, and suppression honesty on seeded fixtures
+- Cross-model benchmarks: defects found, verification success, token cost
 
 ## Development
 

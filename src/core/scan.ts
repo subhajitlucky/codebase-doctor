@@ -11,10 +11,12 @@ import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
 import { createSecretsDoctor } from "../audits/security/secrets/doctor.js";
 import { createAgentSurfaceDoctor } from "../audits/ai/agent-surface/doctor.js";
 import { createAccessibilityDoctor } from "../audits/frontend/accessibility/doctor.js";
+import { createFrontendSecurityDoctor } from "../audits/frontend/security/doctor.js";
 import { createSeoDoctor } from "../audits/frontend/seo/doctor.js";
 import { createDockerDoctor } from "../audits/infrastructure/docker/doctor.js";
 import { createGitHubActionsDoctor } from "../audits/infrastructure/github-actions/doctor.js";
 import { createBackendAuthDoctor } from "../audits/backend/auth/doctor.js";
+import { createBackendApiDoctor } from "../audits/backend/api/doctor.js";
 import { createPerformanceDoctor } from "../audits/performance/static/doctor.js";
 import { createAdvisoriesDoctor } from "../audits/security/advisories/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
@@ -33,6 +35,7 @@ import {
 import { discoverRepositoryFiles } from "../scope/repository-files.js";
 import { fullAuditScope, planChangedScope } from "../scope/planner.js";
 import { planDomainCoverage } from "./domain-coverage.js";
+import { applySuppressions } from "./suppressions.js";
 import { buildInventoriedSourceGraph } from "../source-graph/builder.js";
 import { planSourceImpact as planSourceImpactInternal } from "../source-graph/impact.js";
 import type { SourceGraph, SourceImpact } from "../source-graph/types.js";
@@ -113,10 +116,12 @@ const defaultDependencies: ScanDependencies = {
       sourceIntegrityDoctor,
       createAgentSurfaceDoctor(),
       createAccessibilityDoctor(),
+      createFrontendSecurityDoctor(),
       createSeoDoctor(),
       createDockerDoctor(),
       createGitHubActionsDoctor(),
       createBackendAuthDoctor(),
+      createBackendApiDoctor(),
       createPerformanceDoctor(),
       createCheckDoctor({
         timeoutMs: request.timeoutMs,
@@ -213,11 +218,34 @@ export async function scanCodebase(
     includeDatabaseAudit: request.includeDatabaseAudit === true,
   });
 
+  const suppression = await applySuppressions(
+    inventory.root,
+    results.flatMap(({ result }) => result.findings),
+  );
+  const suppressedFingerprints = new Set(suppression.suppressed.map(({ fingerprint }) => fingerprint));
+  const effectiveResults = suppression.suppressed.length === 0
+    ? results
+    : results.map((entry) => {
+      if (entry.result.findings.length === 0) return entry;
+      return {
+        ...entry,
+        result: {
+          ...entry.result,
+          findings: entry.result.findings.filter((finding) =>
+            !suppressedFingerprints.has(finding.fingerprint)
+          ),
+        },
+      };
+    });
+
   return normalizeScanResult(
     inventory.root,
     detection.projects,
-    auditScope,
-    results,
+    {
+      ...auditScope,
+      limitations: [...auditScope.limitations, ...suppression.limitations],
+    },
+    effectiveResults,
     plans.map((plan) => ({
       planId: plan.id,
       projectId: plan.projectId,
@@ -226,6 +254,7 @@ export async function scanCodebase(
     })),
     domainCoverage,
     sourceImpact,
+    suppression.suppressed,
   );
 }
 

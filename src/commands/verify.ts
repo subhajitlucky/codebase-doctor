@@ -86,7 +86,10 @@ export function createVerifyCommand(): Command {
       "do not fail when baseline findings are still present",
       false,
     ),
-    () => ({}),
+    // Verify compares against audit baselines, so the fresh scan runs the
+    // same offline audit scope. Live database access stays ungranted: those
+    // doctors report skipped coverage instead of failing.
+    () => ({ includeSecurityAudit: true, includeDatabaseAudit: true }),
     executeVerify,
   );
 }
