@@ -15,6 +15,7 @@ import { createSeoDoctor } from "../audits/frontend/seo/doctor.js";
 import { createDockerDoctor } from "../audits/infrastructure/docker/doctor.js";
 import { createGitHubActionsDoctor } from "../audits/infrastructure/github-actions/doctor.js";
 import { createBackendAuthDoctor } from "../audits/backend/auth/doctor.js";
+import { createPerformanceDoctor } from "../audits/performance/static/doctor.js";
 import { createAdvisoriesDoctor } from "../audits/security/advisories/doctor.js";
 import { createDependenciesDoctor } from "../audits/security/dependencies/doctor.js";
 import { createSecretsHistoryDoctor } from "../audits/security/secrets-history/doctor.js";
@@ -116,6 +117,7 @@ const defaultDependencies: ScanDependencies = {
       createDockerDoctor(),
       createGitHubActionsDoctor(),
       createBackendAuthDoctor(),
+      createPerformanceDoctor(),
       createCheckDoctor({
         timeoutMs: request.timeoutMs,
         plans,

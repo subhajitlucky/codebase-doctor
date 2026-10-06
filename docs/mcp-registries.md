@@ -66,7 +66,7 @@ primary step. Ownership claim uses the checked-in manifest:
 
 Glama verifies stdio servers from repository structure, package metadata, and
 tool schemas. The server answers `initialize` and `tools/list` over stdio with
-four read-only tools (`audit_codebase`, `verify_changes`, `explain_finding`,
+five read-only tools (`audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`,
 `describe_capabilities`), each annotated `readOnlyHint: true`,
 `destructiveHint: false`, `openWorldHint: false`.
 

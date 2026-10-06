@@ -20,6 +20,9 @@ describe("secret placeholder classification", () => {
     "process.env.API_KEY",
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "abcabcabcabcabcabcabcabc",
+    "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+    "glpat-0123456789abcdef",
+    "sk-ant-zyxwvutsrqponmlkjihgfedcba987654321",
   ];
 
   it.each(placeholderValues)("rejects the intentional placeholder %s", (value) => {
@@ -41,7 +44,7 @@ describe("secret placeholder classification", () => {
   it("requires adequate length and character variety", () => {
     expect(isPlausibleSecretValue("abcdefghijklmno")).toBe(false);
     expect(isPlausibleSecretValue("abcdefghijklmnop")).toBe(false);
-    expect(isPlausibleSecretValue("Abcdefghijklmn1!")).toBe(true);
+    expect(isPlausibleSecretValue("Ak3!mQ9#vX2@pL7$")).toBe(true);
   });
 
   it("defines returned match metadata without a secret value field", () => {

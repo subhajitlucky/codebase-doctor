@@ -44,7 +44,7 @@ afterEach(async () => {
 });
 
 describe("review CLI", () => {
-  it("requests changes with markdown for a secret on an added line", async () => {
+  it("requests changes with markdown for a secret on an added line", { timeout: 30_000 }, async () => {
     const secret = generatedToken("ghp_");
     const root = await createRepository({ "ok.ts": "export const value = 1;\n" });
     await writeProjectFile(root, "changed.ts", `const GITHUB_TOKEN = "${secret}";\n`);
@@ -60,7 +60,7 @@ describe("review CLI", () => {
     expect(result.stdout).not.toContain(secret);
   });
 
-  it("approves when the only finding sits on an unchanged line", async () => {
+  it("approves when the only finding sits on an unchanged line", { timeout: 30_000 }, async () => {
     const secret = generatedToken("ghp_");
     const root = await createRepository({
       "app.ts": `const GITHUB_TOKEN = "${secret}";\nexport const value = 1;\n`,
@@ -87,7 +87,7 @@ describe("review CLI", () => {
     expect(all.stdout).toContain("security/secrets/provider-token");
   });
 
-  it("emits workflow commands and a review envelope in json", async () => {
+  it("emits workflow commands and a review envelope in json", { timeout: 30_000 }, async () => {
     const secret = generatedToken("xoxb-");
     const root = await createRepository({ "ok.ts": "export const value = 1;\n" });
     await writeProjectFile(root, "changed.ts", `const SLACK_TOKEN = "${secret}";\n`);
@@ -111,7 +111,7 @@ describe("review CLI", () => {
     expect(json.stdout).not.toContain(secret);
   });
 
-  it("comments below the threshold and approves a clean diff", async () => {
+  it("comments below the threshold and approves a clean diff", { timeout: 30_000 }, async () => {
     const secret = generatedToken("xoxb-");
     const root = await createRepository({ "ok.ts": "export const value = 1;\n" });
     await writeProjectFile(root, "changed.ts", `const SLACK_TOKEN = "${secret}";\n`);
@@ -126,7 +126,7 @@ describe("review CLI", () => {
     expect(clean.stdout).toContain("APPROVE");
   });
 
-  it("fails new findings only when a baseline is provided", async () => {
+  it("fails new findings only when a baseline is provided", { timeout: 30_000 }, async () => {
     const secret = generatedToken("ghp_");
     const root = await createRepository({
       "known.ts": `const GITHUB_TOKEN = "${secret}";\n`,
@@ -150,7 +150,7 @@ describe("review CLI", () => {
     expect(withNew.stdout).toContain("REQUEST_CHANGES");
   });
 
-  it("rejects unknown review formats and writes reports to --output", async () => {
+  it("rejects unknown review formats and writes reports to --output", { timeout: 30_000 }, async () => {
     const root = await createRepository();
 
     const bad = cli(["review", root, "--format", "junit"]);

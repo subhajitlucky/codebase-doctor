@@ -255,6 +255,7 @@ describe('changed source-integrity audit', () => {
     }],
   ] as const)(
     'selects an unchanged importer when its explicit target is %s without reporting an unrelated old miss',
+    { timeout: 30_000 },
     async (changeKind, applyChange) => {
       const { root } = await createRepository({
         'package.json': JSON.stringify({

@@ -10,10 +10,28 @@ import {
   handleAuditCodebase,
   handleDescribeCapabilities,
   handleExplainFinding,
+  handleReviewChanges,
   handleToolCall,
   handleVerifyChanges,
 } from "../../../src/mcp/tools.js";
 import { MAX_TOOL_PAYLOAD_BYTES } from "../../../src/mcp/payload.js";
+import {
+  commitInitialContent,
+  createTempProject,
+  initializeGitRepository,
+  removeTempProject,
+  writeProjectFile,
+} from "../../helpers/temp-project.js";
+
+const SECRET_ALPHABET = "M7n9B2v8C4x6Z1l3K5j0HgFdSaPqWeRt";
+
+function generatedToken(prefix: string, length = 32): string {
+  let value = prefix;
+  for (let index = 0; value.length < prefix.length + length; index += 1) {
+    value += SECRET_ALPHABET[index % SECRET_ALPHABET.length];
+  }
+  return value;
+}
 
 const repositoryRoot = process.cwd();
 const fixture = (name: string) =>
@@ -79,6 +97,7 @@ describe("describe_capabilities tool handler", () => {
       "describe_capabilities",
       "verify_changes",
       "explain_finding",
+      "review_changes",
     ]);
     expect(capabilities.auditDomains).toHaveLength(9);
     expect(capabilities.doctorCapabilities.grantedByThisServer).toEqual({
@@ -236,8 +255,7 @@ describe("explain_finding tool handler", () => {
   );
 });
 
-describe("error mapping", () => {
-  it("prefixes operational failures with the house error marker", () => {
+describe("error mapping", () => {  it("prefixes operational failures with the house error marker", () => {
     const result = errorToolResult(new Error("boom"));
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe("codebase-doctor: boom");
@@ -245,5 +263,71 @@ describe("error mapping", () => {
 
   it("stringifies non-error throwables", () => {
     expect(textOf(errorToolResult("plain"))).toBe("codebase-doctor: plain");
+  });
+});
+describe("review_changes tool handler", () => {
+  it(
+    "requests changes for a secret on an added line",
+    { timeout: 60_000 },
+    async () => {
+      const root = await createTempProject("codebase-doctor-mcp-review-");
+      try {
+        await initializeGitRepository(root);
+        await commitInitialContent(root, { "ok.ts": "export const value = 1;\n" });
+        const secret = generatedToken("ghp_");
+        await writeProjectFile(root, "changed.ts", `const GITHUB_TOKEN = "${secret}";\n`);
+
+        const result = await handleReviewChanges({ path: root, format: "json" });
+        const report = JSON.parse(textOf(result)) as {
+          review: { verdict: string; findingsInDiff: number; totalFindings: number };
+          findings: unknown[];
+        };
+
+        expect(report.review).toMatchObject({
+          verdict: "REQUEST_CHANGES",
+          findingsInDiff: 1,
+          totalFindings: 1,
+        });
+        expect(report.findings).toHaveLength(1);
+        expect(textOf(result)).not.toContain(secret);
+      } finally {
+        await removeTempProject(root);
+      }
+    },
+  );
+
+  it(
+    "approves when the only finding sits on an unchanged line",
+    { timeout: 60_000 },
+    async () => {
+      const root = await createTempProject("codebase-doctor-mcp-review-approve-");
+      try {
+        await initializeGitRepository(root);
+        const secret = generatedToken("ghp_");
+        await commitInitialContent(root, {
+          "app.ts": `const GITHUB_TOKEN = "${secret}";\nexport const value = 1;\n`,
+        });
+        await writeProjectFile(
+          root,
+          "app.ts",
+          `const GITHUB_TOKEN = "${secret}";\nexport const value = 2;\n`,
+        );
+
+        const result = await handleReviewChanges({ path: root, format: "summary" });
+        const text = textOf(result);
+
+        expect(text).toContain("APPROVE");
+        expect(text).toContain("findings in diff: 0");
+        expect(text).not.toContain(secret);
+      } finally {
+        await removeTempProject(root);
+      }
+    },
+  );
+
+  it("routes through tool dispatch", async () => {
+    await expect(handleToolCall("review_changes", { base: "  " })).rejects.toThrow(
+      /non-empty string/u,
+    );
   });
 });

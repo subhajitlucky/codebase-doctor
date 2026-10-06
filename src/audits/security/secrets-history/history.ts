@@ -33,6 +33,11 @@ export interface HistoryScanResult {
 export interface HistoryScanOptions {
   readonly maxCommits?: number;
   readonly maxPatchBytes?: number;
+  /**
+   * Repository-relative paths to scope the log to. When omitted, the whole
+   * audited subtree is scanned. An empty list scans nothing and completes.
+   */
+  readonly paths?: readonly string[];
 }
 
 interface MutableHistoryMatch {
@@ -56,9 +61,20 @@ export async function scanGitHistory(
 ): Promise<HistoryScanResult> {
   const maxCommits = options.maxCommits ?? DEFAULT_MAX_COMMITS;
   const maxPatchBytes = options.maxPatchBytes ?? DEFAULT_MAX_PATCH_BYTES;
+  const scopedPaths = options.paths === undefined ? ["."] : [...options.paths].sort();
   const limitations: string[] = [];
   let status: HistoryScanResult["status"] = "completed";
   let stdout = "";
+
+  const emptyResult: HistoryScanResult = {
+    status: "completed",
+    commitsExamined: 0,
+    filesExamined: 0,
+    addedLinesExamined: 0,
+    matches: [],
+    limitations: ["No paths were selected for history scanning."],
+  };
+  if (scopedPaths.length === 0) return emptyResult;
 
   try {
     const result = await execFileAsync(
@@ -74,7 +90,7 @@ export async function scanGitHistory(
         "-n",
         String(maxCommits),
         "--",
-        ".",
+        ...scopedPaths,
       ],
       { cwd: root, maxBuffer: maxPatchBytes, encoding: "utf8" },
     );

@@ -12,13 +12,8 @@ import type { ScanRequest } from "../core/scan.js";
 import { summarizeFindings } from "../core/summary.js";
 import type { ScanResult } from "../core/normalize.js";
 import { getChangedLines, type ChangedLines } from "../review/changed-lines.js";
-import { filterFindingsToDiff } from "../review/filter.js";
-import {
-  classifyReviewExit,
-  decideReviewVerdict,
-  selectVerdictFindings,
-  type ReviewVerdict,
-} from "../review/verdict.js";
+import { summarizeReview } from "../review/summary.js";
+import { classifyReviewExit, type ReviewVerdict } from "../review/verdict.js";
 import { renderBriefReport } from "../reporters/brief.js";
 import { renderGithubAnnotations } from "../reporters/github.js";
 import { renderJsonReport } from "../reporters/json.js";
@@ -120,21 +115,17 @@ export async function runReview(
     changedLines = undefined;
   }
 
-  const filtered = filterFindingsToDiff(
-    result.findings,
-    result.auditScope.changes,
-    changedLines,
-    { allFindings: options.allFindings },
-  );
-  const verdictFindings = selectVerdictFindings(filtered.included, result.comparison?.new);
-  const verdict = decideReviewVerdict(verdictFindings, failOn);
+  const summary = summarizeReview(result, changedLines, failOn, {
+    allFindings: options.allFindings,
+  });
+  const { verdict } = summary;
   const filteredResult: ScanResult = {
     ...result,
-    findings: filtered.included,
-    summary: summarizeFindings(filtered.included),
+    findings: summary.included,
+    summary: summarizeFindings(summary.included),
   };
 
-  const baselineFiltered = result.comparison !== undefined;
+  const baselineFiltered = summary.baselineFiltered;
   let report: string;
   switch (format) {
     case "json": {
@@ -143,10 +134,10 @@ export async function runReview(
         review: {
           verdict,
           failOn,
-          findingsInDiff: filtered.included.length,
+          findingsInDiff: summary.included.length,
           totalFindings: result.findings.length,
-          excludedCount: filtered.excluded.length,
-          linePrecision: filtered.linePrecision,
+          excludedCount: summary.excluded.length,
+          linePrecision: summary.linePrecision,
           allFindings: options.allFindings,
           baselineFiltered,
         },
@@ -159,12 +150,12 @@ export async function runReview(
       break;
     case "brief": {
       const header =
-        `review verdict=${verdict} findings-in-diff=${filtered.included.length} ` +
+        `review verdict=${verdict} findings-in-diff=${summary.included.length} ` +
         `total=${result.findings.length} fail-on=${failOn}\n`;
       const body = renderBriefReport(filteredResult, { maxFindings });
-      const footer = filtered.excluded.length === 0
+      const footer = summary.excluded.length === 0
         ? ""
-        : `outside-diff: ${filtered.excluded.length} finding(s) omitted; rerun with --all-findings\n`;
+        : `outside-diff: ${summary.excluded.length} finding(s) omitted; rerun with --all-findings\n`;
       report = `${header}${body}${footer}`;
       break;
     }
@@ -172,37 +163,37 @@ export async function runReview(
       const baseOption = typeof options.base === "string" && options.base.trim().length > 0
         ? ` --base ${options.base.trim()}`
         : "";
-      report = renderMarkdownReview(result, filtered.included, {
+      report = renderMarkdownReview(result, summary.included, {
         verdict,
         failOn,
         maxFindings,
-        excludedCount: filtered.excluded.length,
+        excludedCount: summary.excluded.length,
         baselineFiltered,
-        linePrecision: filtered.linePrecision,
+        linePrecision: summary.linePrecision,
         rerunCommand: `codebase-doctor review . --format markdown${baseOption}`,
       });
       break;
     }
     case "github":
-      report = renderGithubAnnotations(filtered.included, {
+      report = renderGithubAnnotations(summary.included, {
         verdict,
         maxFindings,
-        excludedCount: filtered.excluded.length,
+        excludedCount: summary.excluded.length,
       });
       break;
     default: {
       const header =
         `Review verdict: ${verdict} (fail-on ${failOn}; ` +
-        `${filtered.included.length} finding(s) in diff, ${result.findings.length} total)\n`;
+        `${summary.included.length} finding(s) in diff, ${result.findings.length} total)\n`;
       const body = renderTextReport(filteredResult, {
         color: true,
         isTTY: process.stdout.isTTY === true,
         noColor: process.env.NO_COLOR !== undefined,
       });
-      const footer = filtered.excluded.length === 0
+      const footer = summary.excluded.length === 0
         ? ""
-        : `\nReview: ${filtered.excluded.length} finding(s) outside the changed lines omitted from this review (rerun with --all-findings to include them).\n`;
-      const precisionNote = filtered.linePrecision
+        : `\nReview: ${summary.excluded.length} finding(s) outside the changed lines omitted from this review (rerun with --all-findings to include them).\n`;
+      const precisionNote = summary.linePrecision
         ? ""
         : "Review: changed-line mapping was unavailable; file-level filtering applied.\n";
       report = `${header}${precisionNote}${body}${footer}`;
@@ -212,17 +203,17 @@ export async function runReview(
 
   const coverageComplete = result.domainCoverage.every((domain) => domain.coverageComplete);
   const doctorFailed = result.doctorRuns.some((run) => run.status === "failed");
-  const exitCode = classifyReviewExit(verdictFindings, failOn, doctorFailed, coverageComplete, {
+  const exitCode = classifyReviewExit(summary.verdictFindings, failOn, doctorFailed, coverageComplete, {
     requireComplete: options.requireComplete,
   });
 
   return {
     report,
     verdict,
-    findingsInDiff: filtered.included.length,
+    findingsInDiff: summary.included.length,
     totalFindings: result.findings.length,
-    excludedCount: filtered.excluded.length,
-    linePrecision: filtered.linePrecision,
+    excludedCount: summary.excluded.length,
+    linePrecision: summary.linePrecision,
     exitCode,
   };
 }

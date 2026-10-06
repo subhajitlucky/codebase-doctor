@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
+import type { ChangedPath } from "../../../scope/types.js";
 import { analyzeSecrets } from "../secrets/analyzer.js";
 import type { SecretFindingFamily } from "../secrets/types.js";
 import { scanGitHistory, type HistoryMatch, type HistoryScanResult } from "./history.js";
@@ -21,7 +22,7 @@ const TITLE_BY_FAMILY: Record<SecretFindingFamily, string> = {
 };
 
 export interface SecretsHistoryDoctorOptions {
-  readonly scanner?: (root: string, options: { maxCommits?: number; maxPatchBytes?: number }) => Promise<HistoryScanResult>;
+  readonly scanner?: (root: string, options: { maxCommits?: number; maxPatchBytes?: number; paths?: readonly string[] }) => Promise<HistoryScanResult>;
   readonly readFile?: (absolutePath: string) => Promise<Uint8Array>;
   readonly maxCommits?: number;
   readonly maxPatchBytes?: number;
@@ -70,6 +71,7 @@ function findingFor(match: HistoryMatch): Finding {
 
 function coverage(
   status: AuditCoverage["status"],
+  scope: string,
   filesExamined: number,
   addedLinesExamined: number,
   matches: number,
@@ -78,7 +80,7 @@ function coverage(
   return {
     moduleId: DOCTOR_ID,
     status,
-    scope: "full",
+    scope,
     filesExamined,
     statementsExamined: addedLinesExamined,
     statementsRecognized: matches,
@@ -87,9 +89,24 @@ function coverage(
 }
 
 /**
+ * Repository-relative paths worth scanning in changed mode: each changed
+ * path plus rename/copy sources. Deleted paths stay in scope because a
+ * credential deleted from the working tree is exactly what history covers.
+ */
+export function changedHistoryPaths(changes: readonly ChangedPath[]): string[] {
+  const paths = new Set<string>();
+  for (const change of changes) {
+    paths.add(change.path);
+    if (change.previousPath !== undefined) paths.add(change.previousPath);
+  }
+  return [...paths].sort();
+}
+
+/**
  * Read-only, offline scan of recent Git history for credentials that were
- * deleted from the working tree but remain reachable in commits. Skips changed
- * audits because history coverage is not scope-selected there.
+ * deleted from the working tree but remain reachable in commits. Changed
+ * audits scan history for the changed paths instead of reporting
+ * not-selected, so a PR that deletes a leaked file cannot review clean.
  */
 export function createSecretsHistoryDoctor(options: SecretsHistoryDoctorOptions = {}): Doctor {
   const maxCommits = options.maxCommits ?? DEFAULT_MAX_COMMITS;
@@ -104,21 +121,28 @@ export function createSecretsHistoryDoctor(options: SecretsHistoryDoctorOptions 
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
+      const changed = snapshot.auditScope.mode === "changed";
+      const paths = changed ? changedHistoryPaths(snapshot.auditScope.changes) : undefined;
+      const scope = changed ? "changed" : "full";
 
-      if (snapshot.auditScope.mode === "changed") {
+      if (paths !== undefined && paths.length === 0) {
         return {
           status: "completed",
           findings: [],
           coverage: [
-            coverage("not-selected", 0, 0, 0, [
-              "History scanning is not selected for changed audits; run a full audit for deleted-credential coverage.",
+            coverage("completed", scope, 0, 0, 0, [
+              "No changed paths were selected; history scanning had nothing to check.",
             ]),
           ],
           durationMs: Date.now() - startedAt,
         };
       }
 
-      const scan = await scanner(snapshot.root, { maxCommits, maxPatchBytes });
+      const scan = await scanner(snapshot.root, {
+        maxCommits,
+        maxPatchBytes,
+        ...(paths === undefined ? {} : { paths }),
+      });
       const currentLimitations: string[] = [];
       const stillCurrent = new Set<string>();
       for (const match of scan.matches) {
@@ -158,11 +182,14 @@ export function createSecretsHistoryDoctor(options: SecretsHistoryDoctorOptions 
         coverage: [
           coverage(
             scan.status === "partial" ? "partial" : "completed",
+            scope,
             scan.filesExamined,
             scan.addedLinesExamined,
             findings.length,
             [
-              `History scan examined up to ${maxCommits} commits across all branches.`,
+              paths === undefined
+                ? `History scan examined up to ${maxCommits} commits across all branches.`
+                : `History scan examined up to ${maxCommits} commits for ${paths.length} changed path(s).`,
               ...scan.limitations,
               ...currentLimitations,
             ],

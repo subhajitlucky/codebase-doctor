@@ -17,11 +17,10 @@ npx -y codebase-doctor audit . --changed --format brief
 ```txt
 codebase-doctor brief
 scope=full findings=1 shown=1 coverage=incomplete
-[high] security/secrets/provider-token test/unit/audits/ai/agent-surface.test.ts:83 —
+[high] security/secrets/provider-token src/config.ts:12 —
   Have an authorized human or external coding agent remove the value and rotate it,
   then rerun the audit.
-coverage-limitations: validation: skipped, database: skipped, security: partial,
-  performance: unsupported
+coverage-limitations: validation: skipped, database: skipped, security: partial
 ```
 
 That last line is the point. Most tools print findings and stop. This one tells you what it *didn't* check, every single run.
@@ -127,7 +126,7 @@ Findings appear in the Security tab. See [docs/github-action.md](docs/github-act
 
 Precision-first and not exhaustive: it detects private-key material, provider-token shapes, paired AWS credentials, credential-bearing URLs, and high-confidence sensitive assignments. A Git-ignored `.env` is normal storage and is **not** a finding; a tracked one containing a real credential is.
 
-`security/secrets-history` catches the case that matters most: a secret committed and later deleted from the working tree, so a rotated-looking repo doesn't hide an exposure. It inspects the most recent 200 commits across all branches without ever checking out, rewriting, or executing repository content.
+`security/secrets-history` catches the case that matters most: a secret committed and later deleted from the working tree, so a rotated-looking repo doesn't hide an exposure. It inspects the most recent 200 commits across all branches without ever checking out, rewriting, or executing repository content. Changed audits scope the history log to changed paths, so deleting a leaked file cannot review clean.
 
 **Matched values are withheld from every finding, fingerprint, error, and report.** Codebase Doctor never prints your secrets — including in its own SARIF. An external authorized human or agent must remediate the shareable content and rotate or revoke the credential, then rerun the same audit.
 
@@ -253,7 +252,7 @@ That means:
 | Backend and authz | Read-only, offline `backend/auth` analysis of CORS, session-cookie, and JWT hazards in JS/TS; NestJS detection | API, worker, webhook, cron, rate-limit analysis |
 | Security | Secrets (tree + history), dependency rules, opt-in OSV | Secrets, permission, vulnerability, supply chain |
 | Infrastructure | Dockerfile and GitHub Actions | Hosting and deployment analysis |
-| Performance | No semantic analyzer | Cache, query, memory, profiling |
+| Performance | Static file hygiene: committed build artifacts, oversized sources | Cache, query, memory, profiling |
 | AI systems | Agent-surface audit: MCP configs, `SKILL.md` grants, permission settings | Prompt, token, grounding analysis |
 
 North-star entries are planned modules, not shipped behavior. Built-in source-impact graph, secrets analysis, and dependency analysis ship together in `0.1.4` and are not part of the historical `0.1.3` package.
@@ -306,7 +305,7 @@ codebase-doctor verify . --baseline before.json
 claude mcp add codebase-doctor -- npx -y codebase-doctor mcp
 ```
 
-Read-only tools: `audit_codebase`, `verify_changes`, `explain_finding`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
+Read-only tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
 
 Registry metadata ships in `server.json` (`io.github.subhajitlucky/codebase-doctor`); publishing steps for the official MCP registry, Smithery, and Glama are in [docs/mcp-registries.md](docs/mcp-registries.md).
 

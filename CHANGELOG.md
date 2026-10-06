@@ -4,8 +4,32 @@ All notable changes to Codebase Doctor are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Scope `security/secrets-history` to changed paths in changed audits instead
+  of reporting `not-selected`, so a change that deletes a leaked file cannot
+  review clean. Review filtering keeps file-level findings on deleted paths
+  in scope while line-anchored findings on deleted files stay out.
+- Treat synthetic sequential tokens (`abcdef...`, `0123456789...`, long
+  alphabet or digit runs) as secret placeholders instead of provider-token
+  findings. A random credential with an 8+ sequential run is astronomically
+  unlikely, while hand-typed fixtures use them constantly. This keeps the
+  tool's own audit clean without suppressing real-looking values in tests.
+
 ### Added
 
+- Add the read-only, offline `performance/static` module: reports
+  `performance/static/committed-build-artifact` for inventoried generated
+  output and `performance/static/large-file` for oversized non-lockfile,
+  non-asset sources, both low severity and high confidence from inventory
+  metadata alone (no content reads). Full mode keeps repository-shareable
+  paths so ignored build output is never flagged; changed mode examines
+  changed inventoried paths. The performance domain now reports module
+  coverage instead of a blanket unsupported status.
+- Add the `review_changes` MCP tool: diff-narrowed PR verdicts
+  (`APPROVE`/`COMMENT`/`REQUEST_CHANGES`) over changed scope through the
+  same read-only, offline pipeline as the CLI, with `json` and Markdown
+  `summary` formats bounded like every other tool response.
 - Add `npm run bundle`: packs a self-contained Smithery-ready `.mcpb` bundle
   (generated manifest, built CLI, production dependencies) with an
   end-to-end integration test.

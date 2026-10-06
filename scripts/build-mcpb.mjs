@@ -48,6 +48,10 @@ async function manifest() {
         description: "Run the full built-in audit on a repository and return the evidence-backed report.",
       },
       {
+        name: "review_changes",
+        description: "Review changed code with a PR-ready verdict narrowed to added diff lines.",
+      },
+      {
         name: "verify_changes",
         description: "Verify that baseline findings were repaired under completed coverage.",
       },
