@@ -1,6 +1,6 @@
 import { compareFindings, type Finding } from "../core/findings.js";
 import type { ScanResult } from "../core/normalize.js";
-import { coverageLimitations } from "../core/verify.js";
+import { coverageLimitations, skippedPlannedChecks } from "../core/verify.js";
 
 export interface BriefRenderOptions {
   maxFindings?: number;
@@ -8,6 +8,7 @@ export interface BriefRenderOptions {
 
 const DEFAULT_MAX_FINDINGS = 100;
 const MAX_REMEDIATION_CHARS = 140;
+const MAX_SKIPPED_CHECKS = 5;
 
 function location(finding: Finding): string {
   if (finding.location === undefined) return "(repository)";
@@ -80,6 +81,17 @@ export function renderBriefReport(
 
   if (limitations.length > 0) {
     lines.push(`coverage-limitations: ${limitations.join(", ")}`);
+  }
+
+  const skippedChecks = skippedPlannedChecks(result);
+  if (skippedChecks.length > 0) {
+    const shown = skippedChecks.slice(0, MAX_SKIPPED_CHECKS);
+    const omitted = skippedChecks.length - shown.length;
+    lines.push(
+      `planned-checks-not-run (${skippedChecks.length}): ${shown.join("; ")}` +
+      (omitted > 0 ? `; …and ${omitted} more` : "") +
+      " — detected but never executed; rerun with --run-checks after explicit approval",
+    );
   }
 
   return `${lines.join("\n")}\n`;

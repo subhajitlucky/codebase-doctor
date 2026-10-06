@@ -26,11 +26,14 @@ export interface DiffFilterResult {
  *
  * - Findings without a location are global (repository-level) and stay in
  *   scope: they cannot be mapped to a diff line.
- * - Findings on a changed path stay in scope when they have no line number
- *   (file-level rules) or when the line is an added line. Added and untracked
- *   files count every line as changed.
- * - Findings on unchanged or deleted paths move to `excluded` with their
- *   evidence intact; the review reports the omitted count.
+ * - Findings on a touched path stay in scope when they have no line number
+ *   (file-level rules describe the path as a whole, and deletion counts as
+ *   touching it — this keeps history findings about a deleted file in scope).
+ * - Line-anchored findings stay in scope only on added lines. Added and
+ *   untracked files count every line as changed; lines on deleted files or
+ *   unchanged paths cannot be proven to touch the diff and move to `excluded`.
+ * - Excluded findings keep their evidence intact; the review reports the
+ *   omitted count.
  */
 export function filterFindingsToDiff(
   findings: readonly Finding[],
@@ -72,12 +75,19 @@ export function filterFindingsToDiff(
       continue;
     }
     const { path, line } = finding.location;
-    if (!changedPaths.has(path) || deletedPaths.has(path)) {
+    const touched = changedPaths.has(path) || deletedPaths.has(path);
+    if (!touched) {
       excluded.push(finding);
       continue;
     }
     if (line === undefined) {
       included.push(finding);
+      continue;
+    }
+    if (deletedPaths.has(path)) {
+      // A line-anchored finding on a deleted file cannot be mapped to the
+      // diff; only file-level findings about the deletion stay in scope.
+      excluded.push(finding);
       continue;
     }
     if (!linePrecision) {

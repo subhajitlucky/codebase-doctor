@@ -378,8 +378,10 @@ A history match whose detector still matches current tracked content is
 suppressed because `security/secrets` already reports it. History scanning is
 bounded to the most recent 200 commits across all branches and 20 MB of patch
 output; an unavailable repository, truncated patch stream, or unreadable current
-file becomes a coverage limitation, never a clean result. Changed audits report
-`not-selected`. Remediation requires an external rotation or revocation first
+file becomes a coverage limitation, never a clean result. Changed audits scope
+the log to changed paths (including deleted ones) instead of reporting
+`not-selected`, so a change that deletes a leaked file cannot review clean;
+an empty changed scope completes with nothing to check. Remediation requires an external rotation or revocation first
 and an authorized history-rewriting workflow; the Doctor never rewrites history.
 
 ## Built-in secrets audit
@@ -570,6 +572,21 @@ JSX parsing stays off for plain `.ts` files so a generic arrow such as
 Configured origin and secret literals are never copied into evidence, and the
 fingerprint never contains the raw source text.
 
+## Built-in performance audit
+
+The read-only, offline `performance/static` module works from inventory
+metadata only — it never reads file contents. It reports
+`performance/static/committed-build-artifact` (low severity, high confidence)
+for inventoried paths that look like generated output (`dist/`, `build/`,
+source maps, minified bundles) and `performance/static/large-file` for
+non-lockfile, non-asset sources above 512 KB. Lockfiles, binary assets, and
+Git-ignored local build output are never findings: full mode keeps only
+repository-shareable paths, and changed mode examines changed paths present
+in the inventory. Findings are bounded at 100 with partial coverage past the
+cap. Cache, query, memory, and profiling analysis remain north-star work, and
+an external authorized human or agent performs the cleanup, then reruns the
+same scope.
+
 ## Precision and bounded-report contract
 
 Workspace publication entries, generated targets, and fixture-controlled paths
@@ -661,10 +678,13 @@ the fix, then reruns the same review. Models build. Codebase Doctor verifies.
 ## Model Context Protocol server
 
 The `codebase-doctor mcp` subcommand serves the same normalized audit over an
-MCP stdio transport for coding agents. It exposes two read-only tools:
+MCP stdio transport for coding agents. It exposes five read-only tools:
 `audit_codebase` runs the public programmatic audit API with path,
 json-or-summary format, and changed/base passthrough while bounding oversized
-responses at roughly 50 KB with an explicit note, and
+responses at roughly 50 KB with an explicit note,
+`review_changes` returns a diff-narrowed PR verdict over changed scope,
+`verify_changes` compares a baseline against a fresh audit,
+`explain_finding` returns full evidence for one finding, and
 `describe_capabilities` reads tool, domain, and capability metadata. The
 server never enables validation commands or live database access, performs no
 writes, and preserves the permanent boundary: Models build. Codebase Doctor

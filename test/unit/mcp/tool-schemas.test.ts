@@ -6,18 +6,21 @@ import {
   parseAuditToolArgs,
   parseCapabilitiesToolArgs,
   parseExplainToolArgs,
+  parseReviewToolArgs,
   parseVerifyToolArgs,
+  REVIEW_TOOL_NAME,
   TOOL_DEFINITIONS,
   VERIFY_TOOL_NAME,
 } from "../../../src/mcp/tool-schemas.js";
 
 describe("mcp tool definitions", () => {
-  it("advertises the read-only audit, verify, explain, and capability tools", () => {
+  it("advertises the read-only audit, review, verify, explain, and capability tools", () => {
     expect(TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
       AUDIT_TOOL_NAME,
       CAPABILITIES_TOOL_NAME,
       VERIFY_TOOL_NAME,
       EXPLAIN_TOOL_NAME,
+      REVIEW_TOOL_NAME,
     ]);
     for (const tool of TOOL_DEFINITIONS) {
       expect(tool.inputSchema.type).toBe("object");
@@ -183,5 +186,35 @@ describe("explain_finding argument parsing", () => {
     expect(() => parseExplainToolArgs({ ruleId: "x", base: "main" })).toThrow(
       /--base option requires --changed/u,
     );
+  });
+});
+describe("review_changes argument parsing", () => {
+  it("defaults to json format with implied changed scope", () => {
+    expect(parseReviewToolArgs(undefined)).toEqual({ format: "json" });
+    expect(parseReviewToolArgs({})).toEqual({ format: "json" });
+  });
+
+  it("keeps path, base, and format passthrough values", () => {
+    expect(
+      parseReviewToolArgs({ path: "/tmp/repo", base: "main", format: "summary" }),
+    ).toEqual({ path: "/tmp/repo", base: "main", format: "summary" });
+  });
+
+  it("rejects empty base, unknown arguments, and bad formats", () => {
+    expect(() => parseReviewToolArgs({ base: "  " })).toThrow(/non-empty string/u);
+    expect(() => parseReviewToolArgs({ changed: true })).toThrow(/changed/u);
+    expect(() => parseReviewToolArgs({ format: "markdown" })).toThrow(
+      /expected "json" or "summary"/u,
+    );
+  });
+
+  it("advertises path, base, and format in the tool schema", () => {
+    const reviewTool = TOOL_DEFINITIONS.find((tool) => tool.name === REVIEW_TOOL_NAME);
+    expect(Object.keys(reviewTool?.inputSchema.properties ?? {})).toEqual([
+      "path",
+      "base",
+      "format",
+    ]);
+    expect(reviewTool?.annotations?.readOnlyHint).toBe(true);
   });
 });

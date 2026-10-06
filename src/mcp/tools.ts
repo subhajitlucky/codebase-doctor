@@ -5,7 +5,10 @@ import { compareFindings } from "../core/findings.js";
 import { auditCodebase, type AuditRequest } from "../core/scan.js";
 import { coverageLimitations, verifyRepairs } from "../core/verify.js";
 import { renderJsonReport } from "../reporters/json.js";
+import { renderMarkdownReview } from "../reporters/markdown.js";
 import { renderTextReport } from "../reporters/text.js";
+import { getChangedLines, type ChangedLines } from "../review/changed-lines.js";
+import { summarizeReview } from "../review/summary.js";
 import { renderVerifyText } from "../reporters/verify.js";
 import { VERSION } from "../version.js";
 import { boundToolPayload } from "./payload.js";
@@ -16,11 +19,14 @@ import {
   parseAuditToolArgs,
   parseCapabilitiesToolArgs,
   parseExplainToolArgs,
+  parseReviewToolArgs,
   parseVerifyToolArgs,
+  REVIEW_TOOL_NAME,
   TOOL_DEFINITIONS,
   VERIFY_TOOL_NAME,
   type AuditToolArgs,
   type ExplainToolArgs,
+  type ReviewToolArgs,
   type VerifyToolArgs,
 } from "./tool-schemas.js";
 
@@ -120,9 +126,62 @@ export async function handleExplainFinding(args: ExplainToolArgs): Promise<CallT
   return textResult(boundToolPayload(JSON.stringify(payload, null, 2)).text);
 }
 
+/**
+ * Review changed code with a PR-ready verdict through the same read-only
+ * pipeline as the CLI: changed-scope audit narrowed to added diff lines.
+ * Findings outside the diff are omitted, never resolved.
+ */
+export async function handleReviewChanges(args: ReviewToolArgs): Promise<CallToolResult> {
+  const result = await runBuiltInAudit(args.path, true, args.base);
+
+  let changedLines: ChangedLines | undefined;
+  try {
+    changedLines = result.auditScope.base === null
+      ? undefined
+      : await getChangedLines({
+        root: result.repository.root,
+        baseCommit: result.auditScope.base.resolvedCommit,
+        changes: result.auditScope.changes,
+      });
+  } catch {
+    changedLines = undefined;
+  }
+
+  const summary = summarizeReview(result, changedLines, DEFAULT_FAIL_ON);
+
+  if (args.format === "summary") {
+    const rendered = renderMarkdownReview(result, summary.included, {
+      verdict: summary.verdict,
+      failOn: DEFAULT_FAIL_ON,
+      excludedCount: summary.excluded.length,
+      baselineFiltered: summary.baselineFiltered,
+      linePrecision: summary.linePrecision,
+      rerunCommand: "review_changes",
+    });
+    return textResult(boundToolPayload(rendered).text);
+  }
+
+  const payload = {
+    tool: { name: "codebase-doctor", version: VERSION },
+    review: {
+      verdict: summary.verdict,
+      failOn: DEFAULT_FAIL_ON,
+      findingsInDiff: summary.included.length,
+      totalFindings: result.findings.length,
+      excludedCount: summary.excluded.length,
+      linePrecision: summary.linePrecision,
+      baselineFiltered: summary.baselineFiltered,
+    },
+    scope: result.auditScope,
+    coverageComplete: coverageLimitations(result).length === 0,
+    coverageLimitations: coverageLimitations(result),
+    findings: summary.included,
+  };
+  return textResult(boundToolPayload(JSON.stringify(payload, null, 2)).text);
+}
+
 /** Describe registry metadata: tools, audit domains, and capability vocabulary. */
-export function handleDescribeCapabilities(): CallToolResult {
-  return textResult(
+export function handleDescribeCapabilities(): CallToolResult {  return textResult(
     JSON.stringify(
       {
         server: { name: "codebase-doctor", version: VERSION },
@@ -152,8 +211,9 @@ export function handleDescribeCapabilities(): CallToolResult {
             "explicitly to grant those separately.",
         },
         usage:
-          "Prefer audit_codebase with changed=true after edits and a full audit " +
-          "at trust or release boundaries. After repairing findings, call " +
+          "Prefer audit_codebase with changed=true after edits, review_changes " +
+          "for a diff-narrowed PR verdict (APPROVE, COMMENT, or REQUEST_CHANGES), " +
+          "and a full audit at trust or release boundaries. After repairing findings, call " +
           "verify_changes with the saved baseline report; a baseline finding is " +
           "only resolved when it is absent and coverage completed. Use " +
           "explain_finding for full evidence and the verification command for one " +
@@ -189,6 +249,9 @@ export async function handleToolCall(
   }
   if (name === EXPLAIN_TOOL_NAME) {
     return handleExplainFinding(parseExplainToolArgs(rawArguments));
+  }
+  if (name === REVIEW_TOOL_NAME) {
+    return handleReviewChanges(parseReviewToolArgs(rawArguments));
   }
   if (name === CAPABILITIES_TOOL_NAME) {
     parseCapabilitiesToolArgs(rawArguments);

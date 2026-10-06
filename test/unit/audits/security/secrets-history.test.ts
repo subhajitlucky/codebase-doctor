@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createSecretsHistoryDoctor } from "../../../../src/audits/security/secrets-history/doctor.js";
 import type { AuditCoverage } from "../../../../src/core/doctor.js";
 import { fullAuditScope } from "../../../../src/scope/planner.js";
-import type { AuditScope } from "../../../../src/scope/types.js";
+import type { AuditScope, ChangedPath } from "../../../../src/scope/types.js";
 import type { ProjectSnapshot } from "../../../../src/workspace/types.js";
 import {
   commitInitialContent,
@@ -15,11 +15,11 @@ import {
 
 const secret = "f8K2mQ9xL4vN7pR1sT6uW3yZ0aB5cD";
 
-function changedScope(): AuditScope {
+function changedScope(changes: readonly ChangedPath[] = []): AuditScope {
   return {
     mode: "changed",
     base: { kind: "head", requestedRef: null, resolvedCommit: "a".repeat(40) },
-    changes: [],
+    changes,
     affectedProjectIds: [],
     reasons: [],
     limitations: [],
@@ -75,7 +75,44 @@ describe("Secrets History Doctor", () => {
     }
   });
 
-  it("reports not-selected for changed audits", async () => {
+  it("scopes history to changed paths instead of reporting not-selected", async () => {
+    const root = await createTempProject("codebase-doctor-history-");
+    try {
+      await initializeGitRepository(root);
+      await commitInitialContent(root, {
+        "src/app.ts": `export const apiKey = "${secret}";\n`,
+        "src/other.ts": "export const safe = true;\n",
+      });
+      await writeProjectFile(root, "src/app.ts", "export const apiKey = process.env.API_KEY;\n");
+      await runGitFixtureCommand(root, ["add", "."]);
+      await runGitFixtureCommand(root, ["commit", "-m", "remove credential"]);
+
+      const doctor = createSecretsHistoryDoctor();
+      const result = await doctor.diagnose({
+        snapshot: snapshotWith(
+          root,
+          changedScope([{ status: "modified", path: "src/app.ts" }]),
+        ),
+        allowedCapabilities: new Set(["filesystem:read"]),
+      });
+
+      const finding = result.findings.find((entry) =>
+        entry.ruleId.startsWith("security/secrets-history/")
+      );
+      expect(finding?.location?.path).toBe("src/app.ts");
+      expect(JSON.stringify(result)).not.toContain(secret);
+
+      const moduleCoverage = result.coverage?.find(
+        (entry: AuditCoverage) => entry.moduleId === "security/secrets-history"
+      );
+      expect(moduleCoverage).toMatchObject({ status: "completed", scope: "changed" });
+      expect(moduleCoverage?.limitations.join(" ")).toContain("1 changed path(s)");
+    } finally {
+      await removeTempProject(root);
+    }
+  });
+
+  it("completes honestly when changed scope selects no paths", async () => {
     const root = await createTempProject("codebase-doctor-history-");
     try {
       await initializeGitRepository(root);
@@ -91,8 +128,8 @@ describe("Secrets History Doctor", () => {
       const moduleCoverage = result.coverage?.find(
         (entry: AuditCoverage) => entry.moduleId === "security/secrets-history"
       );
-      expect(moduleCoverage?.status).toBe("not-selected");
-      expect(moduleCoverage?.limitations.join(" ")).toContain("not selected for changed audits");
+      expect(moduleCoverage?.status).toBe("completed");
+      expect(moduleCoverage?.limitations.join(" ")).toContain("nothing to check");
     } finally {
       await removeTempProject(root);
     }

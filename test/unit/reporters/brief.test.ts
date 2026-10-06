@@ -44,13 +44,33 @@ const partialCoverage: DomainCoverage[] = [
   },
 ];
 
-function scan(findings: Finding[], domainCoverage: DomainCoverage[] = []) {
+function scan(
+  findings: Finding[],
+  domainCoverage: DomainCoverage[] = [],
+  overrides: { plannedChecks?: { command: string; projectId: string }[]; checksStatus?: "completed" | "skipped" } = {},
+) {
   return normalizeScanResult(
     "/repo",
     [],
     fullAuditScope(),
-    [run("fixture", { status: "completed", findings, durationMs: 0 })],
-    [],
+    [run(
+      "fixture",
+      { status: "completed", findings, durationMs: 0 },
+    ), run(
+      "checks",
+      {
+        status: overrides.checksStatus ?? "skipped",
+        findings: [],
+        durationMs: 0,
+        ...(overrides.checksStatus === "completed" ? {} : { skipReason: "Doctor requires denied capabilities: process:execute." }),
+      },
+    )],
+    (overrides.plannedChecks ?? []).map((check, index) => ({
+      planId: `plan-${index}`,
+      projectId: check.projectId,
+      label: check.command,
+      command: check.command,
+    })),
     domainCoverage,
   );
 }
@@ -95,5 +115,34 @@ describe("renderBriefReport", () => {
     expect(report).toContain("new=1 resolved=0");
     expect(report).toContain("= [high] existing");
     expect(report).toContain("+ [low] fresh");
+  });
+});
+
+describe("planned validation commands", () => {
+  it("names commands that were detected but never executed", () => {
+    const report = renderBriefReport(
+      scan([], [], {
+        plannedChecks: [
+          { command: "npm test", projectId: "project:." },
+          { command: "npm run lint", projectId: "project:." },
+        ],
+      }),
+    );
+
+    expect(report).toContain("planned-checks-not-run (2): npm test (project:.); npm run lint (project:.)");
+    expect(report).toContain("--run-checks after explicit approval");
+  });
+
+  it("stays silent when checks ran or nothing was planned", () => {
+    const ran = renderBriefReport(
+      scan([], [], {
+        checksStatus: "completed",
+        plannedChecks: [{ command: "npm test", projectId: "project:." }],
+      }),
+    );
+    expect(ran).not.toContain("planned-checks-not-run");
+
+    const nonePlanned = renderBriefReport(scan([], []));
+    expect(nonePlanned).not.toContain("planned-checks-not-run");
   });
 });

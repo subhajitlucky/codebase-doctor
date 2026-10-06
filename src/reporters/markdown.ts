@@ -1,6 +1,6 @@
 import type { Finding } from "../core/findings.js";
 import type { ScanResult } from "../core/normalize.js";
-import { coverageLimitations } from "../core/verify.js";
+import { coverageLimitations, skippedPlannedChecks } from "../core/verify.js";
 import type { ReviewVerdict } from "../review/verdict.js";
 
 export interface MarkdownReviewOptions {
@@ -163,6 +163,21 @@ export function renderMarkdownReview(
     lines.push(
       "Do not call this codebase clean or verified without reviewing these limitations.",
     );
+  }
+
+  const skippedChecks = skippedPlannedChecks(result);
+  if (skippedChecks.length > 0) {
+    lines.push("", "### Planned validation commands (not executed)");
+    lines.push(
+      "These commands were detected but never ran. Rerun with `--run-checks` " +
+      "only after explicit approval — never on an untrusted repository.",
+    );
+    for (const check of skippedChecks.slice(0, MAX_SCOPE_LIST_ITEMS)) {
+      lines.push(`- \`${check}\``);
+    }
+    if (skippedChecks.length > MAX_SCOPE_LIST_ITEMS) {
+      lines.push(`- _…and ${skippedChecks.length - MAX_SCOPE_LIST_ITEMS} more._`);
+    }
   }
 
   lines.push(

@@ -4,6 +4,7 @@ export const AUDIT_TOOL_NAME = "audit_codebase";
 export const CAPABILITIES_TOOL_NAME = "describe_capabilities";
 export const VERIFY_TOOL_NAME = "verify_changes";
 export const EXPLAIN_TOOL_NAME = "explain_finding";
+export const REVIEW_TOOL_NAME = "review_changes";
 
 export type McpAuditFormat = "json" | "summary";
 
@@ -207,6 +208,48 @@ export const TOOL_DEFINITIONS: readonly Tool[] = [
       openWorldHint: false,
     },
   },
+  {
+    name: REVIEW_TOOL_NAME,
+    description:
+      "Review changed code with a PR-ready verdict. Always audits changed scope " +
+      "and narrows findings to added diff lines, returning APPROVE, COMMENT, or " +
+      "REQUEST_CHANGES. Findings on unchanged lines are omitted, never resolved. " +
+      "Read-only and offline by default; it never enables validation commands " +
+      "or live database access.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Repository path to review. Defaults to the server working directory.",
+        },
+        base: {
+          type: "string",
+          description:
+            "Git ref to compare against from the merge base; defaults to " +
+            "working-tree changes against HEAD when omitted.",
+        },
+        format: {
+          type: "string",
+          enum: ["json", "summary"],
+          description:
+            'Report rendering: "json" returns the structured review with the ' +
+            'verdict and diff-scoped findings; "summary" returns the ' +
+            "PR-comment-ready Markdown review.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "Review changed code",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ];
 
 function requireObject(input: unknown, toolName: string): Map<string, unknown> {
@@ -384,5 +427,44 @@ export function parseExplainToolArgs(input: unknown): ExplainToolArgs {
     ...(ruleId === undefined ? {} : { ruleId }),
     ...(changed ? { changed: true } : {}),
     ...(base === undefined ? {} : { base }),
+  };
+}
+export type McpReviewFormat = "json" | "summary";
+
+const MCP_REVIEW_FORMATS = new Set<McpReviewFormat>(["json", "summary"]);
+
+const REVIEW_TOOL_ARGUMENTS = new Set(["path", "base", "format"]);
+
+export interface ReviewToolArgs {
+  path?: string;
+  base?: string;
+  format: McpReviewFormat;
+}
+
+/**
+ * Validate and normalize raw review_changes arguments. Changed scope is
+ * always implied; an explicit base reference must be non-empty.
+ */
+export function parseReviewToolArgs(input: unknown): ReviewToolArgs {
+  const args = requireObject(input, REVIEW_TOOL_NAME);
+  rejectUnknownArguments(args, REVIEW_TOOL_ARGUMENTS, REVIEW_TOOL_NAME);
+
+  const path = readString(args, "path", REVIEW_TOOL_NAME);
+  const base = readString(args, "base", REVIEW_TOOL_NAME);
+  const formatValue = args.get("format");
+  if (
+    formatValue !== undefined &&
+    (typeof formatValue !== "string" ||
+      !MCP_REVIEW_FORMATS.has(formatValue as McpReviewFormat))
+  ) {
+    throw new Error(
+      `Invalid ${REVIEW_TOOL_NAME} argument "format": expected "json" or "summary".`,
+    );
+  }
+
+  return {
+    ...(path === undefined ? {} : { path }),
+    ...(base === undefined ? {} : { base }),
+    format: (formatValue as McpReviewFormat | undefined) ?? "json",
   };
 }

@@ -47,7 +47,8 @@ describe("filterFindingsToDiff", () => {
       finding("file-level", "medium", { path: "src/changed.ts" }),
       finding("untracked-any-line", "high", { path: "src/fresh.ts", line: 99 }),
       finding("unchanged-file", "high", { path: "src/other.ts", line: 1 }),
-      finding("deleted-file", "high", { path: "src/gone.ts", line: 1 }),
+      finding("deleted-file-line", "high", { path: "src/gone.ts", line: 1 }),
+      finding("deleted-file-level", "high", { path: "src/gone.ts" }),
       finding("global", "low"),
     ];
 
@@ -55,10 +56,10 @@ describe("filterFindingsToDiff", () => {
 
     expect(filtered.linePrecision).toBe(true);
     expect(filtered.included.map(({ ruleId }) => ruleId).sort()).toEqual(
-      ["file-level", "global", "on-added-line", "untracked-any-line"].sort(),
+      ["deleted-file-level", "file-level", "global", "on-added-line", "untracked-any-line"].sort(),
     );
     expect(filtered.excluded.map(({ ruleId }) => ruleId).sort()).toEqual(
-      ["deleted-file", "on-removed-line", "unchanged-file"].sort(),
+      ["deleted-file-line", "on-removed-line", "unchanged-file"].sort(),
     );
   });
 

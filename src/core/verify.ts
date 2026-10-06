@@ -151,6 +151,18 @@ export function verifyRepairs(
 }
 
 /**
+ * Planned validation commands that were detected but never executed because
+ * the `checks` doctor was skipped (no `--run-checks`). Agents must see the
+ * exact commands that did not run instead of reading "validation: skipped"
+ * as a pass.
+ */
+export function skippedPlannedChecks(result: ScanResult): string[] {
+  const checksRun = result.doctorRuns.find((run) => run.doctorId === "checks");
+  if (checksRun === undefined || checksRun.status !== "skipped") return [];
+  return result.plannedChecks.map((check) => `${check.command} (${check.projectId})`);
+}
+
+/**
  * Exit 0 only when every baseline finding is verifiably resolved, no baseline
  * finding remains (unless `allowUnchanged`), and no new finding meets the
  * threshold. Unresolved entries always fail: absence under incomplete coverage

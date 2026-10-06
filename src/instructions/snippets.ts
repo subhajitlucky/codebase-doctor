@@ -103,7 +103,7 @@ const SNIPPETS: readonly InstructionSnippet[] = [
   {
     target: "mcp",
     file: "MCP client configuration",
-    description: "MCP server entry exposing audit_codebase, verify_changes, explain_finding, and describe_capabilities.",
+    description: "MCP server entry exposing audit_codebase, review_changes, verify_changes, explain_finding, and describe_capabilities.",
     content: MCP_CONFIG
   }
 ];

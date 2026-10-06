@@ -78,4 +78,34 @@ describe("renderMarkdownReview", () => {
     expect(report).toContain("1 more finding(s)");
     expect(report).not.toContain("two title");
   });
+
+  it("names planned validation commands that never executed", () => {
+    const run = {
+      doctorId: "checks",
+      result: {
+        status: "skipped" as const,
+        findings: [],
+        durationMs: 0,
+        skipReason: "Doctor requires denied capabilities: process:execute.",
+      },
+    };
+    const result = normalizeScanResult(
+      "/repo",
+      [],
+      fullAuditScope(),
+      [{
+        doctorId: "security/secrets",
+        result: { status: "completed" as const, findings: [], durationMs: 0 },
+      }, run],
+      [{ planId: "plan-0", projectId: "project:.", label: "npm test", command: "npm test" }],
+      [],
+    );
+    const report = renderMarkdownReview(result, [], {
+      verdict: "APPROVE",
+      failOn: "high",
+    });
+
+    expect(report).toContain("### Planned validation commands (not executed)");
+    expect(report).toContain("npm test (project:.)");
+  });
 });

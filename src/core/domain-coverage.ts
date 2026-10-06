@@ -386,6 +386,34 @@ function applyChangedSelection(
   };
 }
 
+function performanceCoverage(
+  modules: readonly DomainModuleCoverage[],
+): DomainCoverage {  if (modules.length === 0) {
+    return {
+      domain: "performance",
+      applicability: "unknown",
+      status: "unsupported",
+      coverageComplete: false,
+      evidence: [],
+      modules: [],
+      limitations: ["Performance applicability and semantic analysis are not implemented."],
+    };
+  }
+  const status = aggregateStatuses(modules.map(({ status }) => status));
+  return {
+    domain: "performance",
+    applicability: status === "not-applicable" ? "not-detected" : "detected",
+    status,
+    coverageComplete: status === "completed" || status === "not-applicable",
+    evidence: sortEvidence(modules.map(({ moduleId }) => ({
+      type: "module" as const,
+      value: moduleId,
+    }))),
+    modules,
+    limitations: [...new Set(modules.flatMap(({ limitations }) => limitations))].sort(),
+  };
+}
+
 function aiCoverage(
   modules: readonly DomainModuleCoverage[],
   snapshot: ProjectSnapshot,
@@ -639,15 +667,7 @@ export function planDomainCoverage(
     },
     securityCoverage(securityModules, input.snapshot),
     infrastructure,
-    {
-      domain: "performance",
-      applicability: "unknown",
-      status: "unsupported",
-      coverageComplete: false,
-      evidence: [],
-      modules: [],
-      limitations: ["Performance applicability and semantic analysis are not implemented."],
-    },
+    performanceCoverage(modulesByDomain.get("performance") ?? []),
     ai,
   ];
   return coverage.map((entry) => applyChangedSelection(entry, input.snapshot));

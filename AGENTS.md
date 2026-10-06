@@ -27,7 +27,7 @@ codebase-doctor scan [path]      # repository-only scan (back-compat)
 codebase-doctor mcp              # serve read-only tools over stdio
 ```
 
-MCP tools: `audit_codebase`, `verify_changes`, `explain_finding`, `describe_capabilities`.
+MCP tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `describe_capabilities`.
 
 ## Hard rules for agents
 
