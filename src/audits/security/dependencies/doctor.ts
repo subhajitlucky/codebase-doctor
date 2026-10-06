@@ -16,6 +16,13 @@ import {
 } from "./ecosystems.js";
 import { parseNodeLock } from "./node-locks.js";
 import { parseNpmLock, type NpmLockParseResult } from "./parser.js";
+import {
+  analyzePythonTarget,
+  parsePythonLock,
+  parsePythonManifest,
+  selectPythonTargets,
+  type PythonManifestSummary,
+} from "./python.js";
 import { selectDependencyAuditTargets } from "./selection.js";
 import { safeNpmPackageName } from "./source.js";
 import type { DependencyFindingFamily, DependencyMatch } from "./types.js";
@@ -36,10 +43,10 @@ export interface DependenciesDoctorOptions {
 
 const TITLE_BY_FAMILY: Record<DependencyFindingFamily, string> = {
   "missing-lockfile": "External dependency graph has no governing lockfile",
-  "manifest-lock-drift": "Package manifest and npm lockfile disagree",
+  "manifest-lock-drift": "Package manifest and lockfile disagree",
   "insecure-source": "Dependency uses an insecure source transport",
   "mutable-git-source": "Git dependency is not locked to an immutable commit",
-  "missing-integrity": "Resolved npm tarball lacks valid integrity evidence",
+  "missing-integrity": "Resolved package lacks valid integrity evidence",
   "workspace-registry-resolution": "Internal workspace name resolves outside its member",
   "competing-npm-lockfiles": "Competing npm lockfiles can diverge",
   "competing-lockfiles": "Competing package-manager lockfiles can diverge",
@@ -165,6 +172,7 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
       const startedAt = Date.now();
       const selection = selectDependencyAuditTargets(snapshot);
       const crossSelection = selectCrossEcosystemTargets(snapshot);
+      const pythonSelection = selectPythonTargets(snapshot);
       const findings: Finding[] = [];
       const coverageRecords: AuditCoverage[] = [];
       const internalPackages: InternalPackage[] = snapshot.projects.flatMap((project) => {
@@ -180,6 +188,12 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
         if (
           isNodeManagerEcosystem(unsupported.ecosystem) &&
           crossSelection.handledProjectIds.has(unsupported.projectId)
+        ) {
+          continue;
+        }
+        if (
+          unsupported.ecosystem === "python" &&
+          pythonSelection.handledProjectIds.has(unsupported.projectId)
         ) {
           continue;
         }
@@ -206,6 +220,7 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
         selection.scope === "changed" &&
         selection.targets.length === 0 &&
         crossSelection.targets.length === 0 &&
+        pythonSelection.targets.length === 0 &&
         selection.unsupportedScopes.length === 0 &&
         selection.notApplicableScopes.length === 0
       ) {
@@ -383,6 +398,140 @@ export function createDependenciesDoctor(options: DependenciesDoctorOptions = {}
               internalNames,
             })
           : { matches: [], limitations: [] };
+        targetLimitations.push(...analysis.limitations);
+
+        const targetMatches = analysis.matches.slice(0, maxFindingsPerTarget);
+        if (analysis.matches.length > maxFindingsPerTarget) {
+          targetLimitations.push(
+            `${target.lockfile?.path ?? target.lockRoot}: dependency finding limit of ${maxFindingsPerTarget} was reached; additional matches were withheld.`,
+          );
+        }
+        const remaining = maxFindings - findings.length;
+        const emittedMatches = targetMatches.slice(0, remaining);
+        if (targetMatches.length > remaining) {
+          targetLimitations.push(
+            `Dependency audit finding limit of ${maxFindings} was reached; additional matches and remaining lock roots were not reported.`,
+          );
+        }
+        findings.push(...emittedMatches.map((match) =>
+          findingFor(match, snapshot.auditScope.mode === "changed")
+        ));
+        coverageRecords.push(coverage(
+          targetLimitations.length > 0
+            ? "partial"
+            : analysis.matches.length === 0 && target.coveredProjects.length === 0
+              ? "not-applicable"
+              : "completed",
+          scope,
+          target.coveredProjects.length + lockExamined,
+          statementsExamined,
+          emittedMatches.length,
+          targetLimitations,
+        ));
+      }
+
+      for (const target of pythonSelection.targets) {
+        const targetLimitations = [...pythonSelection.limitations, ...target.limitations];
+        const scope = `${selection.scope}:${target.lockRoot}:${target.manager}`;
+        let summary;
+        let lockExamined = 0;
+        let statementsExamined = 0;
+        const manifests = new Map<string, PythonManifestSummary | undefined>();
+
+        if (findings.length >= maxFindings) {
+          targetLimitations.push(
+            `Dependency audit finding limit of ${maxFindings} was reached; additional matches and remaining lock roots were not reported.`,
+          );
+          coverageRecords.push(coverage(
+            "partial",
+            scope,
+            target.coveredProjects.length,
+            0,
+            0,
+            targetLimitations,
+          ));
+          continue;
+        }
+
+        if (target.lockfile !== undefined) {
+          const path = target.lockfile.path;
+          if (target.lockfile.size > maxFileBytes) {
+            targetLimitations.push(
+              `${path}: file exceeds the ${maxFileBytes}-byte dependency audit size limit.`,
+            );
+          } else if (totalBytes + target.lockfile.size > maxTotalBytes) {
+            targetLimitations.push(
+              `${path}: total dependency audit content limit of ${maxTotalBytes} bytes was reached; remaining lockfiles were not examined.`,
+            );
+          } else {
+            let bytes: Uint8Array | undefined;
+            try {
+              bytes = await readSelectedFile(join(snapshot.root, ...path.split("/")));
+            } catch {
+              targetLimitations.push(`${path}: unable to read selected dependency metadata.`);
+            }
+            if (bytes !== undefined) {
+              if (bytes.byteLength > maxFileBytes) {
+                targetLimitations.push(
+                  `${path}: file exceeds the ${maxFileBytes}-byte dependency audit size limit.`,
+                );
+              } else if (totalBytes + bytes.byteLength > maxTotalBytes) {
+                targetLimitations.push(
+                  `${path}: total dependency audit content limit of ${maxTotalBytes} bytes was reached; remaining lockfiles were not examined.`,
+                );
+              } else {
+                totalBytes += bytes.byteLength;
+                lockExamined = 1;
+                summary = parsePythonLock(
+                  target.manager,
+                  path,
+                  Buffer.from(bytes).toString("utf8"),
+                );
+                statementsExamined = summary.packages.length;
+              }
+            }
+          }
+        }
+
+        for (const project of target.coveredProjects) {
+          if (project.manifestPath === undefined) continue;
+          const manifestRecord = snapshot.files.find((entry) => entry.path === project.manifestPath);
+          if (manifestRecord?.kind !== "file") {
+            targetLimitations.push(`${project.manifestPath}: manifest is not an inventoried regular file.`);
+            manifests.set(project.manifestPath, undefined);
+            continue;
+          }
+          if (manifestRecord.size > maxFileBytes) {
+            targetLimitations.push(
+              `${project.manifestPath}: file exceeds the ${maxFileBytes}-byte dependency audit size limit.`,
+            );
+            manifests.set(project.manifestPath, undefined);
+            continue;
+          }
+          try {
+            const bytes = await readSelectedFile(
+              join(snapshot.root, ...project.manifestPath.split("/")),
+            );
+            totalBytes += bytes.byteLength;
+            const parsed = parsePythonManifest(
+              project.manifestPath,
+              Buffer.from(bytes).toString("utf8"),
+            );
+            if (parsed === undefined) {
+              targetLimitations.push(
+                `${project.manifestPath}: manifest has no supported dependency sections.`,
+              );
+              manifests.set(project.manifestPath, undefined);
+            } else {
+              manifests.set(project.manifestPath, parsed);
+            }
+          } catch {
+            targetLimitations.push(`${project.manifestPath}: unable to read selected dependency metadata.`);
+            manifests.set(project.manifestPath, undefined);
+          }
+        }
+
+        const analysis = analyzePythonTarget({ target, ...(summary === undefined ? {} : { lock: summary }), manifests });
         targetLimitations.push(...analysis.limitations);
 
         const targetMatches = analysis.matches.slice(0, maxFindingsPerTarget);

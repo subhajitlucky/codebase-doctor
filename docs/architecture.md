@@ -145,6 +145,11 @@ full observed schema-set audit only when separately requested with
 
 Unaffected source behavior and domain checks are not broadly covered in changed
 mode, although full-context structural doctors may inspect unaffected areas.
+File-local doctors (backend, frontend, infrastructure, agent surface,
+performance) examine only changed files present in the inventory in changed
+mode, so changed audits do work proportional to the change rather than the
+repository; deleted and uninventoried changed paths become explicit
+limitations, and a changed scope that selects nothing reports `not-selected`.
 Zero changed findings is not a full clean result. Consumers must read
 `auditScope`, `doctorRuns`, `coverage`, and `findings` to determine each doctor's
 actual scope.
@@ -365,6 +370,22 @@ a new logical issue. A repair is supported only when the fingerprint is absent
 and all applicable coverage completed. Absence during partial, skipped, failed,
 limited, or out-of-scope work is not resolution.
 
+## Acknowledged findings
+
+After doctors run, the pipeline partitions findings through inline
+`codebase-doctor-ignore: <rule-id[, ...]> [-- reason]` directives read from
+the finding's own line or the line above it. Matching is exact on rule id,
+doctor id, or a `doctor/*` prefix; location-less findings are never
+acknowledged, and unmatched directives are ignored. Reads are bounded (1 MB
+per file, 200 files) with explicit scope limitations past the caps.
+
+Acknowledgment changes gating, never truth: acknowledged findings leave
+`findings`, appear in full under the report's `suppressed` section with reason
+and directive location, count as present for baseline `unchanged`/`resolved`
+classification and `verify` status, and are excluded from SARIF uploads. The
+text, brief, Markdown, and JSON reporters surface them; deleting the directive
+returns the finding to `findings` (and to `new` against an older baseline).
+
 ## Built-in history secrets audit
 
 The combined audit also registers `security/secrets-history`, a read-only,
@@ -422,7 +443,15 @@ Doctor immediately after `security/secrets`. It supports npm lockfile versions
 covered by a cross-ecosystem path: `pnpm-lock.yaml` (v5+), `yarn.lock` (v1 and
 Berry), and text `bun.lock` are parsed for resolved sources, integrity or
 checksum evidence, and the manifest ranges the lock actually records. Python
-and other dependency ecosystems remain unsupported coverage; the Doctor does not
+poetry and uv lock authority is covered by a parallel path: `poetry.lock` and
+`uv.lock` package blocks and `pyproject.toml` Poetry and PEP 621 declarations
+are parsed with a bounded line scanner (no TOML dependency) for insecure
+transports, unpinned git references, missing hash evidence, missing lockfiles,
+competing lockfiles, and decidable manifest-lock drift. Undecidable
+specifiers, environment markers, direct-URL drift, transitive-only lock
+entries, and requirements-only layouts stay visible as partial coverage;
+reverse drift is never reported because locks legitimately contain transitive
+packages. Other dependency ecosystems remain unsupported coverage; the Doctor does not
 guess their graph state.
 
 The module never invokes npm or another package manager, never launches a shell,
@@ -577,15 +606,41 @@ fingerprint never contains the raw source text.
 The read-only, offline `performance/static` module works from inventory
 metadata only — it never reads file contents. It reports
 `performance/static/committed-build-artifact` (low severity, high confidence)
-for inventoried paths that look like generated output (`dist/`, `build/`,
-source maps, minified bundles) and `performance/static/large-file` for
+for inventoried paths that look like generated output (source maps, minified
+or bundled scripts, coverage reports) and `performance/static/large-file` for
 non-lockfile, non-asset sources above 512 KB. Lockfiles, binary assets, and
-Git-ignored local build output are never findings: full mode keeps only
-repository-shareable paths, and changed mode examines changed paths present
-in the inventory. Findings are bounded at 100 with partial coverage past the
+Git-ignored local build output are never findings, and inventory-skipped
+directories (`dist/`, `build/`, `.next/`) are outside every doctor's reach by
+construction: full mode keeps only repository-shareable paths, and changed mode
+examines changed paths present in the inventory. Findings are bounded at 100 with partial coverage past the
 cap. Cache, query, memory, and profiling analysis remain north-star work, and
 an external authorized human or agent performs the cleanup, then reruns the
 same scope.
+
+## Built-in backend API audit
+
+The read-only, offline `backend/api` module reuses the `backend/auth`
+binding discipline — import declarations, CommonJS requires, plus `new
+BoundClass()` instance tracking — over JavaScript and TypeScript sources. It
+reports `backend/api/sql-string-concat-query` for concatenated or interpolated
+SQL text passed to a provably bound database `query`/`execute` call
+(parameterized calls carrying a values array are safe) and
+`backend/api/child-process-exec-dynamic` for non-static commands passed to a
+provably bound `child_process` shell execution (including `spawn` with
+`shell: true`), while argument-separated `execFile` and plain `spawn` never
+fire. Unresolvable query text is a coverage limitation, never a guessed
+finding. An external authorized human or agent performs the correction, then
+reruns the same scope.
+
+## Built-in frontend security audit
+
+The read-only, offline `frontend/security` module parses JSX/TSX sources with
+the same non-executing parser as the accessibility module. Its
+`frontend/security/dangerously-set-inner-html` rule fires for a dynamically
+computed value without a provable sanitizer call (`DOMPurify.sanitize`,
+`sanitizeHtml`); static literals are safe and spread props suppress the check
+because the attribute set cannot be resolved. An external authorized human or
+agent performs the correction, then reruns the same scope.
 
 ## Precision and bounded-report contract
 

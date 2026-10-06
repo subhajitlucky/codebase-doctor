@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
+import { selectChangedCandidates } from "../../../scope/changed-files.js";
 import {
   AGENT_SURFACE_DOCTOR_ID,
   analyzeMcpConfig,
@@ -136,12 +137,13 @@ export function createAgentSurfaceDoctor(options: AgentSurfaceDoctorOptions = {}
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
-      const candidates = snapshot.files
+      const changed = snapshot.auditScope.mode === "changed";
+      const allCandidates = snapshot.files
         .filter((file) => file.kind === "file" && isAgentSurfaceCandidate(file.path))
         .map((file) => file.path)
         .sort();
 
-      if (candidates.length === 0) {
+      if (allCandidates.length === 0) {
         return {
           status: "completed",
           findings: [],
@@ -151,6 +153,34 @@ export function createAgentSurfaceDoctor(options: AgentSurfaceDoctorOptions = {}
       }
 
       const limitations: string[] = [];
+      const scopeNotes: string[] = [];
+      let candidates = allCandidates;
+      if (changed) {
+        const selection = selectChangedCandidates(
+          snapshot.auditScope.changes,
+          snapshot.files,
+          isAgentSurfaceCandidate,
+          "agent surface",
+        );
+        candidates = [...selection.candidates];
+        limitations.push(...selection.limitations);
+        if (candidates.length === 0) {
+          return {
+            status: "completed",
+            findings: [],
+            coverage: [coverage(
+              "not-selected",
+              snapshot.auditScope.mode,
+              0,
+              0,
+              0,
+              [...limitations, "No changed agent-surface files were selected; unchanged files were not independently re-audited."],
+            )],
+            durationMs: Date.now() - startedAt,
+          };
+        }
+        scopeNotes.push("Changed scope examined selected current changed files only; unchanged files were not independently re-audited.");
+      }
       const matches: AgentSurfaceMatch[] = [];
       let filesExamined = 0;
       let entriesExamined = 0;
@@ -225,7 +255,7 @@ export function createAgentSurfaceDoctor(options: AgentSurfaceDoctorOptions = {}
         status: "completed",
         findings: sortFindings(matches.map((match) => findingFor(match, snapshot.auditScope.mode === "changed"))),
         coverage: [
-          coverage(status, snapshot.auditScope.mode, filesExamined, entriesExamined, matches.length, limitations),
+          coverage(status, snapshot.auditScope.mode, filesExamined, entriesExamined, matches.length, [...limitations, ...scopeNotes]),
         ],
         durationMs: Date.now() - startedAt,
       };

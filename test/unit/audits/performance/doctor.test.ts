@@ -42,7 +42,7 @@ function shareable(paths: string[]): ProjectSnapshot["repositoryFiles"] {
 
 const FILES: FileRecord[] = [
   file("src/app.ts", 1_024),
-  file("dist/bundle.js", 900_000),
+  file("vendor/app.bundle.js", 900_000),
   file("src/big-generated.ts", 600_000),
   file("package-lock.json", 2_000_000),
   file("assets/logo.png", 3_000_000),
@@ -61,7 +61,7 @@ describe("performance/static doctor", () => {
     expect(rules).toContain("performance/static/committed-build-artifact");
     expect(rules).toContain("performance/static/large-file");
     const paths = result.findings.map((finding) => finding.location?.path);
-    expect(paths).toContain("dist/bundle.js");
+    expect(paths).toContain("vendor/app.bundle.js");
     expect(paths).toContain("src/app.js.map");
     expect(paths).toContain("src/big-generated.ts");
     expect(paths).not.toContain("package-lock.json");
@@ -97,7 +97,7 @@ describe("performance/static doctor", () => {
   it("warns honestly when shareable-file selection is unavailable", async () => {
     const doctor = createPerformanceDoctor();
     const result = await doctor.diagnose({
-      snapshot: snapshotWith([file("dist/bundle.js", 900_000)]),
+      snapshot: snapshotWith([file("vendor/app.bundle.js", 900_000)]),
       allowedCapabilities: new Set(["filesystem:read"]),
     });
 
@@ -115,7 +115,7 @@ describe("performance/static doctor", () => {
         FILES,
         changedScope([
           { status: "modified", path: "src/big-generated.ts" },
-          { status: "deleted", path: "dist/bundle.js" },
+          { status: "deleted", path: "vendor/app.bundle.js" },
           { status: "modified", path: "src/app.ts" },
         ]),
       ),
@@ -128,7 +128,8 @@ describe("performance/static doctor", () => {
     const moduleCoverage = result.coverage?.find(
       (entry: AuditCoverage) => entry.moduleId === "performance/static",
     );
-    expect(moduleCoverage).toMatchObject({ status: "completed", scope: "changed" });
+    expect(moduleCoverage).toMatchObject({ status: "partial", scope: "changed" });
+    expect(moduleCoverage?.limitations.join(" ")).toContain("deleted changed path");
   });
 
   it("reports not-applicable when nothing qualifies", async () => {

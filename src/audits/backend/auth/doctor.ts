@@ -4,6 +4,7 @@ import { join, posix } from "node:path";
 import { parse, type ParserPlugin } from "@babel/parser";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
+import { selectChangedCandidates } from "../../../scope/changed-files.js";
 
 const DOCTOR_ID = "backend/auth";
 const DEFAULT_MAX_FILE_BYTES = 1_000_000;
@@ -627,11 +628,12 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
-      const candidates = snapshot.files
+      const changed = snapshot.auditScope.mode === "changed";
+      const allCandidates = snapshot.files
         .filter((file) => file.kind === "file" && isBackendSourcePath(file.path))
         .map((file) => file.path)
         .sort();
-      if (candidates.length === 0) {
+      if (allCandidates.length === 0) {
         return {
           status: "completed",
           findings: [],
@@ -641,6 +643,34 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
       }
 
       const limitations: string[] = [];
+      const scopeNotes: string[] = [];
+      let candidates = allCandidates;
+      if (changed) {
+        const selection = selectChangedCandidates(
+          snapshot.auditScope.changes,
+          snapshot.files,
+          isBackendSourcePath,
+          "backend auth",
+        );
+        candidates = [...selection.candidates];
+        limitations.push(...selection.limitations);
+        if (candidates.length === 0) {
+          return {
+            status: "completed",
+            findings: [],
+            coverage: [coverage(
+              "not-selected",
+              snapshot.auditScope.mode,
+              0,
+              0,
+              0,
+              [...limitations, "No changed backend files were selected; unchanged files were not independently re-audited."],
+            )],
+            durationMs: Date.now() - startedAt,
+          };
+        }
+        scopeNotes.push("Changed scope examined selected current changed files only; unchanged files were not independently re-audited.");
+      }
       const findings: Finding[] = [];
       let filesExamined = 0;
       let callsExamined = 0;
@@ -689,7 +719,7 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
           filesExamined,
           callsExamined,
           Math.min(findings.length, maxFindings),
-          limitations,
+          [...limitations, ...scopeNotes],
         )],
         durationMs: Date.now() - startedAt,
       };

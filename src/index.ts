@@ -37,6 +37,16 @@ export {
   loadBaseline,
   withBaselineComparison,
 } from "./core/baseline.js";
+export {
+  applySuppressions,
+  parseSuppressionDirectives,
+} from "./core/suppressions.js";
+export type {
+  SuppressedFinding,
+  SuppressionDirective,
+  SuppressionOptions,
+  SuppressionOutcome,
+} from "./core/suppressions.js";
 export type {
   BaselineReport,
   BaselineComparisonOptions,

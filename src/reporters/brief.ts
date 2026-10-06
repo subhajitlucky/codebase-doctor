@@ -9,6 +9,7 @@ export interface BriefRenderOptions {
 const DEFAULT_MAX_FINDINGS = 100;
 const MAX_REMEDIATION_CHARS = 140;
 const MAX_SKIPPED_CHECKS = 5;
+const MAX_SUPPRESSED_LINES = 25;
 
 function location(finding: Finding): string {
   if (finding.location === undefined) return "(repository)";
@@ -81,6 +82,25 @@ export function renderBriefReport(
 
   if (limitations.length > 0) {
     lines.push(`coverage-limitations: ${limitations.join(", ")}`);
+  }
+
+  if (result.suppressed.length > 0) {
+    lines.push(
+      `suppressed: ${result.suppressed.length} finding(s) acknowledged via codebase-doctor-ignore ` +
+      `(excluded from gates, still present, listed in json)`,
+    );
+    for (const entry of result.suppressed.slice(0, MAX_SUPPRESSED_LINES)) {
+      const location = entry.location === undefined
+        ? "(repository)"
+        : `${entry.location.path}${entry.location.line === undefined ? "" : `:${entry.location.line}`}`;
+      const reason = entry.reason.length === 0 ? "no reason recorded" : entry.reason;
+      lines.push(`~ [${entry.severity}] ${entry.ruleId} ${location} — ${reason}`);
+    }
+    if (result.suppressed.length > MAX_SUPPRESSED_LINES) {
+      lines.push(
+        `suppressed-truncated: ${result.suppressed.length - MAX_SUPPRESSED_LINES} more; use --format json for the full list`,
+      );
+    }
   }
 
   const skippedChecks = skippedPlannedChecks(result);

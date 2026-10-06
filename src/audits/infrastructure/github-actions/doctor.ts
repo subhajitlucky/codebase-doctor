@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
+import { selectChangedCandidates } from "../../../scope/changed-files.js";
 
 const DOCTOR_ID = "infrastructure/github-actions";
 const DEFAULT_MAX_FILE_BYTES = 1_000_000;
@@ -259,11 +260,12 @@ export function createGitHubActionsDoctor(options: GitHubActionsDoctorOptions = 
     supports: () => true,
     async diagnose({ snapshot }): Promise<DoctorResult> {
       const startedAt = Date.now();
-      const candidates = snapshot.files
+      const changed = snapshot.auditScope.mode === "changed";
+      const allCandidates = snapshot.files
         .filter((file) => file.kind === "file" && isWorkflowPath(file.path))
         .map((file) => file.path)
         .sort();
-      if (candidates.length === 0) {
+      if (allCandidates.length === 0) {
         return {
           status: "completed",
           findings: [],
@@ -273,6 +275,34 @@ export function createGitHubActionsDoctor(options: GitHubActionsDoctorOptions = 
       }
 
       const limitations: string[] = [];
+      const scopeNotes: string[] = [];
+      let candidates = allCandidates;
+      if (changed) {
+        const selection = selectChangedCandidates(
+          snapshot.auditScope.changes,
+          snapshot.files,
+          isWorkflowPath,
+          "GitHub Actions",
+        );
+        candidates = [...selection.candidates];
+        limitations.push(...selection.limitations);
+        if (candidates.length === 0) {
+          return {
+            status: "completed",
+            findings: [],
+            coverage: [coverage(
+              "not-selected",
+              snapshot.auditScope.mode,
+              0,
+              0,
+              0,
+              [...limitations, "No changed workflows were selected; unchanged files were not independently re-audited."],
+            )],
+            durationMs: Date.now() - startedAt,
+          };
+        }
+        scopeNotes.push("Changed scope examined selected current changed files only; unchanged files were not independently re-audited.");
+      }
       const findings: Finding[] = [];
       let filesExamined = 0;
       let stepsExamined = 0;
@@ -316,7 +346,7 @@ export function createGitHubActionsDoctor(options: GitHubActionsDoctorOptions = 
           filesExamined,
           stepsExamined,
           Math.min(findings.length, maxFindings),
-          limitations,
+          [...limitations, ...scopeNotes],
         )],
         durationMs: Date.now() - startedAt,
       };

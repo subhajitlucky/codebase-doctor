@@ -84,6 +84,7 @@ function result(): ScanResult {
       },
       fingerprint: "fingerprint",
     }],
+    suppressed: [],
     summary: {
       total: 1,
       counts: { info: 0, low: 0, medium: 0, high: 1, critical: 0 },
@@ -271,6 +272,7 @@ describe("text reporter", () => {
       projects: [],
       doctorRuns: [],
       findings: [],
+      suppressed: [],
       summary: {
         total: 0,
         counts: { info: 0, low: 0, medium: 0, high: 0, critical: 0 },
@@ -299,6 +301,7 @@ describe("text reporter", () => {
         limitations: ["Unchanged files were not independently re-audited."],
       },
       findings: [],
+      suppressed: [],
       summary: { total: 0, counts: { info: 0, low: 0, medium: 0, high: 0, critical: 0 }, highestSeverity: null },
       coverage: [{ moduleId: "database/sql-rls", status: "skipped", scope: "changed", filesExamined: 0, statementsExamined: 0, statementsRecognized: 0, limitations: ["No changed SQL stream was selected."] }],
       sourceImpact: {
@@ -382,6 +385,7 @@ describe("text reporter", () => {
         limitations: ["Only selected changes were audited."],
       },
       findings: [],
+      suppressed: [],
       summary: { total: 0, counts: { info: 0, low: 0, medium: 0, high: 0, critical: 0 }, highestSeverity: null },
     };
 

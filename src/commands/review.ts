@@ -137,6 +137,7 @@ export async function runReview(
           findingsInDiff: summary.included.length,
           totalFindings: result.findings.length,
           excludedCount: summary.excluded.length,
+          suppressedCount: result.suppressed.length,
           linePrecision: summary.linePrecision,
           allFindings: options.allFindings,
           baselineFiltered,

@@ -18,6 +18,43 @@ All notable changes to Codebase Doctor are documented here.
 
 ### Added
 
+- Scope file-local doctors (backend, frontend, infrastructure, agent
+  surface, performance) to changed files present in the inventory during
+  changed audits, so changed audits do work proportional to the change
+  rather than re-parsing the repository. Deleted and uninventoried paths
+  become explicit limitations and an empty selection reports `not-selected`.
+  No cross-run state is kept: there is nothing to go stale.
+- Extend the read-only, offline `security/dependencies` module to Python
+  poetry and uv locks: `poetry.lock`/`uv.lock` package blocks and
+  `pyproject.toml` Poetry and PEP 621 declarations are parsed with a bounded
+  line scanner (no TOML dependency) for insecure sources, mutable git
+  references, missing integrity evidence, missing lockfiles, competing
+  lockfiles, and decidable manifest-lock drift. Undecidable specifiers,
+  markers, direct-URL drift, and requirements-only layouts stay partial
+  coverage; reverse drift is never reported for transitive entries.
+- Add the read-only, offline `backend/api` module: `sql-string-concat-query`
+  (concatenated or interpolated SQL on provably bound database calls;
+  parameterized values arrays are safe) and `child-process-exec-dynamic`
+  (non-static shell commands including `spawn` with `shell: true`;
+  `execFile` and plain `spawn` never fire), with `new BoundClass()`
+  instance-call resolution and unresolvable text as coverage limitations.
+- Add the read-only, offline `frontend/security` module:
+  `dangerously-set-inner-html` for dynamic values without a provable
+  sanitizer call; static literals are safe and spread props suppress.
+- Add `npm run benchmark`: a 14-case deterministic harness scoring recall,
+  medium+ false positives, review verdicts, and suppression honesty on
+  seeded disposable repositories, with methodology in `docs/benchmark.md`.
+- Add acknowledged findings: inline `codebase-doctor-ignore` directives
+  (rule id, doctor id, or `doctor/*` prefix, on the finding's line or the
+  line above) exclude reviewed findings from failure gates while keeping
+  them fully listed under `suppressed` with reason and directive location.
+  Suppressed findings still count as present, so baselines report them
+  `unchanged` and `verify` never reports them `resolved`; SARIF uploads
+  exclude them by design.
+- Fix CLI `verify` to run the same offline audit scope as `audit`, so
+  security and database findings in an audit baseline are comparable
+  instead of invisible to verification. Live database access stays
+  ungranted.
 - Add the read-only, offline `performance/static` module: reports
   `performance/static/committed-build-artifact` for inventoried generated
   output and `performance/static/large-file` for oversized non-lockfile,

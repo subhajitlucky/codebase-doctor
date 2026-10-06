@@ -169,6 +169,7 @@ export async function handleReviewChanges(args: ReviewToolArgs): Promise<CallToo
       findingsInDiff: summary.included.length,
       totalFindings: result.findings.length,
       excludedCount: summary.excluded.length,
+      suppressedCount: result.suppressed.length,
       linePrecision: summary.linePrecision,
       baselineFiltered: summary.baselineFiltered,
     },

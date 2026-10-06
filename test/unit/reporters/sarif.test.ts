@@ -40,6 +40,7 @@ function result(): ScanResult {
       },
       fingerprint: "stable-fingerprint",
     }],
+    suppressed: [],
     summary: {
       total: 1,
       counts: { info: 0, low: 0, medium: 0, high: 1, critical: 0 },
@@ -254,6 +255,7 @@ describe("SARIF reporter", () => {
     const covered: ScanResult = {
       ...result(),
       findings: [],
+      suppressed: [],
       auditScope: {
         mode: "changed",
         base: { kind: "merge-base", requestedRef: "main", resolvedCommit: "1234567890abcdef" },
