@@ -62,11 +62,11 @@
     "url": "https://github.com/subhajitlucky/codebase-doctor/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@babel/parser": "8.0.4",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "commander": "^15.0.0",
     "jsonc-parser": "3.3.1",
     "pg": "^8.23.0",

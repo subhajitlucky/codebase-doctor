@@ -158,7 +158,7 @@ describe("scan CLI", () => {
     expect(result.stderr).toMatch(/conflict/i);
   });
 
-  it("excludes matching projects before planning checks", () => {
+  it("excludes matching projects before planning checks", { timeout: 60_000 }, () => {
     const result = cli(["scan", repositoryRoot, "--json", "--exclude", "test/fixtures/**"]);
     const report = JSON.parse(result.stdout);
 

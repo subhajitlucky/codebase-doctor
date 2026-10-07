@@ -34,7 +34,7 @@ describe("agent distribution metadata", () => {
   it("ships a sandbox Dockerfile that serves the MCP server over stdio", async () => {
     const dockerfile = await readFile("Dockerfile", "utf8");
 
-    expect(dockerfile).toMatch(/FROM node:20-slim/);
+    expect(dockerfile).toMatch(/FROM node:22-slim/);
     expect(dockerfile).toMatch(/CMD \["node", "dist\/cli\.js", "mcp"\]/);
   });
 
