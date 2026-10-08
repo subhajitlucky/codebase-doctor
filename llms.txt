@@ -4,7 +4,7 @@ Models build. Codebase Doctor verifies. Model-independent repository auditor for
 
 ## What it does
 
-Audits a repository and returns deterministic findings as text, JSON, or SARIF with stable fingerprints. Covers secrets (working tree and Git history), dependencies with OSV advisories, PostgreSQL RLS, Dockerfiles, GitHub Actions, and a multi-language source graph (JS/TS, Python, Go, Java, Rust) for impact analysis and missing-target detection.
+Audits a repository and returns deterministic findings as text, JSON, or SARIF with stable fingerprints. Covers secrets (working tree and Git history), dependencies with OSV advisories, PostgreSQL RLS, Dockerfiles, GitHub Actions, and a multi-language source graph (JS/TS, Python, Go, Java, Rust) for impact analysis and missing-target detection. Every report carries a deterministic Repo Health score (`--score`, `--badge`).
 
 ## Install
 

@@ -7,6 +7,7 @@ import type { FindingThreshold } from "../core/summary.js";
 import { renderBriefReport } from "../reporters/brief.js";
 import { renderJsonReport } from "../reporters/json.js";
 import { renderSarifReport } from "../reporters/sarif.js";
+import { renderScoreOutput } from "../reporters/score.js";
 import { renderTextReport } from "../reporters/text.js";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -33,6 +34,8 @@ export interface RepositoryCommandOptions {
   failOn: string;
   requireComplete: boolean;
   maxFindings: string;
+  score: boolean;
+  badge: boolean;
 }
 
 type OutputFormat = "text" | "json" | "sarif" | "brief";
@@ -88,7 +91,8 @@ async function executeScan(
 ): Promise<void> {
   try {
     const { result, format, failOn } = await runRepositoryScan(path, options, requestOptions);
-    process.stdout.write(renderScanReport(result, format, options));
+    const scoreOutput = renderScoreOutput(result, options);
+    process.stdout.write(scoreOutput ?? renderScanReport(result, format, options));
     process.exitCode = classifyScanExit(result, failOn, {
       requireComplete: options.requireComplete,
     });
@@ -226,9 +230,15 @@ export function configureRepositoryCommand<Options extends RepositoryCommandOpti
     );
 }
 
+export function addScoreOptions(command: Command): Command {
+  return command
+    .option("--score", "print only the Repo Health score, e.g. Repo Health: 71/100", false)
+    .option("--badge", "print a shields.io badge URL for the Repo Health score", false);
+}
+
 export function createScanCommand(): Command {
-  return configureRepositoryCommand(
+  return addScoreOptions(configureRepositoryCommand(
     new Command("scan")
       .description("Inspect a repository and report evidence-backed findings."),
-  );
+  ));
 }

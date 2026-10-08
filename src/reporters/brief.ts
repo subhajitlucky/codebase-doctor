@@ -1,5 +1,6 @@
 import { compareFindings, type Finding } from "../core/findings.js";
 import type { ScanResult } from "../core/normalize.js";
+import { scoreScanResult } from "../core/score.js";
 import { coverageLimitations, skippedPlannedChecks } from "../core/verify.js";
 
 export interface BriefRenderOptions {
@@ -47,6 +48,7 @@ export function renderBriefReport(
     `findings=${findings.length}`,
     `shown=${shown.length}`,
     `coverage=${limitations.length === 0 ? "complete" : "incomplete"}`,
+    `score=${scoreScanResult(result).value}`,
   ];
 
   if (result.comparison !== undefined) {

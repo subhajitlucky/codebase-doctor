@@ -64,6 +64,16 @@ export type {
   FindingSummary,
   FindingThreshold,
 } from "./core/summary.js";
+export {
+  bandForScore,
+  INCOMPLETE_COVERAGE_PENALTY,
+  scoreReport,
+  scoreScanResult,
+  SEVERITY_PENALTIES,
+} from "./core/score.js";
+export type { ScoreBand, ScoreReport } from "./core/score.js";
+export { renderScoreLine, scoreBadgeUrl } from "./reporters/score.js";
+export type { ScoreRenderOptions } from "./reporters/score.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderSarifReport } from "./reporters/sarif.js";
 export { renderTextReport } from "./reporters/text.js";
