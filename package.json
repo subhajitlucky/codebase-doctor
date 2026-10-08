@@ -1,6 +1,6 @@
 {
   "name": "codebase-doctor",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "mcpName": "io.github.subhajitlucky/codebase-doctor",
   "description": "Verification for agent-written code: evidence-backed findings, honest coverage.",
   "type": "module",
@@ -31,6 +31,7 @@
     "test": "vitest run --exclude test/integration/packed-cli.test.ts --exclude test/integration/package-report-output.test.ts",
     "test:package": "npm run build && node scripts/check-package.mjs && vitest run test/integration/package-report-output.test.ts && vitest run test/integration/packed-cli.test.ts",
     "test:rls-integration": "npm run build && node scripts/run-rls-integration.mjs",
+    "version": "node scripts/sync-version.mjs",
     "ci": "npm run typecheck && npm test && npm run build",
     "ci:full": "npm run ci && npm run test:package && npm audit --audit-level=high",
     "prepare": "npm run build"

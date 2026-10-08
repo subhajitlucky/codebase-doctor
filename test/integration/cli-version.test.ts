@@ -1,5 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+
+const { version } = JSON.parse(readFileSync("package.json", "utf8")) as {
+  version: string;
+};
 
 describe("CLI version", () => {
   it("prints the package version", () => {
@@ -10,6 +15,6 @@ describe("CLI version", () => {
     );
 
     expect(result.status).toBe(0);
-    expect(result.stdout.trim()).toBe("0.1.10");
+    expect(result.stdout.trim()).toBe(version);
   });
 });
