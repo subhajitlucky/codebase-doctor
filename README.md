@@ -16,7 +16,7 @@ npx -y codebase-doctor audit . --changed --format brief
 
 ```txt
 codebase-doctor brief
-scope=full findings=1 shown=1 coverage=incomplete
+scope=full findings=1 shown=1 coverage=incomplete score=80
 [high] security/secrets/provider-token src/config.ts:12 —
   Have an authorized human or external coding agent remove the value and rotate it,
   then rerun the audit.
@@ -68,6 +68,8 @@ codebase-doctor verify . --baseline before.json  # confirm fixes landed
 --fail-on <severity>  info|low|medium|high|critical|none (default: high)
 --require-complete    Exit 2 when audit coverage is incomplete
 --max-findings <n>    Cap brief output (default: 100)
+--score               Print only the Repo Health score
+--badge               Print a shields.io badge URL for the Repo Health score
 --with-database       Permit live PostgreSQL catalog access
 --with-advisories     Opt-in OSV advisory lookup over lockfile packages
 --database-schema     Schema to inspect; repeatable (default: public)
@@ -280,6 +282,24 @@ Separately authorized `--run-checks` launches repository-owned validation subpro
 - database credentials come from `DATABASE_URL` or `SUPABASE_DB_URL`, never a connection-string flag
 - source analysis parses syntax and never executes source; lockfile analysis never invokes a package manager
 - apart from an explicitly requested OSV lookup, it makes no external network calls
+
+## Repo Health score
+
+Every report carries a deterministic score: `100` minus severity penalties —
+critical 25, high 10, medium 4, low 1, info 0 — minus `10` when applicable
+coverage did not complete, clamped to 0–100. Bands: green ≥ 80, yellow ≥ 50,
+red < 50. Acknowledged (suppressed) findings never count, and the score never
+replaces the report: inspect `coverage` before calling a codebase verified.
+
+```bash
+codebase-doctor audit . --score    # Repo Health: 71/100
+codebase-doctor audit . --badge    # https://img.shields.io/badge/Repo%20Health-71%2F100-yellow
+```
+
+`--score` and `--badge` print only the score or badge; exit codes still follow
+`--fail-on`. JSON reports always include the `score` object with its
+`findingPenalty` and `coveragePenalty` breakdown, and brief output carries
+`score=` in its header.
 
 ## Exit codes
 

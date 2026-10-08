@@ -320,7 +320,7 @@ describe("scan CLI", () => {
     expect(result.status).toBe(0);
     const lines = result.stdout.trimEnd().split("\n");
     expect(lines[0]).toBe("codebase-doctor brief");
-    expect(lines[1]).toMatch(/^scope=full findings=\d+ shown=\d+ coverage=(complete|incomplete)$/u);
+    expect(lines[1]).toMatch(/^scope=full findings=\d+ shown=\d+ coverage=(complete|incomplete) score=\d+$/u);
     expect(result.stdout).toMatch(/\[(info|low|medium|high|critical)\] \S+ /u);
   });
 

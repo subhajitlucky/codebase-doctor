@@ -83,7 +83,7 @@ describe("renderBriefReport", () => {
     const lines = report.trimEnd().split("\n");
 
     expect(lines[0]).toBe("codebase-doctor brief");
-    expect(lines[1]).toBe("scope=full findings=2 shown=2 coverage=complete");
+    expect(lines[1]).toBe("scope=full findings=2 shown=2 coverage=complete score=86");
     expect(report).toContain("[high] missing-tests src/index.ts — Fix missing-tests");
     expect(report).toContain("[medium] lockfile-conflict");
   });

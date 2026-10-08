@@ -2,6 +2,8 @@ import type { Finding, Severity } from "../core/findings.js";
 import type { ScanResult } from "../core/normalize.js";
 import type { DomainCoverageEvidence } from "../core/domain-coverage.js";
 import type { LimitationGroup } from "../core/bounded-evidence.js";
+import { scoreScanResult } from "../core/score.js";
+import { REPO_HEALTH_LABEL } from "./score.js";
 
 export interface TextReportOptions {
   color?: boolean;
@@ -312,5 +314,6 @@ export function renderTextReport(
     "",
     `Summary: ${result.summary.total} findings — critical ${counts.critical}, high ${counts.high}, medium ${counts.medium}, low ${counts.low}, info ${counts.info}`,
   );
+  lines.push(`${REPO_HEALTH_LABEL}: ${scoreScanResult(result).value}/100`);
   return `${lines.join("\n")}\n`;
 }

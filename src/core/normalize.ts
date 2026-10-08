@@ -12,6 +12,7 @@ import {
   type FindingThreshold,
 } from "./summary.js";
 import { VERSION } from "../version.js";
+import { scoreReport, type ScoreReport } from "./score.js";
 import type { DetectedProject } from "../workspace/types.js";
 import type { PlannedCheckRecord } from "../execution/types.js";
 import type { FindingComparison } from "./baseline.js";
@@ -54,6 +55,7 @@ export interface ScanResult {
   /** Acknowledged findings: excluded from gates, still listed, still present. */
   suppressed: readonly SuppressedFinding[];
   summary: FindingSummary;
+  score?: ScoreReport;
   coverage?: readonly AuditCoverage[];
   coverageSummary?: OmittedRecordSummary;
   comparison?: FindingComparison;
@@ -252,6 +254,7 @@ export function normalizeScanResult(
       left.fingerprint.localeCompare(right.fingerprint)
     ),
     summary: summarizeFindings(findings),
+    score: scoreReport(findings, normalizedDomainCoverage, doctorRuns),
     ...(coverage.length === 0 ? {} : { coverage }),
     ...(boundedCoverage.summary.omitted === 0
       ? {}
