@@ -1,8 +1,8 @@
 {
   "name": "codebase-doctor",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "mcpName": "io.github.subhajitlucky/codebase-doctor",
-  "description": "A model-independent CLI for evidence-backed codebase diagnostics.",
+  "description": "Verification for agent-written code: evidence-backed findings, honest coverage.",
   "type": "module",
   "bin": {
     "codebase-doctor": "dist/cli.js"
