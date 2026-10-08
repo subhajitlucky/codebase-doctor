@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
+import { withRepositoryBuildLock } from "../helpers/repository-build.js";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = process.cwd();
@@ -18,24 +19,22 @@ describe("benchmark harness", () => {
     "scores seeded fixtures end to end",
     { timeout: 300_000 },
     async () => {
-      await execFileAsync("npm", ["run", "build"], {
-        cwd: repositoryRoot,
-        timeout: 300_000,
-      });
       const output = await mkdtemp(join(tmpdir(), "codebase-doctor-bench-test-"));
       temporaryRoots.push(output);
       const reportPath = join(output, "results.json");
 
-      const run = await execFileAsync(
-        process.execPath,
-        [
-          resolve(repositoryRoot, "scripts", "benchmark.mjs"),
-          "--cases",
-          "secrets-tracked,review-approve",
-          "--out",
-          reportPath,
-        ],
-        { cwd: repositoryRoot, timeout: 300_000 },
+      const run = await withRepositoryBuildLock(repositoryRoot, () =>
+        execFileAsync(
+          process.execPath,
+          [
+            resolve(repositoryRoot, "scripts", "benchmark.mjs"),
+            "--cases",
+            "secrets-tracked,review-approve",
+            "--out",
+            reportPath,
+          ],
+          { cwd: repositoryRoot, timeout: 300_000 },
+        ),
       );
 
       expect(run.stderr).toBe("");
