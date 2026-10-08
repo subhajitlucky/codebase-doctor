@@ -33,7 +33,10 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          registry-url: https://registry.npmjs.org
+        # registry-url is intentionally omitted: setup-node writes an
+        # _authToken placeholder into .npmrc and exports a fake
+        # NODE_AUTH_TOKEN, which makes npm skip the OIDC exchange and
+        # publish with a bad credential (404). See actions/setup-node#1440.
 
       - name: Install dependencies
         run: npm ci
