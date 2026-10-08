@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
 
@@ -44,16 +44,6 @@ jobs:
       - name: Check package contents
         run: npm pack --dry-run
 
-      - name: Verify npm auth
-        run: |
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error::NPM_TOKEN secret is empty. Create a granular access token with publish rights for codebase-doctor and set the NPM_TOKEN repo secret."
-            exit 1
-          fi
-          npm whoami
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Guard against republish
         run: |
           VERSION=$(node -p "require('./package.json').version")
@@ -65,5 +55,3 @@ jobs:
 
       - name: Publish
         run: npm publish --provenance --access public --tag "${{ github.event.inputs.tag || 'latest' }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
