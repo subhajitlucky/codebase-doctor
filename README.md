@@ -4,9 +4,9 @@
 [![npm downloads](https://img.shields.io/npm/dm/codebase-doctor?label=npm%20downloads)](https://www.npmjs.com/package/codebase-doctor)
 [![CI](https://github.com/subhajitlucky/codebase-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/subhajitlucky/codebase-doctor/actions/workflows/ci.yml)
 
-**It finds the thing, and it never guesses.**
+**Models build. Codebase Doctor verifies.**
 
-> **Models build. Codebase Doctor verifies.**
+> It finds the thing, and it never guesses.
 
 Most repository scanners fail in one of two ways: they flood you with false positives, or they silently skip the hard case and report "clean." Codebase Doctor does neither. Every finding carries evidence, every audit reports what it *couldn't* analyze, and a clean run means the scope was actually checked.
 
@@ -24,6 +24,8 @@ coverage-limitations: validation: skipped, database: skipped, security: partial
 ```
 
 That last line is the point. Most tools print findings and stop. This one tells you what it *didn't* check, every single run.
+
+![Codebase Doctor terminal preview](docs/assets/terminal-preview.svg)
 
 ---
 
@@ -49,8 +51,6 @@ codebase-doctor audit . --changed --base main --json    # PR review
 codebase-doctor audit . --format sarif           # GitHub code scanning
 codebase-doctor verify . --baseline before.json  # confirm fixes landed
 ```
-
-![Codebase Doctor terminal preview](docs/assets/terminal-preview.svg)
 
 ## Options
 

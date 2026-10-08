@@ -1,6 +1,6 @@
 # Codebase Doctor
 
-Model-independent repository auditor for humans and coding agents.
+Models build. Codebase Doctor verifies. Model-independent repository auditor for humans and coding agents.
 
 ## What it does
 

@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1280px; height: 640px; overflow: hidden;
+    background: #0f1115;
+    font-family: "DejaVu Sans Mono", "SF Mono", Menlo, Consolas, monospace;
+    color: #e6e9ef;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 88px;
+  }
+  .brand { font-size: 22px; letter-spacing: 6px; color: #8b93a3; text-transform: uppercase; margin-bottom: 28px; }
+  .brand .dot { color: #ff5f57; }
+  h1 { font-size: 62px; line-height: 1.12; font-weight: 700; letter-spacing: -1.5px; }
+  h1 .accent { color: #4ade80; }
+  .card {
+    margin-top: 40px;
+    background: #171a21; border: 1px solid #2a2f3a; border-radius: 12px;
+    padding: 26px 30px;
+    font-size: 22px; line-height: 1.65;
+  }
+  .prompt { color: #8b93a3; }
+  .prompt .cmd { color: #e6e9ef; }
+  .high { color: #ff5f57; font-weight: 700; }
+  .detail { color: #aeb6c4; }
+  .coverage { color: #ffbd2e; }
+  .footer { margin-top: 26px; display: flex; gap: 34px; font-size: 20px; color: #6b7280; }
+  .footer b { color: #4ade80; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="brand">CODEBASE<span class="dot">.</span>DOCTOR</div>
+  <h1>Models build.<br>Codebase Doctor <span class="accent">verifies</span>.</h1>
+  <div class="card">
+    <div class="prompt">$ <span class="cmd">codebase-doctor audit . --changed --format brief</span></div>
+    <div><span class="high">[high]</span> security/secrets/provider-token src/config.ts:12</div>
+    <div class="detail">Every finding carries evidence. <span class="coverage">coverage=incomplete</span> is printed when something wasn't checked.</div>
+  </div>
+  <div class="footer">
+    <span><b>read-only</b> by design</span>
+    <span><b>never guesses</b></span>
+    <span>npx codebase-doctor</span>
+  </div>
+</body>
+</html>
