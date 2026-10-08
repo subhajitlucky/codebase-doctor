@@ -14,9 +14,10 @@ const reports = parseNpmPackJson(packed.stdout);
 assert.equal(reports.length, 1, "Expected one npm package report.");
 
 const [report] = reports;
-assert.equal(report.id, "codebase-doctor@0.1.10");
-assert.equal(report.name, "codebase-doctor");
-assert.equal(report.version, "0.1.10");
+const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+assert.equal(report.id, `${manifest.name}@${manifest.version}`);
+assert.equal(report.name, manifest.name);
+assert.equal(report.version, manifest.version);
 
 const paths = new Set(report.files.map(({ path }) => path));
 const required = [
