@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,6 +7,9 @@ import { describe, expect, it } from "vitest";
 import { parseNpmPackJson } from "../../scripts/npm-pack-json.mjs";
 
 const repositoryRoot = process.cwd();
+const { version: packageVersion } = JSON.parse(
+  readFileSync(join(repositoryRoot, "package.json"), "utf8"),
+) as { version: string };
 const SECRET_ALPHABET = "R7t9Y2u8I4o6P1a3S5d0FgHjKlZxCvBn";
 
 function generatedToken(prefix: string, length = 32): string {
@@ -214,7 +218,7 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
       const report = JSON.parse(scanned.stdout);
       expect(report).toMatchObject({
         schemaVersion: "1",
-        tool: { name: "codebase-doctor", version: "0.1.10" },
+        tool: { name: "codebase-doctor", version: packageVersion },
       });
       expect(report.doctorRuns).toContainEqual(expect.objectContaining({
         doctorId: "database/rls",
