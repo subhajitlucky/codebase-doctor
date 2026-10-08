@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
+import { withRepositoryBuildLock } from "../helpers/repository-build.js";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = process.cwd();
@@ -24,11 +25,12 @@ describe("mcpb bundle", () => {
     temporaryRoots.push(root);
     const bundle = join(root, "codebase-doctor.mcpb");
 
-    await execFileAsync("npm", ["run", "build"], { cwd: repositoryRoot, timeout: 300_000 });
-    await execFileAsync(
-      process.execPath,
-      [resolve(repositoryRoot, "scripts", "build-mcpb.mjs"), "--out", bundle],
-      { cwd: repositoryRoot, timeout: 300_000 },
+    await withRepositoryBuildLock(repositoryRoot, () =>
+      execFileAsync(
+        process.execPath,
+        [resolve(repositoryRoot, "scripts", "build-mcpb.mjs"), "--out", bundle],
+        { cwd: repositoryRoot, timeout: 300_000 },
+      ),
     );
 
     const entries = await zipEntries(bundle);
