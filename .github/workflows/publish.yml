@@ -56,5 +56,14 @@ jobs:
             exit 1
           fi
 
+      - name: Check OIDC environment
+        run: |
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "OIDC request environment present"
+          else
+            echo "::error::OIDC request environment missing (id-token: write?)"
+            exit 1
+          fi
+
       - name: Publish
-        run: npm publish --provenance --access public --tag "${{ github.event.inputs.tag || 'latest' }}"
+        run: npm publish --provenance --access public --tag "${{ github.event.inputs.tag || 'latest' }}" --loglevel verbose
