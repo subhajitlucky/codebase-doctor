@@ -50,6 +50,7 @@ codebase-doctor audit . --json                   # full audit
 codebase-doctor audit . --changed --json         # just my diff
 codebase-doctor audit . --changed --base main --json    # PR review
 codebase-doctor audit . --format sarif           # GitHub code scanning
+codebase-doctor audit . --format html > report.html     # shareable standalone report
 codebase-doctor verify . --baseline before.json  # confirm fixes landed
 ```
 
@@ -65,7 +66,7 @@ CI gate. Nothing outside a temp directory is touched.
 --changed             Audit Git changes and their affected scope (implied by review)
 --base <ref>          Compare changed scope from the merge base with this ref
 --json                Emit schema-versioned JSON
---format <format>     Output format: text, json, sarif, or brief (review adds markdown, github)
+--format <format>     Output format: text, json, sarif, brief, or html (review adds markdown, github)
 --all-findings        Review only: include findings outside the changed lines
 --output <file>       Review only: write the report to a file as well as stdout
 --exclude <glob>      Exclude a repository-relative path glob; repeatable

@@ -5,6 +5,7 @@ import { classifyScanExit, type ScanResult } from "../core/normalize.js";
 import { scanCodebase, type ScanRequest } from "../core/scan.js";
 import type { FindingThreshold } from "../core/summary.js";
 import { renderBriefReport } from "../reporters/brief.js";
+import { renderHtmlReport } from "../reporters/html.js";
 import { renderJsonReport } from "../reporters/json.js";
 import { renderSarifReport } from "../reporters/sarif.js";
 import { renderScoreOutput } from "../reporters/score.js";
@@ -38,8 +39,8 @@ export interface RepositoryCommandOptions {
   badge: boolean;
 }
 
-type OutputFormat = "text" | "json" | "sarif" | "brief";
-const OUTPUT_FORMATS = new Set<OutputFormat>(["text", "json", "sarif", "brief"]);
+type OutputFormat = "text" | "json" | "sarif" | "brief" | "html";
+const OUTPUT_FORMATS = new Set<OutputFormat>(["text", "json", "sarif", "brief", "html"]);
 
 function parseTimeout(value: string): number {
   if (!/^\d+$/.test(value)) {
@@ -148,7 +149,7 @@ export async function runRepositoryScan<Options extends RepositoryCommandOptions
   const request = {
     root: path,
     runChecks: options.runChecks,
-    format: format === "brief" ? "text" : format,
+    format: format === "brief" || format === "html" ? "text" : format,
     timeoutMs,
     failOn,
     exclude,
@@ -178,6 +179,8 @@ function renderScanReport(
       return renderSarifReport(result);
     case "brief":
       return renderBriefReport(result, { maxFindings: parseMaxFindings(options.maxFindings) });
+    case "html":
+      return renderHtmlReport(result);
     default:
       return renderTextReport(result, {
         color: true,
@@ -206,7 +209,7 @@ export function configureRepositoryCommand<Options extends RepositoryCommandOpti
     )
     .option("--base [ref]", "compare changed scope from the merge base with this ref")
     .option("--json", "emit machine-readable JSON", false)
-    .option("--format <format>", "output format: text, json, sarif, or brief")
+    .option("--format <format>", "output format: text, json, sarif, brief, or html")
     .option("--exclude <glob>", "exclude a repository-relative path glob", collect, [])
     .option("--baseline <path>", "compare findings with a prior JSON report")
     .option("--timeout <ms>", "per-command timeout in milliseconds", String(DEFAULT_TIMEOUT_MS))
