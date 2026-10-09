@@ -96,6 +96,10 @@ export type {
   BisectOutcome,
   BisectResult,
 } from "./bisect/runner.js";
+export { runSwarm } from "./swarm/runner.js";
+export type { SwarmOptions, SwarmOutcome, SwarmRepoReport } from "./swarm/runner.js";
+export { composeFleetVerdict, composeRepoVerdict } from "./swarm/verdict.js";
+export type { RepoVerdict, RepoVerdictComposition } from "./swarm/verdict.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";

@@ -11,6 +11,7 @@ import { createMcpCommand } from "./commands/mcp.js";
 import { createReviewCommand } from "./commands/review.js";
 import { createScanCommand } from "./commands/scan.js";
 import { createShadowCommand } from "./commands/shadow.js";
+import { createSwarmCommand } from "./commands/swarm.js";
 import { createVerifyCommand } from "./commands/verify.js";
 import { createVerifyReceiptCommand } from "./commands/verify-receipt.js";
 import { VERSION } from "./version.js";
@@ -24,6 +25,7 @@ export function createProgram(): Command {
   program.addCommand(createAuditCommand());
   program.addCommand(createDemoCommand());
   program.addCommand(createShadowCommand());
+  program.addCommand(createSwarmCommand());
   program.addCommand(createBisectCommand());
   program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());

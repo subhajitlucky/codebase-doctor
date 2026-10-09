@@ -315,6 +315,24 @@ The copy is always removed, the original is never modified, and the receipt
 is marked `environment: shadow (disposable copy)`. This is the safe way to
 run untrusted validation commands.
 
+## Verifier swarm
+
+`swarm` verifies multiple repositories with parallel read-only workers and
+composes a fleet verdict. Verdicts are honest by construction:
+
+- `findings` — gating findings (at `--fail-on` or above) are present
+- `unknown` — evidence was lost: failed or partial coverage, or a failed worker
+- `gaps` — no gating findings, but some domains were not attempted by design
+- `verified` — every applicable domain completed or was not applicable
+
+```bash
+codebase-doctor swarm ../api ../web ../worker --workers 4 --receipt-dir receipts/
+codebase-doctor swarm ../api ../web --require-complete   # exit 2 on unknown or gaps
+```
+
+The fleet verdict is the worst of its members; a clean verdict is never
+claimed over lost evidence. Each worker can emit a coverage receipt.
+
 ## Chronological bisect
 
 `bisect` finds the commit where a rule or fingerprint first appeared by
