@@ -446,6 +446,25 @@ Each claim is **verified**, **violated** (with evidence locations), or
 complete, and it is never counted as verified. Exit 1 on any violation;
 `--require-verified` exits 2 on undecided. See [docs/intent.md](docs/intent.md).
 
+## Economic verification
+
+`economy verify` replays a transaction journal in a **disposable shadow
+ledger** — nothing is submitted, nothing moves — and proves or witnesses
+economic invariants before real value does:
+
+```bash
+codebase-doctor economy verify journal.json --policy policy.json
+```
+
+- `non-negative-balances` — overdraft / double-spend, with the exact operation
+- `per-operation-limit` and `window-volume-limit` — size and velocity limits
+- `allowlist` — transfer counterparties
+- `declared-balances` — the journal's reported balances must match the replay
+
+Violations carry witnesses (operation id, index, balance snapshot); exit 1 on
+any violation, `--require-proved` exits 2 on undecided. See
+[docs/economy.md](docs/economy.md).
+
 ## Acknowledged findings (suppressions)
 
 A finding a human has reviewed and accepted can be acknowledged inline without hiding it from any report:
