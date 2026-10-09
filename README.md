@@ -81,6 +81,8 @@ CI gate. Nothing outside a temp directory is touched.
 --max-findings <n>    Cap brief output (default: 100)
 --score               Print only the Repo Health score
 --badge               Print a shields.io badge URL for the Repo Health score
+--receipt <path>      Write a portable coverage receipt (digest-verified)
+--receipt-key <path>  Sign the receipt with an Ed25519 private key (PEM)
 --with-database       Permit live PostgreSQL catalog access
 --with-advisories     Opt-in OSV advisory lookup over lockfile packages
 --database-schema     Schema to inspect; repeatable (default: public)
@@ -333,6 +335,22 @@ codebase-doctor verify . --baseline before.json
 ```
 
 `verify` reports each fingerprint as `resolved`, `unchanged`, `unresolved`, or `new`, and exits `1` unless everything is verifiably resolved. `unresolved` means absent under incomplete coverage — never a repair. The fresh `verify` scan runs the same offline audit scope as `audit` so security and database findings are comparable; live database access stays ungranted.
+
+## Coverage receipts
+
+Every audit can emit a portable **coverage receipt** — what was checked, what
+was not, the deterministic score, and finding fingerprints — with a SHA-256
+digest over the canonical body and an optional Ed25519 signature:
+
+```bash
+codebase-doctor audit . --receipt receipt.json
+codebase-doctor audit . --receipt receipt.json --receipt-key key.pem
+codebase-doctor verify-receipt receipt.json   # exit 0 valid, 2 tampered
+```
+
+Receipts never contain secret values or source text. A digest proves tamper
+evidence; a signature proves the key holder issued it. See
+[docs/receipts.md](docs/receipts.md).
 
 ## Acknowledged findings (suppressions)
 

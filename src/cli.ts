@@ -10,6 +10,7 @@ import { createMcpCommand } from "./commands/mcp.js";
 import { createReviewCommand } from "./commands/review.js";
 import { createScanCommand } from "./commands/scan.js";
 import { createVerifyCommand } from "./commands/verify.js";
+import { createVerifyReceiptCommand } from "./commands/verify-receipt.js";
 import { VERSION } from "./version.js";
 
 export function createProgram(): Command {
@@ -22,6 +23,7 @@ export function createProgram(): Command {
   program.addCommand(createDemoCommand());
   program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());
+  program.addCommand(createVerifyReceiptCommand());
   program.addCommand(createInstructionsCommand());
   program.addCommand(createMcpCommand());
   return program;

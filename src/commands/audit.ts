@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import type { ScanRequest } from "../core/scan.js";
 import {
+  addReceiptOptions,
   addScoreOptions,
   configureRepositoryCommand,
   type RepositoryCommandOptions,
@@ -82,5 +83,5 @@ export function createAuditCommand(): Command {
       false,
     );
 
-  return addScoreOptions(configureRepositoryCommand<AuditCommandOptions>(command, databaseRequest));
+  return addReceiptOptions(addScoreOptions(configureRepositoryCommand<AuditCommandOptions>(command, databaseRequest)));
 }
