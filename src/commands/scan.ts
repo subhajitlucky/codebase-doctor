@@ -1,9 +1,11 @@
 import { Command } from "commander";
+import { readFile, writeFile } from "node:fs/promises";
 import { loadCodebaseConfig, validateExcludePattern } from "../config/config.js";
 import { loadBaseline, withBaselineComparison } from "../core/baseline.js";
 import { classifyScanExit, type ScanResult } from "../core/normalize.js";
 import { scanCodebase, type ScanRequest } from "../core/scan.js";
 import type { FindingThreshold } from "../core/summary.js";
+import { buildReceipt, serializeReceipt } from "../receipts/receipt.js";
 import { renderBriefReport } from "../reporters/brief.js";
 import { renderHtmlReport } from "../reporters/html.js";
 import { renderJsonReport } from "../reporters/json.js";
@@ -37,6 +39,8 @@ export interface RepositoryCommandOptions {
   maxFindings: string;
   score: boolean;
   badge: boolean;
+  receipt?: string;
+  receiptKey?: string;
 }
 
 type OutputFormat = "text" | "json" | "sarif" | "brief" | "html";
@@ -94,6 +98,16 @@ async function executeScan(
     const { result, format, failOn } = await runRepositoryScan(path, options, requestOptions);
     const scoreOutput = renderScoreOutput(result, options);
     process.stdout.write(scoreOutput ?? renderScanReport(result, format, options));
+    if (options.receipt !== undefined) {
+      const privateKeyPem = options.receiptKey === undefined
+        ? undefined
+        : await readFile(options.receiptKey, "utf8");
+      const receipt = buildReceipt(result, {
+        ...(privateKeyPem === undefined ? {} : { privateKeyPem }),
+      });
+      await writeFile(options.receipt, serializeReceipt(receipt), "utf8");
+      process.stderr.write(`codebase-doctor: receipt written to ${options.receipt}\n`);
+    }
     process.exitCode = classifyScanExit(result, failOn, {
       requireComplete: options.requireComplete,
     });
@@ -239,9 +253,15 @@ export function addScoreOptions(command: Command): Command {
     .option("--badge", "print a shields.io badge URL for the Repo Health score", false);
 }
 
+export function addReceiptOptions(command: Command): Command {
+  return command
+    .option("--receipt <path>", "write a portable coverage receipt to this path")
+    .option("--receipt-key <path>", "sign the receipt with an Ed25519 private key (PEM)");
+}
+
 export function createScanCommand(): Command {
-  return addScoreOptions(configureRepositoryCommand(
+  return addReceiptOptions(addScoreOptions(configureRepositoryCommand(
     new Command("scan")
       .description("Inspect a repository and report evidence-backed findings."),
-  ));
+  )));
 }

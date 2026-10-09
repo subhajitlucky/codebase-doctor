@@ -74,6 +74,19 @@ export {
 export type { ScoreBand, ScoreReport } from "./core/score.js";
 export { renderScoreLine, scoreBadgeUrl } from "./reporters/score.js";
 export type { ScoreRenderOptions } from "./reporters/score.js";
+export {
+  buildReceipt,
+  canonicalJson,
+  receiptDigest,
+  RECEIPT_VERSION,
+  serializeReceipt,
+  verifyReceipt,
+} from "./receipts/receipt.js";
+export type {
+  BuildReceiptOptions,
+  CoverageReceipt,
+  ReceiptVerification,
+} from "./receipts/receipt.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";
