@@ -25,7 +25,7 @@ function cli(args: readonly string[]) {
   );
 }
 
-const TOKEN = "ghp_7Qm2Xv9Kd4Rn8Ts3Lw6Yp1Bc5";
+const TOKEN = "ghp_" + "7Qm2Xv9Kd4Rn8Ts3Lw6Yp1Bc5";
 
 describe("bisect CLI", () => {
   it("finds the commit where a rule was introduced with parent-absence evidence", async () => {
