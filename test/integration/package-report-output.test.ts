@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
@@ -211,6 +212,9 @@ describe("package report output", () => {
     });
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
-    expect(result.stdout).toContain("Verified codebase-doctor@0.1.10");
+    const { version } = JSON.parse(
+      readFileSync(join(repositoryRoot, "package.json"), "utf8"),
+    ) as { version: string };
+    expect(result.stdout).toContain(`Verified codebase-doctor@${version}`);
   });
 });
