@@ -7,6 +7,7 @@ import { createAuditCommand } from "./commands/audit.js";
 import { createBisectCommand } from "./commands/bisect.js";
 import { createDemoCommand } from "./commands/demo.js";
 import { createInstructionsCommand } from "./commands/instructions.js";
+import { createIntentCommand } from "./commands/intent.js";
 import { createMcpCommand } from "./commands/mcp.js";
 import { createPheromoneCommand } from "./commands/pheromone.js";
 import { createReviewCommand } from "./commands/review.js";
@@ -28,6 +29,7 @@ export function createProgram(): Command {
   program.addCommand(createShadowCommand());
   program.addCommand(createSwarmCommand());
   program.addCommand(createPheromoneCommand());
+  program.addCommand(createIntentCommand());
   program.addCommand(createBisectCommand());
   program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());

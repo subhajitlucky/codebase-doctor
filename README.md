@@ -422,6 +422,30 @@ closed on tampered input, and excludes patterns observed in fewer than
 of what actually occurs — without exposing anyone's code. See
 [docs/pheromones.md](docs/pheromones.md).
 
+## Intent verification
+
+`intent verify` checks **declared** intent against audit evidence — it never
+interprets prose. Claims live in JSON or a fenced `intent` block in a PR
+body:
+
+````markdown
+```intent
+{ "intentVersion": "1", "claims": [
+  { "id": "no-secrets", "kind": "rule-absent", "ruleId": "security/secrets/provider-token" },
+  { "id": "score", "kind": "score-at-least", "value": 90 }
+] }
+```
+````
+
+```bash
+codebase-doctor intent verify pr.md . --require-verified
+```
+
+Each claim is **verified**, **violated** (with evidence locations), or
+**undecided** — undecided means the claim depends on coverage that did not
+complete, and it is never counted as verified. Exit 1 on any violation;
+`--require-verified` exits 2 on undecided. See [docs/intent.md](docs/intent.md).
+
 ## Acknowledged findings (suppressions)
 
 A finding a human has reviewed and accepted can be acknowledged inline without hiding it from any report:
