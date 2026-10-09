@@ -18,6 +18,7 @@ import { createShadowCommand } from "./commands/shadow.js";
 import { createSwarmCommand } from "./commands/swarm.js";
 import { createVerifyCommand } from "./commands/verify.js";
 import { createVerifyReceiptCommand } from "./commands/verify-receipt.js";
+import { createWitnessCommand } from "./commands/witness.js";
 import { VERSION } from "./version.js";
 
 export function createProgram(): Command {
@@ -34,6 +35,7 @@ export function createProgram(): Command {
   program.addCommand(createIntentCommand());
   program.addCommand(createEconomyCommand());
   program.addCommand(createFixCommand());
+  program.addCommand(createWitnessCommand());
   program.addCommand(createBisectCommand());
   program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());

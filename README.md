@@ -482,6 +482,26 @@ patch is a real `git diff`; the receipt binds the fingerprint to the patch
 SHA-256 and the before/after verdicts. The original repository is never
 modified. See [docs/repairs.md](docs/repairs.md).
 
+## Exploit witnesses
+
+`witness` turns a risky-pattern finding into a concrete exploit — the
+payload, the transformed sink text it produces, and why it violates the
+boundary:
+
+```bash
+codebase-doctor witness <fingerprint> .
+# Payload:     ' OR '1'='1' --
+# Transformed: select * from users where id = '' OR '1'='1' --'
+```
+
+Supported rules: `backend/api/sql-string-concat-query`,
+`backend/api/child-process-exec-dynamic`, and
+`frontend/security/dangerously-set-inner-html`. A small concatenation
+evaluator handles literals, template literals, `+`, parentheses, and TS
+casts; anything else is **undecided, never guessed**. The artifact is bound
+to the finding fingerprint with a digest, and nothing is ever executed. See
+[docs/witness.md](docs/witness.md).
+
 ## Acknowledged findings (suppressions)
 
 A finding a human has reviewed and accepted can be acknowledged inline without hiding it from any report:

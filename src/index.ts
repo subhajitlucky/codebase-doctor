@@ -129,6 +129,8 @@ export { planImportRepair, RepairError } from "./repair/repair.js";
 export type { ImportRepairPlan } from "./repair/repair.js";
 export { buildRepairReceipt, renderRepairText, verifyImportRepair } from "./repair/verify.js";
 export type { ImportRepairOutcome, RepairReceipt, RepairVerification } from "./repair/verify.js";
+export { renderWitnessText, synthesizeWitness, WITNESS_PAYLOADS } from "./witness/witness.js";
+export type { WitnessArtifact, WitnessKind, WitnessOutcome } from "./witness/witness.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";
