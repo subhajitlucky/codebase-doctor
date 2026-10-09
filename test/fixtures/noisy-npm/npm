@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+const { readFileSync } = process.getBuiltinModule("node:fs");
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+
 const requiredFiles = [
   "dist/cli.js",
   "dist/index.js",
@@ -15,9 +18,9 @@ const requiredFiles = [
 process.stdout.write("CLI Building entry: src/cli.ts, src/index.ts\n");
 process.stdout.write(`${JSON.stringify([
   {
-    id: "codebase-doctor@0.1.10",
+    id: `codebase-doctor@${version}`,
     name: "codebase-doctor",
-    version: "0.1.10",
+    version,
     size: 123,
     files: requiredFiles.map((path) => ({ path })),
   },
