@@ -6,6 +6,7 @@ import { classifyScanExit, type ScanResult } from "../core/normalize.js";
 import { scanCodebase, type ScanRequest } from "../core/scan.js";
 import type { FindingThreshold } from "../core/summary.js";
 import { buildReceipt, serializeReceipt } from "../receipts/receipt.js";
+import { buildPheromone, serializePheromone } from "../pheromones/pheromone.js";
 import { renderBriefReport } from "../reporters/brief.js";
 import { renderHtmlReport } from "../reporters/html.js";
 import { renderJsonReport } from "../reporters/json.js";
@@ -41,6 +42,7 @@ export interface RepositoryCommandOptions {
   badge: boolean;
   receipt?: string;
   receiptKey?: string;
+  pheromone?: string;
 }
 
 type OutputFormat = "text" | "json" | "sarif" | "brief" | "html";
@@ -107,6 +109,16 @@ async function executeScan(
       });
       await writeFile(options.receipt, serializeReceipt(receipt), "utf8");
       process.stderr.write(`codebase-doctor: receipt written to ${options.receipt}\n`);
+    }
+    if (options.pheromone !== undefined) {
+      const privateKeyPem = options.receiptKey === undefined
+        ? undefined
+        : await readFile(options.receiptKey, "utf8");
+      const signal = buildPheromone(result, {
+        ...(privateKeyPem === undefined ? {} : { privateKeyPem }),
+      });
+      await writeFile(options.pheromone, serializePheromone(signal), "utf8");
+      process.stderr.write(`codebase-doctor: pheromone signal written to ${options.pheromone}\n`);
     }
     process.exitCode = classifyScanExit(result, failOn, {
       requireComplete: options.requireComplete,
@@ -256,7 +268,11 @@ export function addScoreOptions(command: Command): Command {
 export function addReceiptOptions(command: Command): Command {
   return command
     .option("--receipt <path>", "write a portable coverage receipt to this path")
-    .option("--receipt-key <path>", "sign the receipt with an Ed25519 private key (PEM)");
+    .option("--receipt-key <path>", "sign the receipt with an Ed25519 private key (PEM)")
+    .option(
+      "--pheromone <path>",
+      "write a privacy-bounded pheromone signal (rules and counts only; no paths or fingerprints)",
+    );
 }
 
 export function createScanCommand(): Command {

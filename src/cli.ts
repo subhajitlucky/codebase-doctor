@@ -8,6 +8,7 @@ import { createBisectCommand } from "./commands/bisect.js";
 import { createDemoCommand } from "./commands/demo.js";
 import { createInstructionsCommand } from "./commands/instructions.js";
 import { createMcpCommand } from "./commands/mcp.js";
+import { createPheromoneCommand } from "./commands/pheromone.js";
 import { createReviewCommand } from "./commands/review.js";
 import { createScanCommand } from "./commands/scan.js";
 import { createShadowCommand } from "./commands/shadow.js";
@@ -26,6 +27,7 @@ export function createProgram(): Command {
   program.addCommand(createDemoCommand());
   program.addCommand(createShadowCommand());
   program.addCommand(createSwarmCommand());
+  program.addCommand(createPheromoneCommand());
   program.addCommand(createBisectCommand());
   program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());
