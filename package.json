@@ -1,6 +1,6 @@
 {
   "name": "codebase-doctor",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "mcpName": "io.github.subhajitlucky/codebase-doctor",
   "description": "Verification for agent-written code: evidence-backed findings, honest coverage.",
   "type": "module",
