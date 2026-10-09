@@ -1,0 +1,49 @@
+name: Scoreboard
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    name: Doctors verifying doctors
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out codebase-doctor
+        uses: actions/checkout@v6
+
+      - name: Check out rls-doctor
+        uses: actions/checkout@v6
+        with:
+          repository: subhajitlucky/rls-doctor
+          path: rls-doctor-src
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build codebase-doctor
+        run: npm ci && npm run build
+
+      - name: Build rls-doctor
+        run: npm ci && npm run build
+        working-directory: rls-doctor-src
+
+      - name: Run differential scoreboard
+        run: node scripts/differential.mjs --format markdown --out differential-results.json >> "$GITHUB_STEP_SUMMARY"
+        env:
+          RLS_DOCTOR_PATH: ${{ github.workspace }}/rls-doctor-src
+
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: differential-results
+          path: differential-results.json

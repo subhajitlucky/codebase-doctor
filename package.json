@@ -28,6 +28,7 @@
     "bundle": "npm run build && node scripts/build-mcpb.mjs",
     "benchmark": "npm run build && node scripts/benchmark.mjs",
     "red-team": "npm run build && node scripts/red-team.mjs",
+    "differential": "npm run build && node scripts/differential.mjs",
     "study:agents": "node scripts/study-agent-repos.mjs",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
