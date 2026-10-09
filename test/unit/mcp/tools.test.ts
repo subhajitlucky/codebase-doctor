@@ -98,6 +98,8 @@ describe("describe_capabilities tool handler", () => {
       "verify_changes",
       "explain_finding",
       "review_changes",
+      "verify_intent",
+      "build_receipt",
     ]);
     expect(capabilities.auditDomains).toHaveLength(9);
     expect(capabilities.doctorCapabilities.grantedByThisServer).toEqual({
@@ -330,4 +332,60 @@ describe("review_changes tool handler", () => {
       /non-empty string/u,
     );
   });
+});
+
+describe("verify_intent tool handler", () => {
+  it(
+    "verifies declared claims against a real fixture audit",
+    { timeout: 30_000 },
+    async () => {
+      const result = await handleToolCall("verify_intent", {
+        path: fixture("node-pass"),
+        intent: JSON.stringify({
+          intentVersion: "1",
+          claims: [
+            { id: "no-secrets", kind: "rule-absent", ruleId: "security/secrets/provider-token" },
+            { id: "score", kind: "score-at-least", value: 50 },
+          ],
+        }),
+      });
+      const report = JSON.parse(textOf(result)) as {
+        summary: { verified: number; violated: number; undecided: number };
+        digest: { value: string };
+      };
+
+      expect(report.summary.violated).toBe(0);
+      expect(report.summary.verified).toBeGreaterThanOrEqual(1);
+      expect(report.digest.value).toHaveLength(64);
+    },
+  );
+
+  it(
+    "rejects prose without intent blocks",
+    { timeout: 30_000 },
+    async () => {
+      await expect(
+        handleToolCall("verify_intent", { intent: "I fixed everything, promise." }),
+      ).rejects.toThrow(/no structured intent/);
+    },
+  );
+});
+
+describe("build_receipt tool handler", () => {
+  it(
+    "returns a digest-verified coverage receipt",
+    { timeout: 30_000 },
+    async () => {
+      const result = await handleToolCall("build_receipt", { path: fixture("node-pass") });
+      const receipt = JSON.parse(textOf(result)) as {
+        receiptVersion: string;
+        coverage: { complete: boolean; limitations: string[] };
+        digest: { value: string };
+      };
+
+      expect(receipt.receiptVersion).toBe("1");
+      expect(receipt.digest.value).toHaveLength(64);
+      expect(Array.isArray(receipt.coverage.limitations)).toBe(true);
+    },
+  );
 });

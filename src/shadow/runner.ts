@@ -31,7 +31,7 @@ export interface ShadowOutcome {
   exitCode: 0 | 1 | 2;
 }
 
-async function copyRepository(root: string, destination: string): Promise<void> {
+export async function copyRepository(root: string, destination: string): Promise<void> {
   if (existsSync(join(root, ".git"))) {
     await execFileAsync(
       "git",

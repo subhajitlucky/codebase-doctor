@@ -5,6 +5,8 @@ export const CAPABILITIES_TOOL_NAME = "describe_capabilities";
 export const VERIFY_TOOL_NAME = "verify_changes";
 export const EXPLAIN_TOOL_NAME = "explain_finding";
 export const REVIEW_TOOL_NAME = "review_changes";
+export const VERIFY_INTENT_TOOL_NAME = "verify_intent";
+export const BUILD_RECEIPT_TOOL_NAME = "build_receipt";
 
 export type McpAuditFormat = "json" | "summary";
 
@@ -250,6 +252,75 @@ export const TOOL_DEFINITIONS: readonly Tool[] = [
       openWorldHint: false,
     },
   },
+  {
+    name: VERIFY_INTENT_TOOL_NAME,
+    description:
+      "Verify declared intent against audit evidence: claims (rule-absent, " +
+      "rule-present, score-at-least, coverage-complete) are checked as verified, " +
+      "violated, or undecided. Intent is declared JSON or a fenced ```intent block; " +
+      "prose is never interpreted. Undecided means the claim depends on coverage " +
+      "that did not complete and is never counted as verified. Read-only and offline.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent: {
+          type: "string",
+          description:
+            "Intent document: JSON, or markdown containing one or more fenced ```intent blocks.",
+        },
+        path: {
+          type: "string",
+          description:
+            "Repository path to audit. Defaults to the server working directory.",
+        },
+      },
+      required: ["intent"],
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "Verify declared intent",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: BUILD_RECEIPT_TOOL_NAME,
+    description:
+      "Run a read-only audit and return a portable coverage receipt: what was " +
+      "checked, what was not, the score, and finding fingerprints, with a SHA-256 " +
+      "digest over the canonical body. Receipts never contain secret values or " +
+      "source text. Read-only and offline.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Repository path to audit. Defaults to the server working directory.",
+        },
+        changed: {
+          type: "boolean",
+          description:
+            "Audit Git changes and their selected scope instead of the full repository.",
+        },
+        base: {
+          type: "string",
+          description: "Git ref to compare against from the merge base; requires changed.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "Build a coverage receipt",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ];
 
 function requireObject(input: unknown, toolName: string): Map<string, unknown> {
@@ -430,7 +501,6 @@ export function parseExplainToolArgs(input: unknown): ExplainToolArgs {
   };
 }
 export type McpReviewFormat = "json" | "summary";
-
 const MCP_REVIEW_FORMATS = new Set<McpReviewFormat>(["json", "summary"]);
 
 const REVIEW_TOOL_ARGUMENTS = new Set(["path", "base", "format"]);
@@ -466,5 +536,42 @@ export function parseReviewToolArgs(input: unknown): ReviewToolArgs {
     ...(path === undefined ? {} : { path }),
     ...(base === undefined ? {} : { base }),
     format: (formatValue as McpReviewFormat | undefined) ?? "json",
+  };
+}
+
+const VERIFY_INTENT_TOOL_ARGUMENTS = new Set(["intent", "path"]);
+
+export interface VerifyIntentToolArgs {
+  intent: string;
+  path?: string;
+}
+
+/** Validate and normalize raw verify_intent arguments. */
+export function parseVerifyIntentToolArgs(input: unknown): VerifyIntentToolArgs {
+  const args = requireObject(input, VERIFY_INTENT_TOOL_NAME);
+  rejectUnknownArguments(args, VERIFY_INTENT_TOOL_ARGUMENTS, VERIFY_INTENT_TOOL_NAME);
+  const intent = readRequiredString(args, "intent", VERIFY_INTENT_TOOL_NAME);
+  const path = readString(args, "path", VERIFY_INTENT_TOOL_NAME);
+  return { intent, ...(path === undefined ? {} : { path }) };
+}
+
+const BUILD_RECEIPT_TOOL_ARGUMENTS = new Set(["path", "changed", "base"]);
+
+export interface BuildReceiptToolArgs {
+  path?: string;
+  changed?: boolean;
+  base?: string;
+}
+
+/** Validate and normalize raw build_receipt arguments. */
+export function parseBuildReceiptToolArgs(input: unknown): BuildReceiptToolArgs {
+  const args = requireObject(input, BUILD_RECEIPT_TOOL_NAME);
+  rejectUnknownArguments(args, BUILD_RECEIPT_TOOL_ARGUMENTS, BUILD_RECEIPT_TOOL_NAME);
+  const path = readString(args, "path", BUILD_RECEIPT_TOOL_NAME);
+  const { changed, base } = readChangedAndBase(args, BUILD_RECEIPT_TOOL_NAME);
+  return {
+    ...(path === undefined ? {} : { path }),
+    ...(changed ? { changed: true } : {}),
+    ...(base === undefined ? {} : { base }),
   };
 }
