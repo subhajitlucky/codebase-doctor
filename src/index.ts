@@ -117,6 +117,10 @@ export type {
   PheromoneSignal,
   PheromoneVerification,
 } from "./pheromones/pheromone.js";
+export { IntentError, parseIntents } from "./intent/parse.js";
+export type { IntentClaim, ParsedIntent } from "./intent/parse.js";
+export { buildIntentReport, evaluateIntent, renderIntentText } from "./intent/verify.js";
+export type { IntentClaimResult, IntentClaimStatus, IntentReport } from "./intent/verify.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";
