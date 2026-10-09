@@ -1,0 +1,989 @@
+{
+  "schemaVersion": "1",
+  "tool": {
+    "name": "codebase-doctor",
+    "version": "0.4.0"
+  },
+  "repository": {
+    "root": "/home/subhajit/project/codebase-doctor"
+  },
+  "auditScope": {
+    "mode": "full",
+    "base": null,
+    "changes": [],
+    "affectedProjectIds": [],
+    "reasons": [],
+    "limitations": []
+  },
+  "projects": [
+    {
+      "id": "root",
+      "root": ".",
+      "ecosystems": [
+        "node"
+      ],
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "frameworks": [],
+      "packageManager": "npm",
+      "packageName": "codebase-doctor",
+      "dependencyNames": [
+        "@babel/parser",
+        "@modelcontextprotocol/sdk",
+        "@types/node",
+        "@types/pg",
+        "commander",
+        "jsonc-parser",
+        "pg",
+        "tsup",
+        "tsx",
+        "typescript",
+        "vitest",
+        "yaml"
+      ],
+      "manifestPaths": [
+        "package.json"
+      ],
+      "executionSupport": "supported"
+    },
+    {
+      "id": "project:test/fixtures/node-fail",
+      "root": "test/fixtures/node-fail",
+      "ecosystems": [
+        "node"
+      ],
+      "languages": [
+        "javascript"
+      ],
+      "frameworks": [],
+      "packageManager": "npm",
+      "packageName": "codebase-doctor-node-fail-fixture",
+      "dependencyNames": [],
+      "manifestPaths": [
+        "test/fixtures/node-fail/package.json"
+      ],
+      "executionSupport": "supported"
+    },
+    {
+      "id": "project:test/fixtures/node-pass",
+      "root": "test/fixtures/node-pass",
+      "ecosystems": [
+        "node"
+      ],
+      "languages": [
+        "javascript"
+      ],
+      "frameworks": [],
+      "packageManager": "npm",
+      "packageName": "codebase-doctor-node-pass-fixture",
+      "dependencyNames": [],
+      "manifestPaths": [
+        "test/fixtures/node-pass/package.json"
+      ],
+      "executionSupport": "supported"
+    },
+    {
+      "id": "project:test/fixtures/python-detect",
+      "root": "test/fixtures/python-detect",
+      "ecosystems": [
+        "python"
+      ],
+      "languages": [
+        "python"
+      ],
+      "frameworks": [],
+      "manifestPaths": [
+        "test/fixtures/python-detect/pyproject.toml"
+      ],
+      "executionSupport": "supported"
+    }
+  ],
+  "plannedChecks": [
+    {
+      "planId": "root:javascript:typecheck",
+      "projectId": "root",
+      "label": "JavaScript typecheck",
+      "command": "npm run typecheck"
+    },
+    {
+      "planId": "root:javascript:test",
+      "projectId": "root",
+      "label": "JavaScript test",
+      "command": "npm run test"
+    },
+    {
+      "planId": "root:javascript:build",
+      "projectId": "root",
+      "label": "JavaScript build",
+      "command": "npm run build"
+    },
+    {
+      "planId": "project:test/fixtures/node-fail:javascript:test",
+      "projectId": "project:test/fixtures/node-fail",
+      "label": "JavaScript test",
+      "command": "npm run test"
+    },
+    {
+      "planId": "project:test/fixtures/node-pass:javascript:test",
+      "projectId": "project:test/fixtures/node-pass",
+      "label": "JavaScript test",
+      "command": "npm run test"
+    },
+    {
+      "planId": "project:test/fixtures/python-detect:python:pytest",
+      "projectId": "project:test/fixtures/python-detect",
+      "label": "Python pytest",
+      "command": "python -m pytest"
+    }
+  ],
+  "domainCoverage": [
+    {
+      "domain": "repository",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "project"
+        },
+        {
+          "type": "module",
+          "value": "repository/source-graph"
+        },
+        {
+          "type": "module",
+          "value": "repository/source-integrity"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "project",
+          "status": "completed",
+          "scopes": [],
+          "limitations": []
+        },
+        {
+          "moduleId": "repository/source-graph",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "repository/source-integrity",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "domain": "validation",
+      "applicability": "detected",
+      "status": "skipped",
+      "coverageComplete": false,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "project:test/fixtures/node-fail:javascript:test",
+          "projectId": "project:test/fixtures/node-fail"
+        },
+        {
+          "type": "module",
+          "value": "project:test/fixtures/node-pass:javascript:test",
+          "projectId": "project:test/fixtures/node-pass"
+        },
+        {
+          "type": "module",
+          "value": "project:test/fixtures/python-detect:python:pytest",
+          "projectId": "project:test/fixtures/python-detect"
+        },
+        {
+          "type": "module",
+          "value": "root:javascript:build",
+          "projectId": "root"
+        },
+        {
+          "type": "module",
+          "value": "root:javascript:test",
+          "projectId": "root"
+        },
+        {
+          "type": "module",
+          "value": "root:javascript:typecheck",
+          "projectId": "root"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "checks",
+          "status": "skipped",
+          "scopes": [],
+          "limitations": [
+            "Doctor requires denied capabilities: process:execute."
+          ]
+        }
+      ],
+      "limitations": [
+        "Doctor requires denied capabilities: process:execute."
+      ]
+    },
+    {
+      "domain": "frontend",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "frontend/accessibility"
+        },
+        {
+          "type": "module",
+          "value": "frontend/security"
+        },
+        {
+          "type": "module",
+          "value": "frontend/seo"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "frontend/accessibility",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "frontend/security",
+          "status": "not-applicable",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "frontend/seo",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "domain": "backend",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "backend/api"
+        },
+        {
+          "type": "module",
+          "value": "backend/auth"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "backend/api",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "backend/auth",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "domain": "database",
+      "applicability": "unknown",
+      "status": "skipped",
+      "coverageComplete": false,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "database/drizzle"
+        },
+        {
+          "type": "module",
+          "value": "database/rls"
+        },
+        {
+          "type": "module",
+          "value": "database/rls-drift"
+        },
+        {
+          "type": "module",
+          "value": "database/sql-rls"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "database/drizzle",
+          "status": "not-applicable",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "database/rls",
+          "status": "skipped",
+          "scopes": [],
+          "limitations": [
+            "Doctor requires denied capabilities: network:access."
+          ]
+        },
+        {
+          "moduleId": "database/rls-drift",
+          "status": "skipped",
+          "scopes": [],
+          "limitations": [
+            "Doctor requires denied capabilities: network:access."
+          ]
+        },
+        {
+          "moduleId": "database/sql-rls",
+          "status": "not-applicable",
+          "scopes": [
+            "project:test/fixtures/node-fail",
+            "project:test/fixtures/node-pass",
+            "project:test/fixtures/python-detect",
+            "root"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": [
+        "Doctor requires denied capabilities: network:access."
+      ]
+    },
+    {
+      "domain": "security",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "security/dependencies"
+        },
+        {
+          "type": "module",
+          "value": "security/secrets"
+        },
+        {
+          "type": "module",
+          "value": "security/secrets-history"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "security/dependencies",
+          "status": "completed",
+          "scopes": [
+            "full:.",
+            "full:project:test/fixtures/node-fail",
+            "full:project:test/fixtures/node-pass",
+            "full:test/fixtures/python-detect:poetry"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "security/secrets",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "security/secrets-history",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": [
+            "History scan examined up to 200 commits across all branches."
+          ]
+        }
+      ],
+      "limitations": [
+        "History scan examined up to 200 commits across all branches."
+      ]
+    },
+    {
+      "domain": "infrastructure",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "file",
+          "value": "github-actions",
+          "path": ".github/workflows/ci.yml"
+        },
+        {
+          "type": "file",
+          "value": "github-actions",
+          "path": ".github/workflows/mcp-smoke.yml"
+        },
+        {
+          "type": "file",
+          "value": "github-actions",
+          "path": ".github/workflows/publish.yml"
+        },
+        {
+          "type": "file",
+          "value": "docker",
+          "path": "Dockerfile"
+        },
+        {
+          "type": "module",
+          "value": "infrastructure/docker"
+        },
+        {
+          "type": "module",
+          "value": "infrastructure/github-actions"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "infrastructure/docker",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        },
+        {
+          "moduleId": "infrastructure/github-actions",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "domain": "performance",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "performance/static"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "performance/static",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "domain": "ai",
+      "applicability": "detected",
+      "status": "completed",
+      "coverageComplete": true,
+      "evidence": [
+        {
+          "type": "module",
+          "value": "ai/agent-surface"
+        }
+      ],
+      "modules": [
+        {
+          "moduleId": "ai/agent-surface",
+          "status": "completed",
+          "scopes": [
+            "full"
+          ],
+          "limitations": []
+        }
+      ],
+      "limitations": []
+    }
+  ],
+  "doctorRuns": [
+    {
+      "doctorId": "ai/agent-surface",
+      "status": "completed",
+      "durationMs": 9,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "backend/api",
+      "status": "completed",
+      "durationMs": 457,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "backend/auth",
+      "status": "completed",
+      "durationMs": 454,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "checks",
+      "status": "skipped",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": "Doctor requires denied capabilities: process:execute.",
+      "checkRuns": []
+    },
+    {
+      "doctorId": "database/drizzle",
+      "status": "completed",
+      "durationMs": 291,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "database/rls",
+      "status": "skipped",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": "Doctor requires denied capabilities: network:access.",
+      "checkRuns": []
+    },
+    {
+      "doctorId": "database/rls-drift",
+      "status": "skipped",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": "Doctor requires denied capabilities: network:access.",
+      "checkRuns": []
+    },
+    {
+      "doctorId": "database/sql-rls",
+      "status": "completed",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "frontend/accessibility",
+      "status": "completed",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "frontend/security",
+      "status": "completed",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "frontend/seo",
+      "status": "completed",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "infrastructure/docker",
+      "status": "completed",
+      "durationMs": 1,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "infrastructure/github-actions",
+      "status": "completed",
+      "durationMs": 9,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "performance/static",
+      "status": "completed",
+      "durationMs": 1,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "project",
+      "status": "completed",
+      "durationMs": 2,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "repository/source-graph",
+      "status": "completed",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "repository/source-integrity",
+      "status": "completed",
+      "durationMs": 0,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "security/dependencies",
+      "status": "completed",
+      "durationMs": 11,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "security/secrets",
+      "status": "completed",
+      "durationMs": 87,
+      "findingCount": 0,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    },
+    {
+      "doctorId": "security/secrets-history",
+      "status": "completed",
+      "durationMs": 336,
+      "findingCount": 1,
+      "error": null,
+      "skipReason": null,
+      "checkRuns": []
+    }
+  ],
+  "findings": [
+    {
+      "ruleId": "security/secrets-history/provider-token",
+      "doctorId": "security/secrets-history",
+      "severity": "high",
+      "confidence": "high",
+      "category": "security",
+      "title": "Provider credential is reachable in Git history",
+      "message": "A credential-shaped value added in commit fdfa32a is still reachable in Git history. The value was withheld.",
+      "location": {
+        "path": "src/demo/fixture.ts"
+      },
+      "evidence": [
+        {
+          "type": "file",
+          "path": "src/demo/fixture.ts",
+          "detail": "commit fdfa32a; detector github-classic; 1 added-line occurrence(s); value withheld."
+        }
+      ],
+      "impact": "A credential remains reachable to anyone with repository history access even after it is deleted from the working tree.",
+      "remediationConstraints": [
+        "Rotate or revoke the credential first; history rewriting cannot un-expose it.",
+        "Use the repository's authorized history-rewriting workflow outside Codebase Doctor.",
+        "Coordinate with collaborators before rewriting shared history."
+      ],
+      "remediation": "Have an authorized human or external coding agent rotate or revoke the credential, remove it from history with an authorized tool, then rerun a full audit.",
+      "verification": {
+        "command": "codebase-doctor audit . --format json",
+        "expected": "The finding fingerprint is absent and security/secrets-history coverage completed for the same scope."
+      },
+      "fingerprint": "b84266321c45b2b6c189556cf70090e5f8332da15818ce766b35627d167dc826"
+    }
+  ],
+  "suppressed": [],
+  "summary": {
+    "total": 1,
+    "counts": {
+      "info": 0,
+      "low": 0,
+      "medium": 0,
+      "high": 1,
+      "critical": 0
+    },
+    "highestSeverity": "high"
+  },
+  "score": {
+    "value": 80,
+    "band": "green",
+    "findingPenalty": 10,
+    "coveragePenalty": 10
+  },
+  "coverage": [
+    {
+      "moduleId": "ai/agent-surface",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 4,
+      "statementsExamined": 4,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "backend/api",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 308,
+      "statementsExamined": 20868,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "backend/auth",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 308,
+      "statementsExamined": 26555,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "database/drizzle",
+      "status": "not-applicable",
+      "scope": "full",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "database/sql-rls",
+      "status": "not-applicable",
+      "scope": "project:test/fixtures/node-fail",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "database/sql-rls",
+      "status": "not-applicable",
+      "scope": "project:test/fixtures/node-pass",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "database/sql-rls",
+      "status": "not-applicable",
+      "scope": "project:test/fixtures/python-detect",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "database/sql-rls",
+      "status": "not-applicable",
+      "scope": "root",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "frontend/accessibility",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 1,
+      "statementsExamined": 1,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "frontend/security",
+      "status": "not-applicable",
+      "scope": "full",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "frontend/seo",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 1,
+      "statementsExamined": 1,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "infrastructure/docker",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 1,
+      "statementsExamined": 7,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "infrastructure/github-actions",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 3,
+      "statementsExamined": 17,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "performance/static",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 322,
+      "statementsExamined": 322,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "repository/source-graph",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 308,
+      "statementsExamined": 1447,
+      "statementsRecognized": 918,
+      "limitations": []
+    },
+    {
+      "moduleId": "repository/source-integrity",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 308,
+      "statementsExamined": 918,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "security/dependencies",
+      "status": "completed",
+      "scope": "full:.",
+      "filesExamined": 2,
+      "statementsExamined": 295,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "security/dependencies",
+      "status": "not-applicable",
+      "scope": "full:project:test/fixtures/node-fail",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "security/dependencies",
+      "status": "not-applicable",
+      "scope": "full:project:test/fixtures/node-pass",
+      "filesExamined": 0,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "security/dependencies",
+      "status": "completed",
+      "scope": "full:test/fixtures/python-detect:poetry",
+      "filesExamined": 1,
+      "statementsExamined": 0,
+      "statementsRecognized": 0,
+      "limitations": []
+    },
+    {
+      "moduleId": "security/secrets-history",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 1183,
+      "statementsExamined": 71913,
+      "statementsRecognized": 1,
+      "limitations": [
+        "History scan examined up to 200 commits across all branches."
+      ]
+    },
+    {
+      "moduleId": "security/secrets",
+      "status": "completed",
+      "scope": "full",
+      "filesExamined": 321,
+      "statementsExamined": 68384,
+      "statementsRecognized": 0,
+      "limitations": []
+    }
+  ],
+  "sourceImpact": {
+    "mode": "full",
+    "status": "completed",
+    "graphNodeCount": 308,
+    "graphEdgeCount": 918,
+    "externalBoundaryCount": 528,
+    "dynamicBoundaryCount": 1,
+    "changedSourcePaths": [],
+    "impactedFileCount": 0,
+    "impactedProjectIds": [],
+    "impacts": [],
+    "omittedImpactCount": 0,
+    "limitations": []
+  }
+}

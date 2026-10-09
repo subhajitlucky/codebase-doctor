@@ -376,6 +376,20 @@ Workflow: `audit . --changed --format brief` after edits, `review . --base main 
 - Deterministic doctor benchmark (`npm run benchmark`, see [docs/benchmark.md](docs/benchmark.md)): recall, medium+ false-positive rate, review verdicts, and suppression honesty on seeded fixtures
 - Cross-model benchmarks: defects found, verification success, token cost
 
+## Dogfooding
+
+CI audits this repository with Codebase Doctor itself:
+
+```bash
+node dist/cli.js audit . --baseline .codebase-doctor-baseline.json --format brief --fail-on high
+```
+
+The baseline records exactly one acknowledged finding: the demo command's
+intentionally token-shaped fixture credential, which lives in git history.
+Any **new** finding fails CI. The demo fixture itself is source-split so the
+token never appears in the working tree — the generated fixture still
+contains it, so `demo` keeps demonstrating a real secret finding.
+
 ## Development
 
 ```bash

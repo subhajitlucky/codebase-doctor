@@ -32,3 +32,6 @@ jobs:
 
       - name: Verify source and release package
         run: npm run ci:full
+
+      - name: Self-audit
+        run: node dist/cli.js audit . --baseline .codebase-doctor-baseline.json --format brief --fail-on high
