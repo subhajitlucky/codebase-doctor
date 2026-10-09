@@ -50,6 +50,7 @@ npm install -g codebase-doctor         # global
 
 ```bash
 codebase-doctor demo                             # disposable fixture: secret, broken import, blast radius
+codebase-doctor bisect security/secrets/provider-token .   # when did this enter history?
 codebase-doctor audit . --json                   # full audit
 codebase-doctor audit . --changed --json         # just my diff
 codebase-doctor audit . --changed --base main --json    # PR review
@@ -309,6 +310,22 @@ codebase-doctor shadow . --run-checks --fail-on high --receipt shadow.json
 The copy is always removed, the original is never modified, and the receipt
 is marked `environment: shadow (disposable copy)`. This is the safe way to
 run untrusted validation commands.
+
+## Chronological bisect
+
+`bisect` finds the commit where a rule or fingerprint first appeared by
+auditing history oldest-first in disposable git worktrees:
+
+```bash
+codebase-doctor bisect security/secrets/provider-token .
+codebase-doctor bisect <fingerprint> . --max-commits 500 --json
+```
+
+Output carries the commit, author, message, location, fingerprint, and the
+**parent-absence evidence**: the parent commit was scanned immediately before
+and did not contain the target. Each commit is audited in a disposable
+worktree; the working tree is never modified. `--all-history` scans merges
+too; the default is first-parent.
 
 ## Repo Health score
 
