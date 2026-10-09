@@ -1,5 +1,5 @@
 {
   "name": "codebase-doctor",
   "description": "Evidence-backed, read-only codebase diagnostics: audit, review, and verify repositories without writes or network access by default.",
-  "version": "0.4.1"
+  "version": "0.4.2"
 }
