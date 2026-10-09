@@ -27,6 +27,7 @@
     "build": "tsup src/cli.ts src/index.ts --format esm --clean && tsc -p tsconfig.build.json",
     "bundle": "npm run build && node scripts/build-mcpb.mjs",
     "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "study:agents": "node scripts/study-agent-repos.mjs",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude test/integration/packed-cli.test.ts --exclude test/integration/package-report-output.test.ts",
