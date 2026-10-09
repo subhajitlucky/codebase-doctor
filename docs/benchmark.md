@@ -47,7 +47,9 @@ could only ever score `unresolved`. That limitation is documented, not hidden.
 
 17/17 passing with zero medium+ false positives. Re-run with
 `node scripts/benchmark.mjs --out results.json [--cases a,b]`; exit code is
-`0` only when every selected case passes.
+`0` only when every selected case passes. The dated snapshot with aggregate
+recall, false-positive, verdict, and runtime numbers lives in
+[benchmark-results.md](benchmark-results.md).
 
 ## What it does not do yet
 

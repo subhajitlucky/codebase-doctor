@@ -395,6 +395,10 @@ function evaluate(def) {
       pass,
       reason: reasons.join("; ") || "ok",
       found: rules,
+      expected: def.expect ?? [],
+      unexpected,
+      verdictExpected: def.verdict ?? null,
+      suppressedExpected: def.suppressed ?? [],
       durationMs: run.durationMs,
     };
   } finally {
@@ -427,6 +431,27 @@ function main() {
   const results = selected.map(evaluate);
   const passed = results.filter(({ pass }) => pass).length;
   const totalDuration = results.reduce((sum, { durationMs }) => sum + durationMs, 0);
+  const expectedRules = results.reduce((sum, { expected }) => sum + expected.length, 0);
+  const matchedRules = results.reduce(
+    (sum, { expected, found }) => sum + expected.filter((rule) => (found ?? []).includes(rule)).length,
+    0,
+  );
+  const falsePositives = results.reduce((sum, { unexpected }) => sum + unexpected.length, 0);
+  const reviewCases = results.filter(({ verdictExpected }) => verdictExpected !== null);
+  const suppressionCases = results.filter(({ suppressedExpected }) => suppressedExpected.length > 0);
+  const summary = {
+    recall: { expected: expectedRules, matched: matchedRules },
+    falsePositives,
+    review: {
+      cases: reviewCases.length,
+      passed: reviewCases.filter(({ pass }) => pass).length,
+    },
+    suppression: {
+      cases: suppressionCases.length,
+      passed: suppressionCases.filter(({ pass }) => pass).length,
+    },
+    runtimeMs: totalDuration,
+  };
 
   for (const result of results) {
     const mark = result.pass ? "PASS" : "FAIL";
@@ -436,7 +461,8 @@ function main() {
   }
   console.log(
     `\nbenchmark: ${passed}/${results.length} cases passed in ${totalDuration}ms ` +
-    `(recall and medium+ false-positive rate on seeded single-defect fixtures; ` +
+    `(recall ${summary.recall.matched}/${summary.recall.expected}, medium+ false positives ${summary.falsePositives}, ` +
+    `review ${summary.review.passed}/${summary.review.cases}, suppression ${summary.suppression.passed}/${summary.suppression.cases}; ` +
     `verify-resolved is covered at unit level because live coverage cannot complete offline)`,
   );
 
@@ -447,6 +473,7 @@ function main() {
       passed,
       total: results.length,
       totalDurationMs: totalDuration,
+      summary,
     }, null, 2)}\n`);
     console.log(`benchmark: wrote ${out}`);
   }

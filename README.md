@@ -35,6 +35,8 @@ Coding agents ship code faster than review can keep up. The failure isn't that a
 
 Codebase Doctor is that verification step. It builds a source graph, scans for committed secrets, dependency drift, unsafe Dockerfiles, workflow injection, RLS mistakes, and accessibility regressions — then tells you exactly what it could not verify.
 
+**Benchmarked, not vibes**: 17 seeded single-defect fixtures score **100% rule recall and zero medium+ false positives** ([results](docs/benchmark-results.md), reproducible with `npm run benchmark`).
+
 ## Install
 
 ```bash
