@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "tool": {
     "name": "codebase-doctor",
-    "version": "0.4.0"
+    "version": "0.4.13"
   },
   "repository": {
     "root": "/home/subhajit/project/codebase-doctor"
@@ -458,6 +458,11 @@
         },
         {
           "type": "file",
+          "value": "github-actions",
+          "path": ".github/workflows/scoreboard.yml"
+        },
+        {
+          "type": "file",
           "value": "docker",
           "path": "Dockerfile"
         },
@@ -541,7 +546,7 @@
     {
       "doctorId": "ai/agent-surface",
       "status": "completed",
-      "durationMs": 9,
+      "durationMs": 8,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -550,7 +555,7 @@
     {
       "doctorId": "backend/api",
       "status": "completed",
-      "durationMs": 457,
+      "durationMs": 504,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -559,7 +564,7 @@
     {
       "doctorId": "backend/auth",
       "status": "completed",
-      "durationMs": 454,
+      "durationMs": 502,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -577,7 +582,7 @@
     {
       "doctorId": "database/drizzle",
       "status": "completed",
-      "durationMs": 291,
+      "durationMs": 285,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -613,7 +618,7 @@
     {
       "doctorId": "frontend/accessibility",
       "status": "completed",
-      "durationMs": 0,
+      "durationMs": 1,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -622,7 +627,7 @@
     {
       "doctorId": "frontend/security",
       "status": "completed",
-      "durationMs": 0,
+      "durationMs": 1,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -631,7 +636,7 @@
     {
       "doctorId": "frontend/seo",
       "status": "completed",
-      "durationMs": 0,
+      "durationMs": 1,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -649,7 +654,7 @@
     {
       "doctorId": "infrastructure/github-actions",
       "status": "completed",
-      "durationMs": 9,
+      "durationMs": 10,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -694,7 +699,7 @@
     {
       "doctorId": "security/dependencies",
       "status": "completed",
-      "durationMs": 11,
+      "durationMs": 13,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -703,7 +708,7 @@
     {
       "doctorId": "security/secrets",
       "status": "completed",
-      "durationMs": 87,
+      "durationMs": 119,
       "findingCount": 0,
       "error": null,
       "skipReason": null,
@@ -712,8 +717,8 @@
     {
       "doctorId": "security/secrets-history",
       "status": "completed",
-      "durationMs": 336,
-      "findingCount": 1,
+      "durationMs": 345,
+      "findingCount": 5,
       "error": null,
       "skipReason": null,
       "checkRuns": []
@@ -750,24 +755,148 @@
         "expected": "The finding fingerprint is absent and security/secrets-history coverage completed for the same scope."
       },
       "fingerprint": "b84266321c45b2b6c189556cf70090e5f8332da15818ce766b35627d167dc826"
+    },
+    {
+      "ruleId": "security/secrets-history/provider-token",
+      "doctorId": "security/secrets-history",
+      "severity": "high",
+      "confidence": "high",
+      "category": "security",
+      "title": "Provider credential is reachable in Git history",
+      "message": "A credential-shaped value added in commit b61d10f is still reachable in Git history. The value was withheld.",
+      "location": {
+        "path": "test/integration/bisect.test.ts"
+      },
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test/integration/bisect.test.ts",
+          "detail": "commit b61d10f; detector github-classic; 1 added-line occurrence(s); value withheld."
+        }
+      ],
+      "impact": "A credential remains reachable to anyone with repository history access even after it is deleted from the working tree.",
+      "remediationConstraints": [
+        "Rotate or revoke the credential first; history rewriting cannot un-expose it.",
+        "Use the repository's authorized history-rewriting workflow outside Codebase Doctor.",
+        "Coordinate with collaborators before rewriting shared history."
+      ],
+      "remediation": "Have an authorized human or external coding agent rotate or revoke the credential, remove it from history with an authorized tool, then rerun a full audit.",
+      "verification": {
+        "command": "codebase-doctor audit . --format json",
+        "expected": "The finding fingerprint is absent and security/secrets-history coverage completed for the same scope."
+      },
+      "fingerprint": "c515e29d3a557d53b16f1a6da463a2be78d39df104b438add0d6c078a8c64daa"
+    },
+    {
+      "ruleId": "security/secrets-history/provider-token",
+      "doctorId": "security/secrets-history",
+      "severity": "high",
+      "confidence": "high",
+      "category": "security",
+      "title": "Provider credential is reachable in Git history",
+      "message": "A credential-shaped value added in commit 35ba24d is still reachable in Git history. The value was withheld.",
+      "location": {
+        "path": "test/integration/intent.test.ts"
+      },
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test/integration/intent.test.ts",
+          "detail": "commit 35ba24d; detector github-classic; 1 added-line occurrence(s); value withheld."
+        }
+      ],
+      "impact": "A credential remains reachable to anyone with repository history access even after it is deleted from the working tree.",
+      "remediationConstraints": [
+        "Rotate or revoke the credential first; history rewriting cannot un-expose it.",
+        "Use the repository's authorized history-rewriting workflow outside Codebase Doctor.",
+        "Coordinate with collaborators before rewriting shared history."
+      ],
+      "remediation": "Have an authorized human or external coding agent rotate or revoke the credential, remove it from history with an authorized tool, then rerun a full audit.",
+      "verification": {
+        "command": "codebase-doctor audit . --format json",
+        "expected": "The finding fingerprint is absent and security/secrets-history coverage completed for the same scope."
+      },
+      "fingerprint": "4e3d07a403e4f2bc1af1faf208b57b9553b93f13e6580e2a9db2aa8de40ca990"
+    },
+    {
+      "ruleId": "security/secrets-history/provider-token",
+      "doctorId": "security/secrets-history",
+      "severity": "high",
+      "confidence": "high",
+      "category": "security",
+      "title": "Provider credential is reachable in Git history",
+      "message": "A credential-shaped value added in commit 3ead8ec is still reachable in Git history. The value was withheld.",
+      "location": {
+        "path": "test/integration/pheromone.test.ts"
+      },
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test/integration/pheromone.test.ts",
+          "detail": "commit 3ead8ec; detector github-classic; 1 added-line occurrence(s); value withheld."
+        }
+      ],
+      "impact": "A credential remains reachable to anyone with repository history access even after it is deleted from the working tree.",
+      "remediationConstraints": [
+        "Rotate or revoke the credential first; history rewriting cannot un-expose it.",
+        "Use the repository's authorized history-rewriting workflow outside Codebase Doctor.",
+        "Coordinate with collaborators before rewriting shared history."
+      ],
+      "remediation": "Have an authorized human or external coding agent rotate or revoke the credential, remove it from history with an authorized tool, then rerun a full audit.",
+      "verification": {
+        "command": "codebase-doctor audit . --format json",
+        "expected": "The finding fingerprint is absent and security/secrets-history coverage completed for the same scope."
+      },
+      "fingerprint": "12843d9731f9c97c7ef6d5a576c60f7e9b12a95b94440cd0c743b2016be0475a"
+    },
+    {
+      "ruleId": "security/secrets-history/provider-token",
+      "doctorId": "security/secrets-history",
+      "severity": "high",
+      "confidence": "high",
+      "category": "security",
+      "title": "Provider credential is reachable in Git history",
+      "message": "A credential-shaped value added in commit 81425e0 is still reachable in Git history. The value was withheld.",
+      "location": {
+        "path": "test/integration/swarm.test.ts"
+      },
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test/integration/swarm.test.ts",
+          "detail": "commit 81425e0; detector github-classic; 1 added-line occurrence(s); value withheld."
+        }
+      ],
+      "impact": "A credential remains reachable to anyone with repository history access even after it is deleted from the working tree.",
+      "remediationConstraints": [
+        "Rotate or revoke the credential first; history rewriting cannot un-expose it.",
+        "Use the repository's authorized history-rewriting workflow outside Codebase Doctor.",
+        "Coordinate with collaborators before rewriting shared history."
+      ],
+      "remediation": "Have an authorized human or external coding agent rotate or revoke the credential, remove it from history with an authorized tool, then rerun a full audit.",
+      "verification": {
+        "command": "codebase-doctor audit . --format json",
+        "expected": "The finding fingerprint is absent and security/secrets-history coverage completed for the same scope."
+      },
+      "fingerprint": "6b910e79e817bc6f2ca76e9fd7c1db3327e0d69c32a2f960da7e3f33a6b3734c"
     }
   ],
   "suppressed": [],
   "summary": {
-    "total": 1,
+    "total": 5,
     "counts": {
       "info": 0,
       "low": 0,
       "medium": 0,
-      "high": 1,
+      "high": 5,
       "critical": 0
     },
     "highestSeverity": "high"
   },
   "score": {
-    "value": 80,
-    "band": "green",
-    "findingPenalty": 10,
+    "value": 40,
+    "band": "red",
+    "findingPenalty": 50,
     "coveragePenalty": 10
   },
   "coverage": [
@@ -784,8 +913,8 @@
       "moduleId": "backend/api",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 308,
-      "statementsExamined": 20868,
+      "filesExamined": 345,
+      "statementsExamined": 22371,
       "statementsRecognized": 0,
       "limitations": []
     },
@@ -793,8 +922,8 @@
       "moduleId": "backend/auth",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 308,
-      "statementsExamined": 26555,
+      "filesExamined": 345,
+      "statementsExamined": 28539,
       "statementsRecognized": 0,
       "limitations": []
     },
@@ -883,8 +1012,8 @@
       "moduleId": "infrastructure/github-actions",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 3,
-      "statementsExamined": 17,
+      "filesExamined": 4,
+      "statementsExamined": 25,
       "statementsRecognized": 0,
       "limitations": []
     },
@@ -892,8 +1021,8 @@
       "moduleId": "performance/static",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 322,
-      "statementsExamined": 322,
+      "filesExamined": 381,
+      "statementsExamined": 381,
       "statementsRecognized": 0,
       "limitations": []
     },
@@ -901,17 +1030,17 @@
       "moduleId": "repository/source-graph",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 308,
-      "statementsExamined": 1447,
-      "statementsRecognized": 918,
+      "filesExamined": 345,
+      "statementsExamined": 1706,
+      "statementsRecognized": 1052,
       "limitations": []
     },
     {
       "moduleId": "repository/source-integrity",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 308,
-      "statementsExamined": 918,
+      "filesExamined": 345,
+      "statementsExamined": 1052,
       "statementsRecognized": 0,
       "limitations": []
     },
@@ -955,9 +1084,9 @@
       "moduleId": "security/secrets-history",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 1183,
-      "statementsExamined": 71913,
-      "statementsRecognized": 1,
+      "filesExamined": 1255,
+      "statementsExamined": 70213,
+      "statementsRecognized": 5,
       "limitations": [
         "History scan examined up to 200 commits across all branches."
       ]
@@ -966,8 +1095,8 @@
       "moduleId": "security/secrets",
       "status": "completed",
       "scope": "full",
-      "filesExamined": 321,
-      "statementsExamined": 68384,
+      "filesExamined": 376,
+      "statementsExamined": 75287,
       "statementsRecognized": 0,
       "limitations": []
     }
@@ -975,10 +1104,10 @@
   "sourceImpact": {
     "mode": "full",
     "status": "completed",
-    "graphNodeCount": 308,
-    "graphEdgeCount": 918,
-    "externalBoundaryCount": 528,
-    "dynamicBoundaryCount": 1,
+    "graphNodeCount": 345,
+    "graphEdgeCount": 1052,
+    "externalBoundaryCount": 651,
+    "dynamicBoundaryCount": 3,
     "changedSourcePaths": [],
     "impactedFileCount": 0,
     "impactedProjectIds": [],

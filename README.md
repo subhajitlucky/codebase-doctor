@@ -554,11 +554,11 @@ CI audits this repository with Codebase Doctor itself:
 node dist/cli.js audit . --baseline .codebase-doctor-baseline.json --format brief --fail-on high
 ```
 
-The baseline records exactly one acknowledged finding: the demo command's
-intentionally token-shaped fixture credential, which lives in git history.
-Any **new** finding fails CI. The demo fixture itself is source-split so the
-token never appears in the working tree — the generated fixture still
-contains it, so `demo` keeps demonstrating a real secret finding.
+The baseline records five acknowledged findings: intentionally token-shaped
+fixture credentials (the demo command and four integration fixtures) that
+live in git history. Any **new** finding fails CI. All fixture sources are
+split so the token never appears in the working tree — the generated fixture
+still contains it, so `demo` keeps demonstrating a real secret finding.
 
 ## Development
 

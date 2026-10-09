@@ -22,7 +22,7 @@ import {
 
 const repositoryRoot = process.cwd();
 const temporaryRoots: string[] = [];
-const TOKEN = "redacted";
+const TOKEN = "ghp_" + "7Qm2Xv9Kd4Rn8Ts3Lw6Yp1Bc5";
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) rmSync(root, { recursive: true, force: true });
