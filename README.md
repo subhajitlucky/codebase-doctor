@@ -25,7 +25,7 @@ coverage-limitations: validation: skipped, database: skipped, security: partial
 
 That last line is the point. Most tools print findings and stop. This one tells you what it *didn't* check, every single run.
 
-![Codebase Doctor terminal preview](docs/assets/terminal-preview.svg)
+![Codebase Doctor demo](docs/launch/cbd-demo.gif)
 
 ---
 
