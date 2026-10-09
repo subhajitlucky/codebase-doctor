@@ -27,6 +27,7 @@
     "build": "tsup src/cli.ts src/index.ts --format esm --clean && tsc -p tsconfig.build.json",
     "bundle": "npm run build && node scripts/build-mcpb.mjs",
     "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "red-team": "npm run build && node scripts/red-team.mjs",
     "study:agents": "node scripts/study-agent-repos.mjs",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
@@ -35,7 +36,7 @@
     "test:rls-integration": "npm run build && node scripts/run-rls-integration.mjs",
     "version": "node scripts/sync-version.mjs",
     "ci": "npm run typecheck && npm test && npm run build",
-    "ci:full": "npm run ci && npm run test:package && npm audit --audit-level=high",
+    "ci:full": "npm run ci && npm run test:package && node scripts/red-team.mjs && npm audit --audit-level=high",
     "prepare": "npm run build"
   },
   "keywords": [
