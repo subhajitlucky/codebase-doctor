@@ -87,6 +87,8 @@ export type {
   CoverageReceipt,
   ReceiptVerification,
 } from "./receipts/receipt.js";
+export { runShadow } from "./shadow/runner.js";
+export type { ShadowFormat, ShadowOptions, ShadowOutcome } from "./shadow/runner.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";

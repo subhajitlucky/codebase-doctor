@@ -25,6 +25,7 @@ codebase-doctor verify-receipt receipt.json                 # exit 0 valid, 2 in
 | `findings.total` / `bySeverity` | counts only — never secrets or source |
 | `findings.fingerprints` | stable finding fingerprints, sorted |
 | `suppressed` | acknowledged finding count |
+| `shadow` | present when the audit ran in a disposable copy |
 | `digest` | SHA-256 over the canonical JSON body |
 | `signature` | optional Ed25519 signature + public key |
 
