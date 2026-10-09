@@ -39,6 +39,8 @@ Codebase Doctor is that verification step. It builds a source graph, scans for c
 
 **Red-teamed**: an adversarial mutation corpus tries to hide each defect in a different shape — **11/11 mutants caught, 7/7 controls clean**, gated in CI ([corpus](docs/red-team.md), reproducible with `npm run red-team`).
 
+**Cross-checked**: two independently written offline analyzers (this repo's `sql-rls` and rls-doctor) run over the same SQL corpus — **10 findings matched, 0 severity mismatches, 1 documented coverage difference**, safe schema clean under both ([scoreboard](docs/scoreboard.md), `npm run differential`).
+
 **Field study**: of 100 agent-configured public repositories, **23% ship at least one high-severity finding** — 10% have broken imports, 4% committed key material, 11% risky agent configuration ([report](docs/blog/2026-10-09-agent-repo-audit.md), anonymized and reproducible).
 
 ## Install
