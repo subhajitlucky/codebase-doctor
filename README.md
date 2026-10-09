@@ -465,6 +465,23 @@ Violations carry witnesses (operation id, index, balance snapshot); exit 1 on
 any violation, `--require-proved` exits 2 on undecided. See
 [docs/economy.md](docs/economy.md).
 
+## Proof-carrying repairs
+
+`fix` generates a repair for a finding and verifies it in a **disposable
+copy** before writing anything:
+
+```bash
+codebase-doctor fix <fingerprint> . --patch fix.patch --receipt fix.json
+```
+
+For `source/import-target-missing` it finds the unambiguous existing
+candidate (exact stem match first, same directory preferred), applies the
+one-line change in a shadow copy, re-audits, and writes the patch **only if**
+the finding fingerprint disappears and no new medium+ finding appears. The
+patch is a real `git diff`; the receipt binds the fingerprint to the patch
+SHA-256 and the before/after verdicts. The original repository is never
+modified. See [docs/repairs.md](docs/repairs.md).
+
 ## Acknowledged findings (suppressions)
 
 A finding a human has reviewed and accepted can be acknowledged inline without hiding it from any report:
@@ -483,7 +500,7 @@ const API_KEY = "..."; // codebase-doctor-ignore: security/secrets/provider-toke
 claude mcp add codebase-doctor -- npx -y codebase-doctor mcp
 ```
 
-Read-only tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
+Read-only tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `verify_intent`, `build_receipt`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
 
 Registry metadata ships in `server.json` (`io.github.subhajitlucky/codebase-doctor`); publishing steps for the official MCP registry, Smithery, and Glama are in [docs/mcp-registries.md](docs/mcp-registries.md).
 

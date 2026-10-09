@@ -86,6 +86,8 @@ describe("codebase-doctor mcp server lifecycle", () => {
         "verify_changes",
         "explain_finding",
         "review_changes",
+        "verify_intent",
+        "build_receipt",
       ]);
       for (const tool of listed.tools) {
         expect(tool.inputSchema.type).toBe("object");

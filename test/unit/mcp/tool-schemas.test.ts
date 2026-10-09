@@ -1,26 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
   AUDIT_TOOL_NAME,
+  BUILD_RECEIPT_TOOL_NAME,
   CAPABILITIES_TOOL_NAME,
   EXPLAIN_TOOL_NAME,
   parseAuditToolArgs,
   parseCapabilitiesToolArgs,
   parseExplainToolArgs,
   parseReviewToolArgs,
+  parseVerifyIntentToolArgs,
   parseVerifyToolArgs,
   REVIEW_TOOL_NAME,
   TOOL_DEFINITIONS,
+  VERIFY_INTENT_TOOL_NAME,
   VERIFY_TOOL_NAME,
 } from "../../../src/mcp/tool-schemas.js";
 
 describe("mcp tool definitions", () => {
-  it("advertises the read-only audit, review, verify, explain, and capability tools", () => {
+  it("advertises the read-only audit, review, verify, explain, intent, receipt, and capability tools", () => {
     expect(TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
       AUDIT_TOOL_NAME,
       CAPABILITIES_TOOL_NAME,
       VERIFY_TOOL_NAME,
       EXPLAIN_TOOL_NAME,
       REVIEW_TOOL_NAME,
+      VERIFY_INTENT_TOOL_NAME,
+      BUILD_RECEIPT_TOOL_NAME,
     ]);
     for (const tool of TOOL_DEFINITIONS) {
       expect(tool.inputSchema.type).toBe("object");

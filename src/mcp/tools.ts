@@ -12,21 +12,30 @@ import { summarizeReview } from "../review/summary.js";
 import { renderVerifyText } from "../reporters/verify.js";
 import { VERSION } from "../version.js";
 import { boundToolPayload } from "./payload.js";
+import { parseIntents } from "../intent/parse.js";
+import { buildIntentReport, evaluateIntent } from "../intent/verify.js";
+import { buildReceipt, serializeReceipt } from "../receipts/receipt.js";
 import {
   AUDIT_TOOL_NAME,
+  BUILD_RECEIPT_TOOL_NAME,
   CAPABILITIES_TOOL_NAME,
   EXPLAIN_TOOL_NAME,
   parseAuditToolArgs,
+  parseBuildReceiptToolArgs,
   parseCapabilitiesToolArgs,
   parseExplainToolArgs,
   parseReviewToolArgs,
+  parseVerifyIntentToolArgs,
   parseVerifyToolArgs,
   REVIEW_TOOL_NAME,
   TOOL_DEFINITIONS,
+  VERIFY_INTENT_TOOL_NAME,
   VERIFY_TOOL_NAME,
   type AuditToolArgs,
+  type BuildReceiptToolArgs,
   type ExplainToolArgs,
   type ReviewToolArgs,
+  type VerifyIntentToolArgs,
   type VerifyToolArgs,
 } from "./tool-schemas.js";
 
@@ -228,6 +237,26 @@ export function handleDescribeCapabilities(): CallToolResult {  return textResul
   );
 }
 
+/** Verify declared intent against a fresh read-only audit. */
+export async function handleVerifyIntent(args: VerifyIntentToolArgs): Promise<CallToolResult> {
+  const parsed = parseIntents(args.intent, "intent");
+  const result = await runBuiltInAudit(args.path, false, undefined);
+  const claims = evaluateIntent(parsed.claims, result);
+  const report = buildIntentReport(
+    claims,
+    { path: args.path ?? process.cwd(), intentSource: "mcp" },
+    parsed.unstructuredCharacters,
+    VERSION,
+  );
+  return textResult(boundToolPayload(`${JSON.stringify(report, null, 2)}\n`).text);
+}
+
+/** Run a read-only audit and return a portable coverage receipt. */
+export async function handleBuildReceipt(args: BuildReceiptToolArgs): Promise<CallToolResult> {
+  const result = await runBuiltInAudit(args.path, args.changed === true, args.base);
+  return textResult(boundToolPayload(serializeReceipt(buildReceipt(result))).text);
+}
+
 /** Map an unexpected failure to the house-prefixed actionable error result. */
 export function errorToolResult(error: unknown): CallToolResult {
   const message = error instanceof Error ? error.message : String(error);
@@ -257,6 +286,12 @@ export async function handleToolCall(
   if (name === CAPABILITIES_TOOL_NAME) {
     parseCapabilitiesToolArgs(rawArguments);
     return handleDescribeCapabilities();
+  }
+  if (name === VERIFY_INTENT_TOOL_NAME) {
+    return handleVerifyIntent(parseVerifyIntentToolArgs(rawArguments));
+  }
+  if (name === BUILD_RECEIPT_TOOL_NAME) {
+    return handleBuildReceipt(parseBuildReceiptToolArgs(rawArguments));
   }
   throw new Error(
     `Unknown tool "${name}". Available tools: ${
