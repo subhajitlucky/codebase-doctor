@@ -37,6 +37,8 @@ Codebase Doctor is that verification step. It builds a source graph, scans for c
 
 **Benchmarked, not vibes**: 17 seeded single-defect fixtures score **100% rule recall and zero medium+ false positives** ([results](docs/benchmark-results.md), reproducible with `npm run benchmark`).
 
+**Field study**: of 100 agent-configured public repositories, **23% ship at least one high-severity finding** — 10% have broken imports, 4% committed key material, 11% risky agent configuration ([report](docs/blog/2026-10-09-agent-repo-audit.md), anonymized and reproducible).
+
 ## Install
 
 ```bash
