@@ -324,6 +324,23 @@ describe("scan CLI", () => {
     expect(result.stdout).toMatch(/\[(info|low|medium|high|critical)\] \S+ /u);
   });
 
+  it("renders a standalone HTML report", () => {
+    const result = cli([
+      "scan",
+      fixture("node-fail"),
+      "--format",
+      "html",
+      "--fail-on",
+      "none",
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.startsWith("<!doctype html>")).toBe(true);
+    expect(result.stdout).toContain("Codebase Doctor report");
+    expect(result.stdout).toContain("Repo Health");
+    expect(result.stdout).toContain("Coverage:");
+  });
+
   it("verifies a saved baseline and reports unchanged findings", () => {
     const directory = mkdtempSync(resolve(tmpdir(), "codebase-doctor-verify-"));
     temporaryRoots.push(directory);

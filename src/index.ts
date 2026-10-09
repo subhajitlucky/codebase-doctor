@@ -75,6 +75,7 @@ export type { ScoreBand, ScoreReport } from "./core/score.js";
 export { renderScoreLine, scoreBadgeUrl } from "./reporters/score.js";
 export type { ScoreRenderOptions } from "./reporters/score.js";
 export { renderJsonReport } from "./reporters/json.js";
+export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";
 export { renderTextReport } from "./reporters/text.js";
 export type { TextReportOptions } from "./reporters/text.js";
