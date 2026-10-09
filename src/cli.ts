@@ -4,6 +4,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { createAuditCommand } from "./commands/audit.js";
+import { createBisectCommand } from "./commands/bisect.js";
 import { createDemoCommand } from "./commands/demo.js";
 import { createInstructionsCommand } from "./commands/instructions.js";
 import { createMcpCommand } from "./commands/mcp.js";
@@ -23,6 +24,7 @@ export function createProgram(): Command {
   program.addCommand(createAuditCommand());
   program.addCommand(createDemoCommand());
   program.addCommand(createShadowCommand());
+  program.addCommand(createBisectCommand());
   program.addCommand(createReviewCommand());
   program.addCommand(createVerifyCommand());
   program.addCommand(createVerifyReceiptCommand());

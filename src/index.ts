@@ -89,6 +89,13 @@ export type {
 } from "./receipts/receipt.js";
 export { runShadow } from "./shadow/runner.js";
 export type { ShadowFormat, ShadowOptions, ShadowOutcome } from "./shadow/runner.js";
+export { renderBisectText, runBisect } from "./bisect/runner.js";
+export type {
+  BisectEvidence,
+  BisectOptions,
+  BisectOutcome,
+  BisectResult,
+} from "./bisect/runner.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";
