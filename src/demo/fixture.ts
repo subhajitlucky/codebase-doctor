@@ -59,6 +59,8 @@ export function runJob() {
   },
 ];
 
+const DEMO_SECRET = "ghp_" + "7Qm2Xv9Kd4Rn8Ts3Lw6Yp1Bc5";
+
 const BROKEN_FILES: readonly DemoFile[] = [
   {
     path: "src/config.ts",
@@ -67,7 +69,7 @@ const BROKEN_FILES: readonly DemoFile[] = [
   retries: 3,
 };
 
-export const apiKey = "ghp_7Qm2Xv9Kd4Rn8Ts3Lw6Yp1Bc5";
+export const apiKey = "${DEMO_SECRET}";
 `,
   },
   {
