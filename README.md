@@ -88,6 +88,7 @@ CI gate. Nothing outside a temp directory is touched.
 --badge               Print a shields.io badge URL for the Repo Health score
 --receipt <path>      Write a portable coverage receipt (digest-verified)
 --receipt-key <path>  Sign the receipt with an Ed25519 private key (PEM)
+--pheromone <path>    Write a privacy-bounded signal (rules and counts only)
 --with-database       Permit live PostgreSQL catalog access
 --with-advisories     Opt-in OSV advisory lookup over lockfile packages
 --database-schema     Schema to inspect; repeatable (default: public)
@@ -404,6 +405,22 @@ codebase-doctor verify-receipt receipt.json   # exit 0 valid, 2 tampered
 Receipts never contain secret values or source text. A digest proves tamper
 evidence; a signature proves the key holder issued it. See
 [docs/receipts.md](docs/receipts.md).
+
+## Pheromone signals
+
+An audit can emit a **pheromone signal** — rules, severities, and counts
+only, never paths, fingerprints, source text, or repository names:
+
+```bash
+codebase-doctor audit . --pheromone signal.json
+codebase-doctor pheromone merge signals/*.json --min-signals 3 --out index.json
+```
+
+`merge` verifies every signal's digest (and signature, if present), fails
+closed on tampered input, and excludes patterns observed in fewer than
+`--min-signals` signals (k-anonymity). The result is a public pattern index
+of what actually occurs — without exposing anyone's code. See
+[docs/pheromones.md](docs/pheromones.md).
 
 ## Acknowledged findings (suppressions)
 

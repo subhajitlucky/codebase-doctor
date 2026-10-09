@@ -100,6 +100,23 @@ export { runSwarm } from "./swarm/runner.js";
 export type { SwarmOptions, SwarmOutcome, SwarmRepoReport } from "./swarm/runner.js";
 export { composeFleetVerdict, composeRepoVerdict } from "./swarm/verdict.js";
 export type { RepoVerdict, RepoVerdictComposition } from "./swarm/verdict.js";
+export {
+  buildPheromone,
+  mergePheromones,
+  PHEROMONE_VERSION,
+  renderIndexText,
+  serializePheromone,
+  verifyPheromone,
+} from "./pheromones/pheromone.js";
+export type {
+  MergeOptions,
+  MergeResult,
+  PheromoneIndex,
+  PheromoneIndexPattern,
+  PheromonePattern,
+  PheromoneSignal,
+  PheromoneVerification,
+} from "./pheromones/pheromone.js";
 export { renderJsonReport } from "./reporters/json.js";
 export { renderHtmlReport } from "./reporters/html.js";
 export { renderSarifReport } from "./reporters/sarif.js";
