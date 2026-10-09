@@ -45,12 +45,18 @@ npm install -g codebase-doctor         # global
 ## Quick start
 
 ```bash
+codebase-doctor demo                             # disposable fixture: secret, broken import, blast radius
 codebase-doctor audit . --json                   # full audit
 codebase-doctor audit . --changed --json         # just my diff
 codebase-doctor audit . --changed --base main --json    # PR review
 codebase-doctor audit . --format sarif           # GitHub code scanning
 codebase-doctor verify . --baseline before.json  # confirm fixes landed
 ```
+
+`demo` needs no configuration and no repository: it builds a disposable git
+fixture with a tracked secret and a broken import, audits the simulated agent
+edit with the real pipeline, prints the blast radius, and exits 1 to show the
+CI gate. Nothing outside a temp directory is touched.
 
 ## Options
 

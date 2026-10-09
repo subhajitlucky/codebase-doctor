@@ -15,6 +15,7 @@ npx codebase-doctor audit .
 ## One command
 
 ```bash
+codebase-doctor demo                 # disposable fixture: secret, broken import, blast radius
 codebase-doctor audit .              # full audit
 codebase-doctor audit . --changed    # after edits
 codebase-doctor audit . --format sarif
