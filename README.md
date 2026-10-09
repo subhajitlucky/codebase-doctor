@@ -296,6 +296,20 @@ Separately authorized `--run-checks` launches repository-owned validation subpro
 - source analysis parses syntax and never executes source; lockfile analysis never invokes a package manager
 - apart from an explicitly requested OSV lookup, it makes no external network calls
 
+## Shadow audits
+
+`shadow` audits a **disposable copy** of the repository. Validation commands
+(`--run-checks`) execute inside the copy, so repository-owned side effects —
+file writes, caches, hooks — cannot touch your working tree:
+
+```bash
+codebase-doctor shadow . --run-checks --fail-on high --receipt shadow.json
+```
+
+The copy is always removed, the original is never modified, and the receipt
+is marked `environment: shadow (disposable copy)`. This is the safe way to
+run untrusted validation commands.
+
 ## Repo Health score
 
 Every report carries a deterministic score: `100` minus severity penalties —

@@ -109,6 +109,15 @@ describe("coverage receipts", () => {
     expect(verification.reasons).toContain("signature does not match the receipt body");
   });
 
+  it("marks shadow receipts and reports the environment", () => {
+    const receipt = buildReceipt(result(), { shadow: true });
+
+    expect(receipt.shadow).toBe(true);
+    const verification = verifyReceipt(receipt);
+    expect(verification.valid).toBe(true);
+    expect(verification.summary).toContain("environment: shadow (disposable copy)");
+  });
+
   it("rejects unknown receipt versions", () => {
     const receipt = buildReceipt(result());
     const verification = verifyReceipt({ ...receipt, receiptVersion: "99" });

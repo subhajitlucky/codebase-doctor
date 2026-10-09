@@ -29,6 +29,7 @@ export interface CoverageReceipt {
     fingerprints: string[];
   };
   suppressed: number;
+  shadow?: boolean;
   digest: { algorithm: "sha256"; value: string };
   signature?: ReceiptSignature;
 }
@@ -56,6 +57,7 @@ export function receiptDigest(body: ReceiptBody): string {
 export interface BuildReceiptOptions {
   issuedAt?: Date;
   privateKeyPem?: string;
+  shadow?: boolean;
 }
 
 /**
@@ -79,6 +81,7 @@ export function buildReceipt(result: ScanResult, options: BuildReceiptOptions = 
       fingerprints: result.findings.map((finding) => finding.fingerprint).sort(),
     },
     suppressed: result.suppressed.length,
+    ...(options.shadow === true ? { shadow: true } : {}),
   };
 
   const receipt: CoverageReceipt = {
@@ -163,6 +166,7 @@ function receiptSummary(receipt: CoverageReceipt): string {
   const lines = [
     `receipt: ${receipt.tool.name} ${receipt.tool.version} · issued ${receipt.issuedAt}`,
     `subject: ${receipt.subject.root} (scope=${receipt.subject.scope})`,
+    ...(receipt.shadow === true ? ["environment: shadow (disposable copy)"] : []),
     `score: ${receipt.score.value}/100 (${receipt.score.band})`,
     `coverage: ${receipt.coverage.complete ? "complete" : "incomplete"}`,
   ];
