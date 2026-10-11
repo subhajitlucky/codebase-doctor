@@ -15,6 +15,8 @@ const SERVER_INSTRUCTIONS = [
   "evidence-backed findings for coding agents.",
   "Models build; Codebase Doctor verifies: it never edits files, runs",
   "repository checks, or touches a database through this server.",
+  "Call describe_capabilities once for the tool contract. Failures return",
+  "structured JSON shaped as { error: { code, message, nextAction } }.",
 ].join(" ");
 
 export function createMcpServer(): Server {

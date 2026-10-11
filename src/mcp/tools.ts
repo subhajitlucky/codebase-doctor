@@ -220,6 +220,18 @@ export function handleDescribeCapabilities(): CallToolResult {  return textResul
             "access, or --with-advisories network lookups; run the CLI " +
             "explicitly to grant those separately.",
         },
+        errorContract: {
+          shape: {
+            error: {
+              code:
+                "invalid-arguments | path-not-found | path-access-denied | " +
+                "unknown-tool | internal-error",
+              message: "string",
+              nextAction: "string",
+            },
+          },
+          note: "Branch on error.code; never parse error prose.",
+        },
         usage:
           "Prefer audit_codebase with changed=true after edits, review_changes " +
           "for a diff-narrowed PR verdict (APPROVE, COMMENT, or REQUEST_CHANGES), " +
@@ -257,11 +269,63 @@ export async function handleBuildReceipt(args: BuildReceiptToolArgs): Promise<Ca
   return textResult(boundToolPayload(serializeReceipt(buildReceipt(result))).text);
 }
 
-/** Map an unexpected failure to the house-prefixed actionable error result. */
+export type ToolErrorCode =
+  | "invalid-arguments"
+  | "path-not-found"
+  | "path-access-denied"
+  | "unknown-tool"
+  | "internal-error";
+
+const TOOL_ERROR_NEXT_ACTIONS: Record<ToolErrorCode, string> = {
+  "invalid-arguments":
+    "Inspect the tool input schema and retry with valid arguments, or call " +
+    "describe_capabilities for the full contract.",
+  "path-not-found":
+    "Verify the path exists and is inside the repository being audited.",
+  "path-access-denied":
+    "Choose a readable path; this server never requests elevated permissions.",
+  "unknown-tool": "Call describe_capabilities to list the available tools.",
+  "internal-error":
+    "Retry once; if it persists, report the tool name and arguments before " +
+    "trying a different approach.",
+};
+
+function classifyToolError(error: unknown): ToolErrorCode {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === "ENOENT") return "path-not-found";
+  if (code === "EACCES" || code === "EPERM") return "path-access-denied";
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.startsWith("Unknown tool")) return "unknown-tool";
+  if (
+    /^(?:Invalid|Missing required) .*arguments?/u.test(message) ||
+    message.includes("requires --changed")
+  ) {
+    return "invalid-arguments";
+  }
+  return "internal-error";
+}
+
+/** Map an unexpected failure to a structured, house-prefixed error result. */
 export function errorToolResult(error: unknown): CallToolResult {
   const message = error instanceof Error ? error.message : String(error);
+  const code = classifyToolError(error);
   return {
-    content: [{ type: "text", text: `codebase-doctor: ${message}` }],
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            error: {
+              code,
+              message: `codebase-doctor: ${message}`,
+              nextAction: TOOL_ERROR_NEXT_ACTIONS[code],
+            },
+          },
+          null,
+          2,
+        ),
+      },
+    ],
     isError: true,
   };
 }

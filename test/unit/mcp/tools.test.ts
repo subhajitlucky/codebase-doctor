@@ -257,14 +257,34 @@ describe("explain_finding tool handler", () => {
   );
 });
 
-describe("error mapping", () => {  it("prefixes operational failures with the house error marker", () => {
+describe("error mapping", () => {  it("returns a structured envelope with the house error marker", () => {
     const result = errorToolResult(new Error("boom"));
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe("codebase-doctor: boom");
+    const payload = JSON.parse(textOf(result)) as {
+      error: { code: string; message: string; nextAction: string };
+    };
+    expect(payload.error.code).toBe("internal-error");
+    expect(payload.error.message).toBe("codebase-doctor: boom");
+    expect(payload.error.nextAction.length).toBeGreaterThan(0);
+  });
+
+  it("classifies missing paths and unknown tools", () => {
+    const missing = Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+    expect(
+      (JSON.parse(textOf(errorToolResult(missing))) as { error: { code: string } }).error.code,
+    ).toBe("path-not-found");
+    expect(
+      (JSON.parse(textOf(errorToolResult(new Error('Unknown tool "nope".')))) as {
+        error: { code: string };
+      }).error.code,
+    ).toBe("unknown-tool");
   });
 
   it("stringifies non-error throwables", () => {
-    expect(textOf(errorToolResult("plain"))).toBe("codebase-doctor: plain");
+    const payload = JSON.parse(textOf(errorToolResult("plain"))) as {
+      error: { message: string };
+    };
+    expect(payload.error.message).toBe("codebase-doctor: plain");
   });
 });
 describe("review_changes tool handler", () => {
