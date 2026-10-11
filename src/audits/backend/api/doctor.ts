@@ -325,6 +325,81 @@ function isStringLiteral(node: JsonLikeObject | undefined): boolean {
 }
 
 /**
+ * Recognized escaping helpers whose contract includes making a value safe for
+ * interpolation into SQL text. Identifier-based recognition, exactly like the
+ * parameterized-array pattern: the rule fires only for observably unescaped
+ * dynamic text, and an unrecognized helper is a limitation, never a finding.
+ */
+const SAFE_SQL_ESCAPER_NAMES = new Set([
+  "quoteIdentifier",
+  "quoteLiteral",
+  "escapeIdentifier",
+  "escapeLiteral",
+  "escapePostgresIdentifier",
+  "escapePostgresLiteral",
+]);
+
+function callName(callee: JsonLikeObject): string | undefined {
+  const type = nodeType(callee);
+  if (type === "Identifier" && typeof callee["name"] === "string") return callee["name"];
+  if (type === "MemberExpression") {
+    const property = isObject(callee["property"]) ? callee["property"] : undefined;
+    if (property === undefined) return undefined;
+    if (nodeType(property) === "Identifier" && typeof property["name"] === "string") {
+      return property["name"];
+    }
+    if (nodeType(property) === "StringLiteral" && typeof property["value"] === "string") {
+      return property["value"];
+    }
+  }
+  return undefined;
+}
+
+function isSafeEscaperCall(node: unknown): boolean {
+  const candidate = isObject(node) ? node : undefined;
+  if (candidate === undefined || nodeType(candidate) !== "CallExpression") return false;
+  const callee = isObject(candidate["callee"]) ? candidate["callee"] : undefined;
+  if (callee === undefined) return false;
+  if (nodeType(callee) === "MemberExpression") {
+    const object = isObject(callee["object"]) ? callee["object"] : undefined;
+    if (object === undefined || nodeType(object) !== "Identifier") return false;
+  }
+  const name = callName(callee);
+  return name !== undefined && SAFE_SQL_ESCAPER_NAMES.has(name);
+}
+
+function isSafelyEscapedDynamic(node: unknown): boolean {
+  const candidate = isObject(node) ? node : undefined;
+  if (candidate === undefined) return false;
+  const type = nodeType(candidate);
+  if (type === "StringLiteral" || type === "NumericLiteral") return true;
+  if (isSafeEscaperCall(candidate)) return true;
+  if (
+    type === "ParenthesizedExpression" ||
+    type === "TSAsExpression" ||
+    type === "TSNonNullExpression" ||
+    type === "TSInstantiationExpression"
+  ) {
+    return isSafelyEscapedDynamic(candidate["expression"]);
+  }
+  if (type === "BinaryExpression" && candidate["operator"] === "+") {
+    return isSafelyEscapedDynamic(candidate["left"]) && isSafelyEscapedDynamic(candidate["right"]);
+  }
+  return false;
+}
+
+function hasOnlySafeInterpolations(node: JsonLikeObject): boolean {
+  if (nodeType(node) === "TemplateLiteral") {
+    const expressions = Array.isArray(node["expressions"]) ? node["expressions"] : [];
+    return expressions.length > 0 && expressions.every(isSafelyEscapedDynamic);
+  }
+  if (nodeType(node) === "BinaryExpression") {
+    return isSafelyEscapedDynamic(node);
+  }
+  return false;
+}
+
+/**
  * Deterministic, offline backend API analysis. Rules fire only for calls whose
  * receiver provably resolves to an audited database or process package, and
  * only for query or command text that is observably dynamic. Anything whose
@@ -423,6 +498,7 @@ export function analyzeBackendApi(
     if (nodeType(text) === "BinaryExpression" || nodeType(text) === "TemplateLiteral") {
       const parameterized = isObject(second) && nodeType(second) === "ArrayExpression";
       if (parameterized && nodeType(text) !== "TemplateLiteral") continue;
+      if (hasOnlySafeInterpolations(text)) continue;
       findings.push(findingFor(path, {
         ruleId: "sql-string-concat-query",
         severity: "high",

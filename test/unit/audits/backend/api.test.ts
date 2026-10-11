@@ -50,6 +50,36 @@ describe("backend/api SQL analysis", () => {
     expect(parameterized.limitations).toEqual([]);
   });
 
+  it("accepts recognized escaping helpers and still flags unescaped interpolations", () => {
+    const escaped = analyzeBackendApi(
+      "db.js",
+      [
+        'import { Pool, escapeIdentifier, escapeLiteral } from "pg";',
+        "const pool = new Pool();",
+        "export function byId(id) { return pool.query(`SELECT * FROM users WHERE id = ${escapeIdentifier(id)}`); }",
+        'export function byName(name) { return pool.query("SELECT * FROM users WHERE name = " + escapeLiteral(name)); }',
+        "",
+      ].join("\n"),
+      false,
+    );
+    expect(escaped.findings).toEqual([]);
+    expect(escaped.limitations).toEqual([]);
+
+    const mixed = analyzeBackendApi(
+      "db.js",
+      [
+        'import { Pool, escapeIdentifier } from "pg";',
+        "const pool = new Pool();",
+        "export function byId(id, other) { return pool.query(`SELECT * FROM users WHERE id = ${escapeIdentifier(id)} AND x = ${other}`); }",
+        "",
+      ].join("\n"),
+      false,
+    );
+    expect(mixed.findings.map(({ ruleId }) => ruleId)).toEqual([
+      "backend/api/sql-string-concat-query",
+    ]);
+  });
+
   it("withholds judgment on unresolvable query text", () => {
     const analysis = analyzeBackendApi(
       "db.js",
