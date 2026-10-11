@@ -32,8 +32,11 @@ Coverage is reported per domain in every report. `coverageComplete` does not mea
 
 ## For agents
 
-- Skill: `.claude/skills/codebase-doctor/SKILL.md` (also `.agents/skills/`)
-- MCP: `claude mcp add codebase-doctor -- npx -y codebase-doctor mcp`
+- Skill: `.agents/skills/codebase-doctor/SKILL.md` (also `.claude/skills/` after `npx skills add subhajitlucky/codebase-doctor`)
+- MCP: `claude mcp add codebase-doctor --scope user -- npx -y codebase-doctor@0.4.13 mcp` — tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `verify_intent`, `build_receipt`, `describe_capabilities` (all read-only, annotated)
+- MCP errors: `{ error: { code, message, nextAction } }` — branch on `code`, not prose
+- Exit codes: `0` clean, `1` findings at/above the threshold, `2` operational failure (never clean)
+- Other clients (Codex CLI, Gemini CLI, generic stdio): https://github.com/subhajitlucky/codebase-doctor/blob/main/docs/agents.md
 
 ## Docs
 

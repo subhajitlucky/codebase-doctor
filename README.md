@@ -517,10 +517,10 @@ const API_KEY = "..."; // codebase-doctor-ignore: security/secrets/provider-toke
 ## MCP server and agents
 
 ```bash
-claude mcp add codebase-doctor -- npx -y codebase-doctor mcp
+claude mcp add codebase-doctor --scope user -- npx -y codebase-doctor@0.4.13 mcp
 ```
 
-Read-only tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `verify_intent`, `build_receipt`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access.
+Read-only tools, each annotated `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `verify_intent`, `build_receipt`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access. Failures return structured JSON shaped as `{ error: { code, message, nextAction } }`. Setup for Codex CLI, Gemini CLI, and generic stdio clients is in [docs/agents.md](docs/agents.md).
 
 Registry metadata ships in `server.json` (`io.github.subhajitlucky/codebase-doctor`); publishing steps for the official MCP registry, Smithery, and Glama are in [docs/mcp-registries.md](docs/mcp-registries.md).
 

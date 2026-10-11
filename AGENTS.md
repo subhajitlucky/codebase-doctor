@@ -27,7 +27,13 @@ codebase-doctor scan [path]      # repository-only scan (back-compat)
 codebase-doctor mcp              # serve read-only tools over stdio
 ```
 
-MCP tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `describe_capabilities`.
+MCP tools: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `verify_intent`, `build_receipt`, `describe_capabilities`. All are read-only and annotated (`readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`). MCP failures return `{ error: { code, message, nextAction } }`; branch on `code` (`invalid-arguments`, `path-not-found`, `path-access-denied`, `unknown-tool`, `internal-error`) instead of parsing prose.
+
+## Exit codes
+
+- `0`: requested audits completed and no finding met the threshold.
+- `1`: requested audits completed and a finding met the threshold.
+- `2`: invalid input or an operational failure prevented a requested audit. Never treat exit `2` as clean.
 
 ## Hard rules for agents
 
@@ -47,4 +53,5 @@ Reflection, runtime/DI wiring, generated sources, and cross-language process edg
 ## Links
 
 - npm: https://www.npmjs.com/package/codebase-doctor
+- Agent setup (Claude Code, Codex, Gemini, generic stdio): [docs/agents.md](docs/agents.md)
 - Post: https://subhajitpradhan.vercel.app/writing/what-breaks-if-i-change-this-file
