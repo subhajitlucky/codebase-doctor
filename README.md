@@ -560,6 +560,19 @@ are split so the token never appears contiguously in the working tree or in
 history — the generated fixture still contains it, so `demo` keeps
 demonstrating a real secret finding.
 
+## Rival scanner scoreboard
+
+Most benchmarks are self-run on self-authored fixtures. This one is too — and says so — then puts the same corpus through independently installed rival scanners:
+
+```bash
+npm run rival-differential -- --markdown docs/rival-scoreboard.md
+```
+
+It seeds disposable repositories with the same 17 deterministic cases plus advisory and control rows, runs codebase-doctor and pinned [Semgrep CE](https://semgrep.dev), [gitleaks](https://github.com/gitleaks/gitleaks), [Trivy](https://github.com/aquasecurity/trivy), and [osv-scanner](https://google.github.io/osv-scanner/) over each, and publishes a dated snapshot of caught, missed, noise on clean controls, and out-of-scope cells — including where codebase-doctor loses. Rival results are not a CI gate; registries and advisory databases move.
+
+- Snapshot + methodology: [docs/rival-scoreboard.md](docs/rival-scoreboard.md)
+- A weekly workflow publishes the latest run to the Actions job summary (`.github/workflows/rival-scoreboard.yml`).
+
 ## Development
 
 ```bash

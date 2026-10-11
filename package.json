@@ -38,7 +38,8 @@
     "version": "node scripts/sync-version.mjs",
     "ci": "npm run typecheck && npm test && npm run build",
     "ci:full": "npm run ci && npm run test:package && node scripts/red-team.mjs && npm audit --audit-level=high",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "rival-differential": "npm run build && node scripts/rival-differential.mjs"
   },
   "keywords": [
     "codebase",

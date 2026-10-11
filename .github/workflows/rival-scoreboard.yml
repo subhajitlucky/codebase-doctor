@@ -1,0 +1,57 @@
+name: Rival scoreboard
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scoreboard:
+    name: Rival differential snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install pinned rival scanners
+        run: |
+          curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" | sudo tar xz -C /usr/local/bin gitleaks
+          curl -sL "https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz" | sudo tar xz -C /usr/local/bin trivy
+          sudo curl -sL -o /usr/local/bin/osv-scanner "https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64"
+          sudo chmod +x /usr/local/bin/osv-scanner
+          pipx install semgrep==1.180.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run rival differential
+        run: npm run rival-differential -- --out rival-results.json --markdown rival-scoreboard.md
+
+      - name: Publish job summary
+        if: always()
+        run: |
+          if [ -f rival-scoreboard.md ]; then
+            cat rival-scoreboard.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rival-scoreboard
+          path: |
+            rival-scoreboard.md
+            rival-results.json
+          if-no-files-found: warn
