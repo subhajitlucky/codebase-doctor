@@ -128,6 +128,7 @@ export interface SqlReductionCoverage {
 
 export interface SqlStreamState {
   streamId: string;
+  streamRoot?: string;
   tables: readonly StaticTableState[];
   coverage: SqlReductionCoverage;
 }

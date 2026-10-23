@@ -56,6 +56,9 @@ const PNPM_LOCK = [
   "    resolution: {repo: https://github.com/user/beta.git, commit: 0123456789abcdef0123456789abcdef01234567, type: git}",
   "  epsilon@1.0.0:",
   "    resolution: {repo: https://github.com/user/epsilon.git, type: git}",
+  "snapshots:",
+  "  alpha@1.0.0: {}",
+  "  gamma@2.0.0: {}",
   "",
 ].join("\n");
 

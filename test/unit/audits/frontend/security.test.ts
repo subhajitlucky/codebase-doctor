@@ -43,6 +43,40 @@ describe("frontend/security JSX analysis", () => {
     expect(analysis.limitations).toEqual([]);
   });
 
+  it("accepts local const strings used as inline HTML", () => {
+    const analysis = analyzeJsxSecurity(
+      "layout.tsx",
+      [
+        "const themeScript = `document.documentElement.classList.add('dark');`;",
+        "export function Layout() {",
+        "  return <script dangerouslySetInnerHTML={{ __html: themeScript }} />;",
+        "}",
+        "",
+      ].join("\n"),
+      false,
+    );
+
+    expect(analysis.findings).toEqual([]);
+  });
+
+  it("still flags a mutable identifier used as inline HTML", () => {
+    const analysis = analyzeJsxSecurity(
+      "page.tsx",
+      [
+        "let html = userInput;",
+        "export function Page() {",
+        "  return <div dangerouslySetInnerHTML={{ __html: html }} />;",
+        "}",
+        "",
+      ].join("\n"),
+      false,
+    );
+
+    expect(analysis.findings.map(({ ruleId }) => ruleId)).toEqual([
+      "frontend/security/dangerously-set-inner-html",
+    ]);
+  });
+
   it("suppresses spread props instead of guessing", () => {
     const analysis = analyzeJsxSecurity(
       "page.tsx",

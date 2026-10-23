@@ -16,11 +16,29 @@ export interface ReceiptSignature {
   value: string;
 }
 
+export interface ReviewReceiptMetadata {
+  verdict: "NO_CHANGES" | "APPROVE" | "COMMENT" | "REQUEST_CHANGES";
+  failOn: string;
+  findingsInDiff: number;
+  totalFindings: number;
+  excludedCount: number;
+  linePrecision: boolean;
+  allFindings: boolean;
+  baselineFiltered: boolean;
+}
+
 export interface CoverageReceipt {
   receiptVersion: string;
   tool: { name: string; version: string };
   issuedAt: string;
-  subject: { root: string; scope: string };
+  subject: {
+    root: string;
+    scope: string;
+    commit: string | null;
+    baseCommit: string | null;
+    changedPaths: number;
+    changesDigest: string;
+  };
   score: { value: number; band: string };
   coverage: ReceiptCoverage;
   findings: {
@@ -30,6 +48,7 @@ export interface CoverageReceipt {
   };
   suppressed: number;
   shadow?: boolean;
+  review?: ReviewReceiptMetadata;
   digest: { algorithm: "sha256"; value: string };
   signature?: ReceiptSignature;
 }
@@ -58,6 +77,7 @@ export interface BuildReceiptOptions {
   issuedAt?: Date;
   privateKeyPem?: string;
   shadow?: boolean;
+  review?: ReviewReceiptMetadata;
 }
 
 /**
@@ -68,11 +88,21 @@ export interface BuildReceiptOptions {
 export function buildReceipt(result: ScanResult, options: BuildReceiptOptions = {}): CoverageReceipt {
   const limitations = coverageLimitations(result);
   const score = scoreScanResult(result);
+  const changesDigest = createHash("sha256")
+    .update(canonicalJson(result.auditScope.changes), "utf8")
+    .digest("hex");
   const body: ReceiptBody = {
     receiptVersion: RECEIPT_VERSION,
     tool: { name: result.tool.name, version: result.tool.version },
     issuedAt: (options.issuedAt ?? new Date()).toISOString(),
-    subject: { root: result.repository.root, scope: result.auditScope.mode },
+    subject: {
+      root: result.repository.root,
+      scope: result.auditScope.mode,
+      commit: result.repository.commit ?? null,
+      baseCommit: result.auditScope.base?.resolvedCommit ?? null,
+      changedPaths: result.auditScope.changes.length,
+      changesDigest,
+    },
     score: { value: score.value, band: score.band },
     coverage: { complete: limitations.length === 0, limitations },
     findings: {
@@ -82,6 +112,7 @@ export function buildReceipt(result: ScanResult, options: BuildReceiptOptions = 
     },
     suppressed: result.suppressed.length,
     ...(options.shadow === true ? { shadow: true } : {}),
+    ...(options.review === undefined ? {} : { review: options.review }),
   };
 
   const receipt: CoverageReceipt = {
@@ -166,7 +197,17 @@ function receiptSummary(receipt: CoverageReceipt): string {
   const lines = [
     `receipt: ${receipt.tool.name} ${receipt.tool.version} · issued ${receipt.issuedAt}`,
     `subject: ${receipt.subject.root} (scope=${receipt.subject.scope})`,
+    `identity: commit=${receipt.subject.commit ?? "unknown"} · ` +
+    `base=${receipt.subject.baseCommit ?? "none"} · ` +
+    `changed=${receipt.subject.changedPaths ?? "unknown"} · ` +
+    `changesDigest=${(receipt.subject.changesDigest ?? "unknown").slice(0, 16)}`,
     ...(receipt.shadow === true ? ["environment: shadow (disposable copy)"] : []),
+    ...(receipt.review === undefined
+      ? []
+      : [
+          `review: ${receipt.review.verdict} (${receipt.review.findingsInDiff} in diff, ` +
+          `${receipt.review.totalFindings} total, ${receipt.review.excludedCount} excluded)`,
+        ]),
     `score: ${receipt.score.value}/100 (${receipt.score.band})`,
     `coverage: ${receipt.coverage.complete ? "complete" : "incomplete"}`,
   ];

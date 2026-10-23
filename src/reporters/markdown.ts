@@ -23,6 +23,7 @@ const MAX_SCOPE_LIST_ITEMS = 20;
 const MAX_IMPACT_ITEMS = 10;
 
 const VERDICT_EMOJI: Record<ReviewVerdict, string> = {
+  NO_CHANGES: "⚪",
   APPROVE: "🟢",
   COMMENT: "🟡",
   REQUEST_CHANGES: "🔴",

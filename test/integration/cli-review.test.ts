@@ -150,6 +150,62 @@ describe("review CLI", () => {
     expect(withNew.stdout).toContain("REQUEST_CHANGES");
   });
 
+  it("writes a signed, verifiable review receipt without leaking secrets", { timeout: 30_000 }, async () => {
+    const secret = generatedToken("ghp_");
+    const root = await createRepository({ "ok.ts": "export const value = 1;\n" });
+    await writeProjectFile(root, "changed.ts", `const GITHUB_TOKEN = "${secret}";\n`);
+
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const keyPath = `${root}/receipt-key.pem`;
+    const receiptPath = `${root}/proof/review.json`;
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(keyPath, privateKey.export({ type: "pkcs8", format: "pem" }).toString());
+
+    const review = cli([
+      "review", root, "--format", "brief", "--fail-on", "high",
+      "--receipt", receiptPath, "--receipt-key", keyPath,
+    ]);
+    expect(review.status, review.stderr).toBe(1);
+    expect(review.stderr).toContain("receipt written");
+
+    const raw = (await import("node:fs")).readFileSync(receiptPath, "utf8");
+    expect(raw).not.toContain(secret);
+    const receipt = JSON.parse(raw);
+    expect(receipt.review).toMatchObject({
+      verdict: "REQUEST_CHANGES",
+      excludedCount: 0,
+      linePrecision: true,
+      allFindings: false,
+      baselineFiltered: false,
+    });
+    expect(receipt.review.findingsInDiff).toBeGreaterThan(0);
+    expect(receipt.findings.total).toBe(receipt.review.findingsInDiff);
+    expect(receipt.review.totalFindings).toBe(
+      receipt.review.findingsInDiff + receipt.review.excludedCount,
+    );
+    expect(receipt.subject.commit).toMatch(/^[0-9a-f]{40}$/u);
+    expect(receipt.signature.algorithm).toBe("ed25519");
+
+    const verified = cli(["verify-receipt", receiptPath]);
+    expect(verified.status, verified.stderr).toBe(0);
+    expect(verified.stdout).toContain("review: REQUEST_CHANGES");
+    expect(verified.stdout).toContain("signature: ed25519");
+  });
+
+  it("never labels an empty checkout as approved", { timeout: 30_000 }, async () => {
+    const root = await createRepository({ "ok.ts": "export const value = 1;\n" });
+
+    const review = cli(["review", root, "--format", "brief", "--fail-on", "high"]);
+    expect(review.status, review.stderr).toBe(0);
+    expect(review.stdout).toContain("NO_CHANGES");
+    expect(review.stdout).not.toContain("APPROVE");
+
+    const required = cli(["review", root, "--format", "brief", "--require-base"]);
+    expect(required.status).toBe(2);
+    expect(required.stderr).toContain("--require-base requires --base");
+  });
+
   it("rejects unknown review formats and writes reports to --output", { timeout: 30_000 }, async () => {
     const root = await createRepository();
 

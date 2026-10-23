@@ -15,6 +15,26 @@ All notable changes to Codebase Doctor are documented here.
   findings. A random credential with an 8+ sequential run is astronomically
   unlikely, while hand-typed fixtures use them constantly. This keeps the
   tool's own audit clean without suppressing real-looking values in tests.
+- Fix pnpm v9 lock parsing so resolution-less `snapshots` entries no longer
+  overwrite integrity evidence from the `packages` section.
+- Mirror staged, unstaged, deleted, and untracked files into `shadow` copies;
+  `shadow` now audits the actual working tree instead of committed HEAD.
+- `review` reports `NO_CHANGES` for an empty diff and supports
+  `--require-base`; the GitHub Action derives `origin/<base_ref>` for pull
+  requests and no longer treats an empty checkout as `APPROVE`.
+- Bind receipts to the repository HEAD, base commit, changed-path count, and a
+  SHA-256 digest of the changed-path set.
+- Stop scoring ordinary Prisma/Postgres migrations as insecure solely because
+  RLS is disabled; static RLS findings now require Supabase or observable RLS
+  intent, while application-grant exposure remains high severity.
+- Resolve local `const` string/template consumers before reporting
+  `dangerously-set-inner-html`; mutable identifiers still report.
+- Pin the GitHub Action's npm version and add inputs for live database access,
+  advisories, receipts, and `require-base`; upload receipts as artifacts.
+- Run the live RLS integration suite in CI.
+- Raise the packed-cli release test timeout to 120 seconds to stop
+  registry-latency flakes.
+- Update Vitest and Node typings to clear dev-only audit advisories.
 
 ### Added
 
@@ -71,6 +91,16 @@ All notable changes to Codebase Doctor are documented here.
   (generated manifest, built CLI, production dependencies) with an
   end-to-end integration test.
 
+
+## [0.2.0–0.4.13] - 2026-10-09
+
+Consolidated release notes for the intermediate tags. These releases added the
+Repo Health score and badge, disposable demo, standalone HTML report, changed
+source-impact graph, 100-repository agent-config study, coverage receipts and
+Ed25519 signing, shadow audits, chronological bisect, adversarial red-team
+corpus, rival differential scoreboard, verifier swarm, pheromone signals,
+intent verification, shadow-ledger economic verification, proof-carrying
+repairs, exploit witnesses, and the real-tarball package checks.
 
 ## [0.1.10] - 2026-10-05
 

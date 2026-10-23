@@ -307,7 +307,7 @@ function compositionFindings(streamId: string, table: StaticTableState): Finding
   return findings;
 }
 
-function analyzeTable(streamId: string, table: StaticTableState): Finding[] {
+function analyzeTable(streamId: string, table: StaticTableState, rlsIntent: boolean): Finding[] {
   if (table.dropped) return [];
   const findings: Finding[] = [];
   const applicationGrants = table.grants.filter(({ role }) => applicationRoles.has(role.toLowerCase()));
@@ -326,22 +326,30 @@ function analyzeTable(streamId: string, table: StaticTableState): Finding[] {
 
   if (table.rlsEnabled === false) {
     const exposure = applicationGrants.find(({ privilege }) => rowPrivileges.has(privilege));
-    findings.push(finding(streamId, table, exposure === undefined ? {
-      rule: "rls-disabled",
-      severity: "medium",
-      title: "Row Level Security is disabled",
-      message: `${qualifiedName(table)} is explicitly expected to have RLS disabled.`,
-      remediation: `Run: alter table ${quoteTable(table)} enable row level security;`,
-      evidence: table.rlsEvidence ?? table.lastEvidence,
-    } : {
-      rule: "rls-disabled-exposed",
-      severity: "high",
-      title: "RLS-disabled table has application-facing access",
-      message: `${qualifiedName(table)} has RLS disabled and grants ${exposure.privilege} directly to ${exposure.role}.`,
-      remediation: `Enable RLS and add least-privilege policies before granting application access.`,
-      evidence: exposure.evidence,
-      identity: [exposure.role, exposure.privilege],
-    }));
+    if (exposure !== undefined) {
+      findings.push(finding(streamId, table, {
+        rule: "rls-disabled-exposed",
+        severity: "high",
+        title: "RLS-disabled table has application-facing access",
+        message: `${qualifiedName(table)} has RLS disabled and grants ${exposure.privilege} directly to ${exposure.role}.`,
+        remediation: `Enable RLS and add least-privilege policies before granting application access.`,
+        evidence: exposure.evidence,
+        identity: [exposure.role, exposure.privilege],
+      }));
+    } else if (rlsIntent) {
+      // A table with RLS explicitly disabled is only a finding when this
+      // stream actually uses RLS (Supabase, a policy, an enabled table, or an
+      // application grant). Ordinary Prisma/Postgres apps with server-side
+      // authorization are not silently scored as insecure.
+      findings.push(finding(streamId, table, {
+        rule: "rls-disabled",
+        severity: "medium",
+        title: "Row Level Security is disabled",
+        message: `${qualifiedName(table)} is explicitly expected to have RLS disabled.`,
+        remediation: `Run: alter table ${quoteTable(table)} enable row level security;`,
+        evidence: table.rlsEvidence ?? table.lastEvidence,
+      }));
+    }
     return findings;
   }
 
@@ -372,5 +380,18 @@ function analyzeTable(streamId: string, table: StaticTableState): Finding[] {
 }
 
 export function analyzeStaticSqlRls(state: SqlStreamState): Finding[] {
-  return sortFindings(state.tables.flatMap((table) => analyzeTable(state.streamId, table)));
+  const streamRoot = (state.streamRoot ?? "").replaceAll("\\", "/");
+  const hasSupabaseRoot = streamRoot === "supabase/migrations" ||
+    streamRoot.endsWith("/supabase/migrations");
+  const hasRlsEvidence = state.tables.some((table) =>
+    table.rlsEnabled === true ||
+    table.policies.length > 0 ||
+    table.grants.some(({ role, privilege }) =>
+      applicationRoles.has(role.toLowerCase()) && rowPrivileges.has(privilege)
+    )
+  );
+  const rlsIntent = hasSupabaseRoot || hasRlsEvidence;
+  return sortFindings(state.tables.flatMap((table) =>
+    analyzeTable(state.streamId, table, rlsIntent)
+  ));
 }

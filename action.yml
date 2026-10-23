@@ -42,10 +42,30 @@ inputs:
     description: "Post the markdown report as a pull-request comment (\"true\" or \"false\"). Requires format markdown and pull-requests write permission."
     required: false
     default: "false"
-  version:
-    description: codebase-doctor version to install from npm.
+  with-database:
+    description: "Permit the live PostgreSQL RLS audit; the caller must provide DATABASE_URL or SUPABASE_DB_URL."
     required: false
-    default: latest
+    default: "false"
+  database-schema:
+    description: "PostgreSQL schema to audit when with-database is enabled."
+    required: false
+    default: "public"
+  with-advisories:
+    description: "Permit the opt-in OSV advisory lookup (network)."
+    required: false
+    default: "false"
+  receipt:
+    description: "Optional path for a portable review/audit receipt; uploaded as an artifact when set."
+    required: false
+    default: ""
+  require-base:
+    description: "For review: fail if base is empty instead of treating an empty checkout as a no-op."
+    required: false
+    default: "false"
+  version:
+    description: "Pinned codebase-doctor version to install from npm. Bump this with the action release."
+    required: false
+    default: "0.4.13"
   upload:
     description: "Upload SARIF findings to GitHub code scanning (true or false). Requires the security-events write permission."
     required: false
@@ -59,6 +79,9 @@ outputs:
   report:
     description: Path to the generated report file.
     value: ${{ inputs.output }}
+  receipt:
+    description: Path to the generated receipt, when requested.
+    value: ${{ inputs.receipt }}
 
 runs:
   using: composite
@@ -76,17 +99,34 @@ runs:
       shell: bash
       run: |
         args=("${{ inputs.command }}" "${{ inputs.path }}" --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
-        if [ -n "${{ inputs.base }}" ]; then args+=(--base "${{ inputs.base }}"); fi
+        if [ -n "${{ inputs.base }}" ]; then
+          args+=(--base "${{ inputs.base }}")
+        elif [ "${{ inputs.command }}" = "review" ] && [ -n "${{ github.base_ref }}" ]; then
+          args+=(--base "origin/${{ github.base_ref }}")
+        fi
+        if [ "${{ inputs.require-base }}" = "true" ]; then args+=(--require-base); fi
         if [ "${{ inputs.require-complete }}" = "true" ]; then args+=(--require-complete); fi
         if [ "${{ inputs.run-checks }}" = "true" ]; then args+=(--run-checks); fi
+        if [ "${{ inputs.with-database }}" = "true" ]; then args+=(--with-database); fi
+        if [ -n "${{ inputs.database-schema }}" ]; then args+=(--database-schema "${{ inputs.database-schema }}"); fi
+        if [ "${{ inputs.with-advisories }}" = "true" ]; then args+=(--with-advisories); fi
+        if [ -n "${{ inputs.receipt }}" ]; then args+=(--receipt "${{ inputs.receipt }}"); fi
 
         codebase-doctor "${args[@]}" > "${{ inputs.output }}" && status=0 || status=$?
-        cat "${{ inputs.output }}"
+        if [ -f "${{ inputs.output }}" ]; then cat "${{ inputs.output }}"; fi
         echo "codebase-doctor exit code: $status"
         exit $status
 
+    - name: Upload receipt
+      if: ${{ always() && inputs.receipt != '' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: codebase-doctor-receipt
+        path: ${{ inputs.receipt }}
+        if-no-files-found: error
+
     - name: Comment PR with review
-      if: ${{ inputs.comment == 'true' && inputs.format == 'markdown' }}
+      if: ${{ always() && inputs.comment == 'true' && inputs.format == 'markdown' }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -95,10 +135,14 @@ runs:
           echo "codebase-doctor: no pull request context; skipping PR comment."
           exit 0
         fi
+        if [ ! -f "${{ inputs.output }}" ]; then
+          echo "codebase-doctor: report file is missing; skipping PR comment."
+          exit 0
+        fi
         gh pr comment "${{ github.event.pull_request.number }}" --body-file "${{ inputs.output }}"
 
     - name: Upload SARIF to code scanning
-      if: ${{ inputs.upload == 'true' && inputs.format == 'sarif' }}
+      if: ${{ always() && inputs.upload == 'true' && inputs.format == 'sarif' }}
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: ${{ inputs.output }}

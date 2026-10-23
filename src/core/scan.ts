@@ -29,6 +29,7 @@ import { displayCommand } from "../execution/command-plan.js";
 import { planChecks } from "../doctors/checks/planner.js";
 import {
   discoverGitChanges,
+  resolveHeadCommit,
   type DiscoverChangesOptions,
   type DiscoveredChanges,
 } from "../scope/git.js";
@@ -89,6 +90,8 @@ export interface ScanDependencies {
     graph: SourceGraph,
   ): SourceImpact;
   discoverChanges(options: DiscoverChangesOptions): Promise<DiscoveredChanges>;
+  /** Optional for callers that provide custom scan dependencies. */
+  resolveHeadCommit?(root: string): Promise<string | undefined>;
   discoverRepositoryFiles(root: string): ReturnType<typeof discoverRepositoryFiles>;
   createDoctors(
     request: ScanRequest,
@@ -108,6 +111,7 @@ const defaultDependencies: ScanDependencies = {
   buildSourceGraph: buildInventoriedSourceGraph,
   planSourceImpact: planSourceImpactInternal,
   discoverChanges: discoverGitChanges,
+  resolveHeadCommit,
   discoverRepositoryFiles,
   createDoctors: (request, hooks, plans) => {
     const doctors: Doctor[] = [
@@ -168,6 +172,8 @@ export async function scanCodebase(
   const inventory = await dependencies.inventoryWorkspace(request.root, {
     exclude: request.exclude ?? [],
   });
+  const headCommit = await (dependencies.resolveHeadCommit ?? resolveHeadCommit)(inventory.root)
+    .catch(() => undefined);
   const manifests = await dependencies.loadManifests(inventory);
   const detection = await dependencies.detectWorkspaceProjects(inventory, manifests);
   const sourceGraph = await dependencies.buildSourceGraph(
@@ -255,6 +261,7 @@ export async function scanCodebase(
     domainCoverage,
     sourceImpact,
     suppression.suppressed,
+    headCommit,
   );
 }
 

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Command } from "commander";
 import { normalizeDatabaseSchemas, parseDatabaseTimeout } from "./audit.js";
@@ -20,6 +20,11 @@ import { renderJsonReport } from "../reporters/json.js";
 import { renderMarkdownReview } from "../reporters/markdown.js";
 import { renderSarifReport } from "../reporters/sarif.js";
 import { renderTextReport } from "../reporters/text.js";
+import {
+  buildReceipt,
+  serializeReceipt,
+  type CoverageReceipt,
+} from "../receipts/receipt.js";
 
 const DEFAULT_DATABASE_TIMEOUT_MS = 10_000;
 
@@ -40,6 +45,7 @@ export interface ReviewCommandOptions extends RepositoryCommandOptions {
   databaseSchema: string[];
   databaseTimeout: string;
   allFindings: boolean;
+  requireBase: boolean;
   output?: string;
 }
 
@@ -76,6 +82,7 @@ export interface ReviewReport {
   excludedCount: number;
   linePrecision: boolean;
   exitCode: 0 | 1 | 2;
+  receipt?: CoverageReceipt;
 }
 
 /**
@@ -207,6 +214,24 @@ export async function runReview(
   const exitCode = classifyReviewExit(summary.verdictFindings, failOn, doctorFailed, coverageComplete, {
     requireComplete: options.requireComplete,
   });
+  const privateKeyPem = options.receipt === undefined || options.receiptKey === undefined
+    ? undefined
+    : await readFile(options.receiptKey, "utf8");
+  const receipt = options.receipt === undefined
+    ? undefined
+    : buildReceipt(filteredResult, {
+        ...(privateKeyPem === undefined ? {} : { privateKeyPem }),
+        review: {
+          verdict,
+          failOn,
+          findingsInDiff: summary.included.length,
+          totalFindings: result.findings.length,
+          excludedCount: summary.excluded.length,
+          linePrecision: summary.linePrecision,
+          allFindings: options.allFindings,
+          baselineFiltered,
+        },
+      });
 
   return {
     report,
@@ -216,6 +241,7 @@ export async function runReview(
     excludedCount: summary.excluded.length,
     linePrecision: summary.linePrecision,
     exitCode,
+    ...(receipt === undefined ? {} : { receipt }),
   };
 }
 
@@ -232,10 +258,20 @@ async function executeReview(
     ) {
       throw new Error("The --base option requires a non-empty reference.");
     }
+    if (options.requireBase && (options.base === undefined || options.base === true)) {
+      throw new Error(
+        "--require-base requires --base <ref>. Reviewing an empty checkout as APPROVE is not allowed.",
+      );
+    }
     const review = await runReview(path, options);
     if (options.output !== undefined) {
       await mkdir(dirname(options.output), { recursive: true });
       await writeFile(options.output, review.report, "utf8");
+    }
+    if (options.receipt !== undefined && review.receipt !== undefined) {
+      await mkdir(dirname(options.receipt), { recursive: true });
+      await writeFile(options.receipt, serializeReceipt(review.receipt), "utf8");
+      process.stderr.write(`codebase-doctor: receipt written to ${options.receipt}\n`);
     }
     process.stdout.write(review.report);
     process.exitCode = review.exitCode;
@@ -263,6 +299,13 @@ export function createReviewCommand(): Command {
       false,
     )
     .option("--output <file>", "write the review report to a file as well as stdout")
+    .option("--receipt <path>", "write a portable review receipt to this path")
+    .option("--receipt-key <path>", "sign the receipt with an Ed25519 private key (PEM)")
+    .option(
+      "--require-base",
+      "fail when --base is missing; prevents an empty checkout from being approved",
+      false,
+    )
     .option(
       "--with-database",
       "permit a live PostgreSQL RLS audit using environment credentials",

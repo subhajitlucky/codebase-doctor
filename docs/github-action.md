@@ -49,8 +49,13 @@ jobs:
 | `require-complete` | `"false"` | Fail with exit code 2 when audit coverage is incomplete |
 | `run-checks` | `"false"` | Permit execution of detected validation commands |
 | `comment` | `"false"` | Post the markdown report as a pull-request comment; requires `format: markdown` and `pull-requests: write` |
-| `version` | `latest` | codebase-doctor version to install from npm |
-| `node-version` | `20` | Node.js version used to run the CLI |
+| `with-database` | `"false"` | Permit the live PostgreSQL RLS audit; provide `DATABASE_URL` or `SUPABASE_DB_URL` in the job environment |
+| `database-schema` | `public` | PostgreSQL schema to audit when `with-database` is enabled |
+| `with-advisories` | `"false"` | Permit the opt-in OSV advisory lookup over lockfiles |
+| `receipt` | `""` | Optional portable receipt path; uploaded as the `codebase-doctor-receipt` artifact |
+| `require-base` | `"false"` | For `review`: fail if no base is supplied instead of treating an empty checkout as a no-op |
+| `version` | `0.4.13` | Pinned codebase-doctor version to install from npm |
+| `node-version` | `22` | Node.js version used to run the CLI; `package.json` requires Node 22+ |
 
 ## Exit codes
 
@@ -95,12 +100,16 @@ steps:
       comment: "true"
 ```
 
+When `base` is empty on a pull request, the action derives
+`origin/${{ github.base_ref }}`. An empty diff is reported as `NO_CHANGES`,
+never as `APPROVE`; set `require-base: "true"` to fail closed instead.
+
 A finding on an unchanged line is out of scope for the verdict and counted as
 omitted; the full `audit` still reports it. Inspect coverage before calling
 the reviewed diff verified or clean.
 
 ## Notes
 
-- The action installs the published npm package; pin `version` for reproducible runs.
+- The action installs a pinned npm version by default; bump the `version` input and the action release tag together for reproducible runs.
 - `require-complete: "true"` makes partial domain coverage a failing condition, so a "clean" result is never reported when analyzers were skipped or unsupported.
 - `run-checks: "true"` executes repository-owned validation commands and should be used only on trusted code.

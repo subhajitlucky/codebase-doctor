@@ -110,6 +110,7 @@ function dependencies(doctors: readonly Doctor[]): ScanDependencies {
       base: { kind: "head" as const, requestedRef: null, resolvedCommit: "a".repeat(40) },
       changes: [],
     })),
+    resolveHeadCommit: vi.fn(async () => "a".repeat(40)),
     createDoctors: () => doctors,
   };
 }
