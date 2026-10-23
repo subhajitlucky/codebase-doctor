@@ -7,6 +7,7 @@ export type Capability =
 export interface CapabilityOptions {
   runChecks: boolean;
   withDatabase?: boolean;
+  withProbe?: boolean;
   withAdvisories?: boolean;
 }
 
@@ -15,7 +16,9 @@ export function buildAllowedCapabilities(
 ): ReadonlySet<Capability> {
   const capabilities = new Set<Capability>(["filesystem:read"]);
   if (options.runChecks) capabilities.add("process:execute");
-  if (options.withDatabase === true) capabilities.add("network:access");
+  if (options.withDatabase === true || options.withProbe === true) {
+    capabilities.add("network:access");
+  }
   if (options.withAdvisories === true) capabilities.add("network:advisories");
   return capabilities;
 }

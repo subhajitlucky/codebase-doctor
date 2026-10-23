@@ -46,6 +46,26 @@ inputs:
     description: "Permit the live PostgreSQL RLS audit; the caller must provide DATABASE_URL or SUPABASE_DB_URL."
     required: false
     default: "false"
+  with-probe:
+    description: "Run the read-only, rolled-back behavioral RLS probe against the live database."
+    required: false
+    default: "false"
+  app-roles:
+    description: "Comma-separated application roles to impersonate during probing."
+    required: false
+    default: ""
+  subjects:
+    description: "Comma-separated Supabase subjects to simulate during probing."
+    required: false
+    default: ""
+  owner-columns:
+    description: "Comma-separated ownership/tenant columns for the probe."
+    required: false
+    default: ""
+  probe-sample-limit:
+    description: "Rows sampled per table during probing."
+    required: false
+    default: "1000"
   database-schema:
     description: "PostgreSQL schema to audit when with-database is enabled."
     required: false
@@ -108,6 +128,13 @@ runs:
         if [ "${{ inputs.require-complete }}" = "true" ]; then args+=(--require-complete); fi
         if [ "${{ inputs.run-checks }}" = "true" ]; then args+=(--run-checks); fi
         if [ "${{ inputs.with-database }}" = "true" ]; then args+=(--with-database); fi
+        if [ "${{ inputs.with-probe }}" = "true" ]; then
+          args+=(--probe-db)
+          if [ -n "${{ inputs.app-roles }}" ]; then args+=(--app-roles "${{ inputs.app-roles }}"); fi
+          if [ -n "${{ inputs.subjects }}" ]; then args+=(--subjects "${{ inputs.subjects }}"); fi
+          if [ -n "${{ inputs.owner-columns }}" ]; then args+=(--owner-columns "${{ inputs.owner-columns }}"); fi
+          args+=(--probe-sample-limit "${{ inputs.probe-sample-limit }}")
+        fi
         if [ -n "${{ inputs.database-schema }}" ]; then args+=(--database-schema "${{ inputs.database-schema }}"); fi
         if [ "${{ inputs.with-advisories }}" = "true" ]; then args+=(--with-advisories); fi
         if [ -n "${{ inputs.receipt }}" ]; then args+=(--receipt "${{ inputs.receipt }}"); fi

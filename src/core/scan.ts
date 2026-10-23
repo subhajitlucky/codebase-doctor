@@ -5,6 +5,7 @@ import type { FindingThreshold } from "./summary.js";
 import { createCheckDoctor } from "../doctors/checks/doctor.js";
 import { projectDoctor } from "../doctors/project/doctor.js";
 import { createRlsDoctor } from "../audits/database/rls/doctor.js";
+import { createRlsProbeDoctor } from "../audits/database/rls-probe/doctor.js";
 import { createRlsDriftDoctor } from "../audits/database/rls-drift/doctor.js";
 import { createDrizzleDoctor } from "../audits/database/drizzle/doctor.js";
 import { createSqlRlsDoctor } from "../audits/database/sql-rls/doctor.js";
@@ -60,6 +61,11 @@ export interface ScanRequest {
   includeDatabaseAudit?: boolean;
   includeSecurityAudit?: boolean;
   withDatabase?: boolean;
+  withProbe?: boolean;
+  probeAppRoles?: readonly string[];
+  probeSubjects?: readonly string[];
+  probeOwnerColumns?: readonly string[];
+  probeSampleLimit?: number;
   withAdvisories?: boolean;
   databaseSchemas?: readonly string[];
   databaseTimeoutMs?: number;
@@ -156,6 +162,23 @@ const defaultDependencies: ScanDependencies = {
         statementTimeoutMs: request.databaseTimeoutMs ?? 10_000,
       }));
     }
+    if (request.withProbe === true) {
+      doctors.push(createRlsProbeDoctor({
+        schemas: request.databaseSchemas ?? ["public"],
+        appRoles: request.probeAppRoles ?? [],
+        subjects: request.probeSubjects ?? [],
+        ownerColumns: request.probeOwnerColumns ?? [
+          "owner_id",
+          "user_id",
+          "tenant_id",
+          "account_id",
+        ],
+        ...(request.probeSampleLimit === undefined
+          ? {}
+          : { sampleLimit: request.probeSampleLimit }),
+        statementTimeoutMs: request.databaseTimeoutMs ?? 10_000,
+      }));
+    }
     return doctors;
   },
 };
@@ -214,6 +237,7 @@ export async function scanCodebase(
     {
       runChecks: request.runChecks,
       withDatabase: request.withDatabase === true,
+      withProbe: request.withProbe === true,
       withAdvisories: request.withAdvisories === true,
     },
   );

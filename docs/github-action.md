@@ -50,6 +50,11 @@ jobs:
 | `run-checks` | `"false"` | Permit execution of detected validation commands |
 | `comment` | `"false"` | Post the markdown report as a pull-request comment; requires `format: markdown` and `pull-requests: write` |
 | `with-database` | `"false"` | Permit the live PostgreSQL RLS audit; provide `DATABASE_URL` or `SUPABASE_DB_URL` in the job environment |
+| `with-probe` | `"false"` | Run the read-only, rolled-back behavioral RLS probe |
+| `app-roles` | `""` | Comma-separated application roles to impersonate during probing |
+| `subjects` | `""` | Comma-separated Supabase subjects to simulate during probing |
+| `owner-columns` | `""` | Comma-separated ownership/tenant columns for the probe |
+| `probe-sample-limit` | `1000` | Rows sampled per table during probing |
 | `database-schema` | `public` | PostgreSQL schema to audit when `with-database` is enabled |
 | `with-advisories` | `"false"` | Permit the opt-in OSV advisory lookup over lockfiles |
 | `receipt` | `""` | Optional portable receipt path; uploaded as the `codebase-doctor-receipt` artifact |

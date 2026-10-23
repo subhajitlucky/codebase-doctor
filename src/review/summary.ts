@@ -38,9 +38,10 @@ export function summarizeReview(
   );
   const baselineFiltered = result.comparison !== undefined;
   const verdictFindings = selectVerdictFindings(filtered.included, result.comparison?.new);
-  const verdict: ReviewVerdict = result.auditScope.changes.length === 0
-    ? "NO_CHANGES"
-    : decideReviewVerdict(verdictFindings, failOn);
+  const verdict: ReviewVerdict =
+    result.auditScope.changes.length === 0 && filtered.included.length === 0
+      ? "NO_CHANGES"
+      : decideReviewVerdict(verdictFindings, failOn);
   return {
     verdict,
     included: filtered.included,

@@ -28,6 +28,11 @@ describe("GitHub Action contract", () => {
   it("exposes the CLI capabilities that matter for proof and live RLS", () => {
     for (const name of [
       "with-database",
+      "with-probe",
+      "app-roles",
+      "subjects",
+      "owner-columns",
+      "probe-sample-limit",
       "database-schema",
       "with-advisories",
       "receipt",

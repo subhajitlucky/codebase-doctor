@@ -1,7 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Command } from "commander";
-import { normalizeDatabaseSchemas, parseDatabaseTimeout } from "./audit.js";
+import {
+  buildProbeRequest,
+  normalizeDatabaseSchemas,
+  parseDatabaseTimeout,
+} from "./audit.js";
 import {
   configureRepositoryCommand,
   parseMaxFindings,
@@ -41,6 +45,11 @@ const REVIEW_FORMATS = new Set<ReviewFormat>([
 
 export interface ReviewCommandOptions extends RepositoryCommandOptions {
   withDatabase: boolean;
+  probeDb: boolean;
+  appRoles?: string;
+  subjects?: string;
+  ownerColumns?: string;
+  probeSampleLimit: string;
   withAdvisories: boolean;
   databaseSchema: string[];
   databaseTimeout: string;
@@ -64,13 +73,15 @@ function parseReviewFormat(options: ReviewCommandOptions): ReviewFormat {
 }
 
 function databaseRequest(options: ReviewCommandOptions): Partial<ScanRequest> {
+  const probe = buildProbeRequest(options);
   return {
     includeDatabaseAudit: true,
     includeSecurityAudit: true,
-    withDatabase: options.withDatabase,
+    withDatabase: options.withDatabase || probe.withProbe === true,
     withAdvisories: options.withAdvisories,
     databaseSchemas: normalizeDatabaseSchemas(options.databaseSchema),
     databaseTimeoutMs: parseDatabaseTimeout(options.databaseTimeout),
+    ...probe,
   };
 }
 
@@ -326,7 +337,16 @@ export function createReviewCommand(): Command {
       "--with-advisories",
       "permit one opt-in OSV advisory lookup over resolved npm packages (network)",
       false,
-    );
+    )
+    .option(
+      "--probe-db",
+      "run a read-only, rolled-back behavioral RLS probe against the live database",
+      false,
+    )
+    .option("--app-roles <roles>", "comma-separated application roles to impersonate")
+    .option("--subjects <subjects>", "comma-separated Supabase subjects to simulate")
+    .option("--owner-columns <columns>", "comma-separated ownership/tenant columns")
+    .option("--probe-sample-limit <n>", "rows sampled per table during probing", "1000");
 
   const configured = configureRepositoryCommand<ReviewCommandOptions>(
     command,

@@ -206,6 +206,14 @@ describe("review CLI", () => {
     expect(required.stderr).toContain("--require-base requires --base");
   });
 
+  it("requires explicit app roles for the behavioral probe", async () => {
+    const root = await createRepository();
+
+    const result = cli(["review", root, "--probe-db", "--fail-on", "none"]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("--probe-db requires at least one --app-roles");
+  });
+
   it("rejects unknown review formats and writes reports to --output", { timeout: 30_000 }, async () => {
     const root = await createRepository();
 

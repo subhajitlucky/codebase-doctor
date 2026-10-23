@@ -217,6 +217,18 @@ Live `database/rls` inspects observed database state through a read-only catalog
 
 `database/rls-drift` compares the two — expected migration state against observed live state — and reports `table-missing-live`, `rls-disabled-live`, `force-rls-disabled-live`, `policy-missing-live`, `grant-missing-live`, `rls-enabled-live-only`, and `policy-unmanaged-live`.
 
+`database/rls-probe` is the behavioral layer. With `--probe-db`, it impersonates each `--app-roles` identity inside a read-only, rolled-back transaction, optionally sets Supabase `request.jwt.claims` for each `--subjects` UUID, and proves whether the role can read rows across ownership or tenant boundaries:
+
+```bash
+codebase-doctor audit . --with-database --probe-db \
+  --app-roles authenticated \
+  --subjects 00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000002 \
+  --owner-columns owner_id,tenant_id \
+  --database-schema public
+```
+
+A cross-subject or cross-owner read is high severity. The probe never writes, never commits, and always rolls back.
+
 ### Database and Drizzle hazards
 
 The read-only, offline `database/drizzle` module and its `database/drizzle/raw-sql-date-parameter` rule catch a runtime boundary: a JavaScript `Date` interpolated into a raw Drizzle `sql` template can bypass the column's timestamp encoder, so postgres-js may throw `ERR_INVALID_ARG_TYPE`, while equivalent SQL can still work in psql.

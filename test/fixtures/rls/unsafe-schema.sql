@@ -49,6 +49,10 @@ create table rls_doctor_demo.tasks (
   title text not null
 );
 
+insert into rls_doctor_demo.orders (owner_id, total_cents) values
+  ('00000000-0000-0000-0000-000000000001', 100),
+  ('00000000-0000-0000-0000-000000000002', 200);
+
 grant select on rls_doctor_demo.orders to authenticated, rls_doctor_demo_reader;
 grant select, update, truncate on rls_doctor_demo.profiles to authenticated;
 

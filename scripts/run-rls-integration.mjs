@@ -86,7 +86,36 @@ try {
     "safe RLS doctor status",
   );
 
-  console.log(`Unified RLS integration passed on PostgreSQL ${postgresVersion}.`);
+  const probe = await runProbe(auditorUrl, "rls_doctor_demo");
+  assertEqual(
+    probe.code,
+    1,
+    `unsafe probe threshold exit (stderr: ${redact(probe.stderr)})`,
+  );
+  assertEqual(probe.stderr, "", "unsafe probe stderr");
+  assertNoCredentials(probe);
+  const probeReport = JSON.parse(probe.stdout);
+  assertFinding(probeReport, {
+    ruleId: "database/rls-probe/probe-cross-subject-read",
+    severity: "high",
+    schema: "rls_doctor_demo",
+    table: "orders",
+  });
+  assertEqual(
+    probeReport.doctorRuns.find(({ doctorId }) => doctorId === "database/rls-probe")?.status,
+    "completed",
+    "unsafe probe doctor status",
+  );
+
+  const safeProbe = await runProbe(auditorUrl, "rls_doctor_demo_safe");
+  assertEqual(safeProbe.code, 0, "safe probe threshold exit");
+  assertEqual(safeProbe.stderr, "", "safe probe stderr");
+  assertNoCredentials(safeProbe);
+  const safeProbeReport = JSON.parse(safeProbe.stdout);
+  assertEqual(safeProbeReport.summary.counts.high, 0, "safe probe high findings");
+  assertEqual(safeProbeReport.summary.counts.critical, 0, "safe probe critical findings");
+
+  console.log(`Unified RLS and behavioral probe integration passed on PostgreSQL ${postgresVersion}.`);
 } catch (error) {
   throw new Error(redact(error instanceof Error ? error.message : String(error)));
 } finally {
@@ -109,6 +138,9 @@ async function prepareDatabase(connectionString) {
     await admin.query(
       `grant connect on database ${quoteIdentifier(database)} to ${quoteIdentifier(auditorRole)}`,
     );
+    await admin.query(
+      `grant ${quoteIdentifier("authenticated")} to ${quoteIdentifier(auditorRole)}`,
+    );
     return withCredentials(connectionString, auditorRole, password);
   } finally {
     await admin.end();
@@ -124,6 +156,51 @@ async function runAudit(connectionString, schema) {
         "audit",
         "test/fixtures/node-pass",
         "--with-database",
+        "--database-schema",
+        schema,
+        "--json",
+        "--fail-on",
+        "high",
+      ],
+      {
+        cwd: new URL("..", import.meta.url),
+        env: {
+          ...process.env,
+          DATABASE_URL: connectionString,
+          SUPABASE_DB_URL: "",
+        },
+        maxBuffer: 4 * 1024 * 1024,
+      },
+    );
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    if (typeof error === "object" && error !== null) {
+      return {
+        code: typeof error.code === "number" ? error.code : 2,
+        stdout: typeof error.stdout === "string" ? error.stdout : "",
+        stderr: typeof error.stderr === "string" ? error.stderr : String(error),
+      };
+    }
+    return { code: 2, stdout: "", stderr: String(error) };
+  }
+}
+
+async function runProbe(connectionString, schema) {
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [
+        "dist/cli.js",
+        "audit",
+        "test/fixtures/node-pass",
+        "--with-database",
+        "--probe-db",
+        "--app-roles",
+        "authenticated",
+        "--subjects",
+        "00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000002",
+        "--owner-columns",
+        "owner_id",
         "--database-schema",
         schema,
         "--json",

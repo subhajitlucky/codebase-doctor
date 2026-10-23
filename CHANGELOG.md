@@ -2,6 +2,19 @@
 
 All notable changes to Codebase Doctor are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Add the read-only, rolled-back `database/rls-probe` module and
+  `--probe-db` for `audit` and `review`. It impersonates explicit
+  `--app-roles`, optionally simulates Supabase subjects via
+  `--subjects`, and proves cross-owner or cross-subject reads without
+  mutating the database. Probe findings are included in receipts and
+  coverage.
+- Add matching GitHub Action inputs: `with-probe`, `app-roles`, `subjects`,
+  `owner-columns`, and `probe-sample-limit`.
+
 ## [0.4.14] - 2026-10-23
 
 ### Fixed
