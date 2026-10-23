@@ -98,13 +98,16 @@ CI gate. Nothing outside a temp directory is touched.
 ## Code review
 
 `review` is the pull-request command. It always audits changed scope, narrows
-findings to added diff lines, and prints a verdict — `APPROVE`, `COMMENT`, or
-`REQUEST_CHANGES` — so unrelated old issues never fail a PR:
+findings to added diff lines, and prints a verdict — `NO_CHANGES`, `APPROVE`,
+`COMMENT`, or `REQUEST_CHANGES` — so unrelated old issues never fail a PR and
+an empty checkout is never represented as an approval:
 
 ```bash
 codebase-doctor review . --base origin/main --format markdown > review.md
 codebase-doctor review . --base origin/main --format github
 codebase-doctor review . --format json  # includes a machine-readable review envelope
+codebase-doctor review . --base origin/main --receipt review.json
+codebase-doctor review . --base origin/main --receipt review.json --receipt-key key.pem
 ```
 
 - `--format markdown` renders a PR-comment-ready body with the verdict,
@@ -117,6 +120,12 @@ codebase-doctor review . --format json  # includes a machine-readable review env
   narrowing, and `--output <file>` writes the report to a file as well as
   stdout.
 - With `--baseline`, only *new* findings in the diff gate the verdict.
+- An empty diff reports `NO_CHANGES`, not `APPROVE`. Use `--require-base` in CI
+  to fail closed when the base ref was not supplied.
+- `--receipt <path>` writes a portable review receipt with the verdict,
+  diff-scope counts, coverage limitations, and finding fingerprints. Add
+  `--receipt-key` to sign it with Ed25519; `verify-receipt` checks integrity
+  and prints the review verdict.
 - Exit `1` means the review requests changes; exit `2` is an operational
   failure, never a clean result. Inspect coverage before calling the reviewed
   diff verified or clean.
@@ -130,7 +139,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v4
-  - uses: subhajitlucky/codebase-doctor@v0.1.10
+  - uses: subhajitlucky/codebase-doctor@v0.4.13
     with:
       format: sarif
       upload: "true"
@@ -304,7 +313,8 @@ Separately authorized `--run-checks` launches repository-owned validation subpro
 
 ## Shadow audits
 
-`shadow` audits a **disposable copy** of the repository. Validation commands
+`shadow` audits a **disposable copy of the working tree**, including staged,
+unstaged, deleted, renamed, and untracked files. Validation commands
 (`--run-checks`) execute inside the copy, so repository-owned side effects —
 file writes, caches, hooks — cannot touch your working tree:
 
@@ -402,8 +412,10 @@ codebase-doctor audit . --receipt receipt.json --receipt-key key.pem
 codebase-doctor verify-receipt receipt.json   # exit 0 valid, 2 tampered
 ```
 
-Receipts never contain secret values or source text. A digest proves tamper
-evidence; a signature proves the key holder issued it. See
+Receipts bind the subject root, scope, HEAD commit, base commit, changed-path
+count, and a digest of the changed-path set. Receipts never contain secret
+values or source text. A digest proves tamper evidence; a signature proves the
+key holder issued it. See
 [docs/receipts.md](docs/receipts.md).
 
 ## Pheromone signals

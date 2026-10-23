@@ -52,6 +52,16 @@ const defaultGitRunner: GitRunner = {
   },
 };
 
+/** Resolve the current HEAD without mutating the repository. */
+export async function resolveHeadCommit(root: string): Promise<string | undefined> {
+  try {
+    const commit = (await defaultGitRunner.run(root, ['rev-parse', 'HEAD'])).trim();
+    return /^[0-9a-f]{40,64}$/u.test(commit) ? commit : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const STATUS_BY_CODE: Readonly<Record<'A' | 'D' | 'M' | 'T', ChangeStatus>> = {
   A: 'added',
   D: 'deleted',

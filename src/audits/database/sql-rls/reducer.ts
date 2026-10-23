@@ -90,6 +90,7 @@ function immutableTable(table: MutableTableState): StaticTableState {
 export function reduceSqlStream(
   streamId: string,
   operations: readonly ParsedSqlStatement[],
+  streamRoot?: string,
 ): SqlStreamState {
   const tables = new Map<string, MutableTableState>();
   const limitations: string[] = [];
@@ -198,6 +199,7 @@ export function reduceSqlStream(
 
   return {
     streamId,
+    ...(streamRoot === undefined ? {} : { streamRoot }),
     tables: [...tables.values()]
       .map(immutableTable)
       .sort((left, right) => compareText(`${left.schema}\u0000${left.name}`, `${right.schema}\u0000${right.name}`)),

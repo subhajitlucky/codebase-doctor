@@ -80,6 +80,24 @@ describe("coverage receipts", () => {
     expect(verification.summary).toContain("integrity: digest verified");
   });
 
+  it("binds the receipt subject to a commit and changed-path digest", () => {
+    const committed = {
+      ...result(),
+      repository: { root: "/repo", commit: "a".repeat(40) },
+    };
+    const receipt = buildReceipt(committed);
+
+    expect(receipt.subject).toMatchObject({
+      root: "/repo",
+      scope: "full",
+      commit: "a".repeat(40),
+      baseCommit: null,
+      changedPaths: 0,
+    });
+    expect(receipt.subject.changesDigest).toMatch(/^[0-9a-f]{64}$/u);
+    expect(verifyReceipt(receipt).valid).toBe(true);
+  });
+
   it("detects a modified receipt body", () => {
     const receipt = buildReceipt(result());
     const tampered = { ...receipt, score: { value: 100, band: "green" } };

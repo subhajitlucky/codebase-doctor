@@ -4,9 +4,9 @@ import {
 } from "../core/summary.js";
 import type { Finding } from "../core/findings.js";
 
-export type ReviewVerdict = "APPROVE" | "COMMENT" | "REQUEST_CHANGES";
+export type ReviewVerdict = "NO_CHANGES" | "APPROVE" | "COMMENT" | "REQUEST_CHANGES";
 
-export const REVIEW_VERDICTS = ["APPROVE", "COMMENT", "REQUEST_CHANGES"] as const;
+export const REVIEW_VERDICTS = ["NO_CHANGES", "APPROVE", "COMMENT", "REQUEST_CHANGES"] as const;
 
 /**
  * Decide the review verdict from the in-scope (diff-filtered) findings.
@@ -14,7 +14,10 @@ export const REVIEW_VERDICTS = ["APPROVE", "COMMENT", "REQUEST_CHANGES"] as cons
  * - `REQUEST_CHANGES` when at least one in-scope finding meets the failure
  *   threshold.
  * - `COMMENT` when in-scope findings exist below the threshold.
- * - `APPROVE` when nothing in the diff was flagged.
+ * - `APPROVE` when the diff has content and nothing in it was flagged.
+ *
+ * `NO_CHANGES` is decided by the caller when the review scope is empty, so a
+ * clean checkout is never represented as an approval.
  *
  * Coverage incompleteness never changes the verdict; it is reported alongside
  * it and, with `--require-complete`, fails the exit code instead.

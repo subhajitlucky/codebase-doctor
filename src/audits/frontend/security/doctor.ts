@@ -106,6 +106,39 @@ export interface FrontendSecurityAnalysis {
   readonly limitations: readonly string[];
 }
 
+function isStaticStringNode(node: JsonLikeObject | undefined): boolean {
+  if (nodeType(node) === "StringLiteral") return true;
+  if (nodeType(node) !== "TemplateLiteral") return false;
+  return Array.isArray(node?.["expressions"]) && node["expressions"].length === 0;
+}
+
+/** Collect module-level `const` bindings whose initializer is a static string. */
+function collectStaticConstNames(ast: unknown): Set<string> {
+  const names = new Set<string>();
+  const file = isObject(ast) ? ast : undefined;
+  const program = isObject(file?.["program"]) ? file["program"] : undefined;
+  const body = Array.isArray(program?.["body"]) ? program["body"] : [];
+  const consider = (statement: unknown): void => {
+    if (!isObject(statement)) return;
+    const declaration = nodeType(statement) === "ExportNamedDeclaration" &&
+      isObject(statement["declaration"])
+      ? statement["declaration"]
+      : statement;
+    if (nodeType(declaration) !== "VariableDeclaration" || declaration["kind"] !== "const") return;
+    const declarators = Array.isArray(declaration["declarations"]) ? declaration["declarations"] : [];
+    for (const declarator of declarators) {
+      if (!isObject(declarator)) continue;
+      const id = isObject(declarator["id"]) ? declarator["id"] : undefined;
+      const init = isObject(declarator["init"]) ? declarator["init"] : undefined;
+      if (nodeType(id) === "Identifier" && typeof id?.["name"] === "string" && isStaticStringNode(init)) {
+        names.add(id["name"]);
+      }
+    }
+  };
+  for (const statement of body) consider(statement);
+  return names;
+}
+
 /** Calls that prove the HTML was sanitized before rendering. */
 function isSanitizerCall(node: JsonLikeObject | undefined): boolean {
   if (nodeType(node) !== "CallExpression") return false;
@@ -141,6 +174,7 @@ export function analyzeJsxSecurity(path: string, source: string, changed: boolea
 
   const findings: Finding[] = [];
   const limitations: string[] = [];
+  const staticConstNames = collectStaticConstNames(ast);
   const visited = new WeakSet<object>();
   let elementsExamined = 0;
 
@@ -193,7 +227,14 @@ export function analyzeJsxSecurity(path: string, source: string, changed: boolea
           continue;
         }
         const value = isObject(html["value"]) ? html["value"] : undefined;
-        if (nodeType(value) === "StringLiteral") continue;
+        if (isStaticStringNode(value)) continue;
+        if (
+          nodeType(value) === "Identifier" &&
+          typeof value?.["name"] === "string" &&
+          staticConstNames.has(value["name"])
+        ) {
+          continue;
+        }
         if (isSanitizerCall(value)) continue;
         findings.push(findingFor(path, {
           ruleId: "dangerously-set-inner-html",

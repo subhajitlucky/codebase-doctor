@@ -18,7 +18,7 @@ codebase-doctor verify-receipt receipt.json                 # exit 0 valid, 2 in
 | --- | --- |
 | `tool` | name and version of the issuing tool |
 | `issuedAt` | issuance timestamp (UTC ISO) |
-| `subject` | audited root and scope (`full` / `changed`) |
+| `subject` | audited root, scope (`full` / `changed`), HEAD commit, base commit, changed-path count, and a SHA-256 digest of the changed-path set |
 | `score` | deterministic score and band |
 | `coverage.complete` | whether every applicable domain completed |
 | `coverage.limitations` | exactly what was skipped, partial, or failed |
@@ -53,6 +53,7 @@ What the model proves, honestly:
 ```
 receipt: codebase-doctor 0.4.2 · issued 2026-10-09T07:22:54.222Z
 subject: /repo (scope=full)
+identity: commit=<sha> · base=none · changed=0 · changesDigest=<sha256>
 score: 90/100 (green)
 coverage: incomplete
   - validation: skipped

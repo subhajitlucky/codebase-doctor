@@ -45,7 +45,7 @@ export interface DoctorRunRecord {
 export interface ScanResult {
   schemaVersion: "1";
   tool: { name: "codebase-doctor"; version: string };
-  repository: { root: string };
+  repository: { root: string; commit?: string };
   projects: readonly DetectedProject[];
   auditScope: AuditScope;
   plannedChecks: readonly PlannedCheckRecord[];
@@ -123,6 +123,7 @@ export function normalizeScanResult(
   domainCoverage: readonly DomainCoverage[] = [],
   sourceImpact?: SourceImpact,
   suppressed: readonly SuppressedFinding[] = [],
+  headCommit?: string,
 ): ScanResult {
   const findings = uniqueFindings(registeredResults.flatMap(({ result }) => result.findings));
   const doctorRuns = registeredResults
@@ -239,7 +240,7 @@ export function normalizeScanResult(
   return {
     schemaVersion: "1",
     tool: { name: "codebase-doctor", version: VERSION },
-    repository: { root },
+    repository: { root, ...(headCommit === undefined ? {} : { commit: headCommit }) },
     auditScope: normalizedAuditScope,
     projects: [...projects].sort((left, right) =>
       left.root < right.root ? -1 : left.root > right.root ? 1 : 0,

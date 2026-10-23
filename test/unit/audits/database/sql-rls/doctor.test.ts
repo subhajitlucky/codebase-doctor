@@ -514,7 +514,11 @@ describe("static SQL RLS doctor", () => {
 
   it("replays newly active schema fallback after deletion of the final migration", async () => {
     const reader = vi.fn(async (_root: string, path: string) => ({
-      "schema.sql": "create table public.docs (id uuid);",
+      "schema.sql": [
+        "create table public.docs (id uuid);",
+        "create table public.secrets (id uuid);",
+        "alter table public.secrets enable row level security;",
+      ].join("\n"),
     })[path]!);
     const [entry] = await runDoctors(
       [createSqlRlsDoctor({ readSqlFile: reader })],

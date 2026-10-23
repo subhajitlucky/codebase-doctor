@@ -38,8 +38,11 @@ export function summarizeReview(
   );
   const baselineFiltered = result.comparison !== undefined;
   const verdictFindings = selectVerdictFindings(filtered.included, result.comparison?.new);
+  const verdict: ReviewVerdict = result.auditScope.changes.length === 0
+    ? "NO_CHANGES"
+    : decideReviewVerdict(verdictFindings, failOn);
   return {
-    verdict: decideReviewVerdict(verdictFindings, failOn),
+    verdict,
     included: filtered.included,
     excluded: filtered.excluded,
     linePrecision: filtered.linePrecision,

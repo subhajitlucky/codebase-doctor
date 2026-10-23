@@ -48,6 +48,30 @@ describe("shadow audits", () => {
     expect(verified.stdout).toContain("environment: shadow (disposable copy)");
   });
 
+  it("mirrors uncommitted tracked and untracked changes into the shadow copy", async () => {
+    const root = await createTempProject("codebase-doctor-shadow-working-tree-");
+    temporaryRoots.push(root);
+    await initializeGitRepository(root);
+    await commitInitialContent(root, {
+      "package.json": JSON.stringify({ name: "shadow-working-tree", private: true }),
+      "src/config.ts": "export const apiUrl = \"https://api.example.com\";\n",
+    });
+    const token = `ghp_${"M7n9B2v8C4x6Z1l3K5j0HgFdSaPqWeRt".slice(0, 32)}`;
+    await writeProjectFile(
+      root,
+      "src/config.ts",
+      `export const apiUrl = "https://api.example.com";\nexport const token = "${token}";\n`,
+    );
+    await writeProjectFile(root, "untracked.ts", `export const token = "${token}";\n`);
+
+    const shadow = cli(["shadow", root, "--format", "brief", "--fail-on", "none"]);
+
+    expect(shadow.status, shadow.stderr).toBe(0);
+    expect(shadow.stdout).toContain("security/secrets/provider-token");
+    expect(shadow.stdout).toContain("src/config.ts");
+    expect(shadow.stdout).toContain("untracked.ts");
+  }, 60_000);
+
   it("keeps --run-checks side effects inside the copy", async () => {
     const root = await createTempProject("codebase-doctor-shadow-side-");
     temporaryRoots.push(root);

@@ -10,7 +10,11 @@ function analyze(sql: readonly string[], lineOffset = 0) {
     endLine: lineOffset + index + 1,
     text,
   }));
-  return analyzeStaticSqlRls(reduceSqlStream("root:supabase/migrations", operations));
+  return analyzeStaticSqlRls(reduceSqlStream(
+    "root:supabase/migrations",
+    operations,
+    "supabase/migrations",
+  ));
 }
 
 function ids(sql: readonly string[]) {
@@ -139,5 +143,48 @@ describe("analyzeStaticSqlRls", () => {
     ]);
 
     expect(findings).toEqual([]);
+  });
+
+  it("does not score an ordinary Prisma/Postgres migration as insecure for lacking RLS", () => {
+    const operations = [
+      "create table documents (id uuid);",
+    ].map((text, index) => parseSqlStatement({
+      path: `prisma/migrations/001.sql`,
+      startLine: index + 1,
+      endLine: index + 1,
+      text,
+    }));
+
+    const findings = analyzeStaticSqlRls(reduceSqlStream(
+      "root:prisma/migrations",
+      operations,
+      "prisma/migrations",
+    ));
+
+    expect(findings).toEqual([]);
+  });
+
+  it("keeps reporting disabled RLS once the stream demonstrably uses RLS", () => {
+    const operations = [
+      "create table documents (id uuid);",
+      "create table secrets (id uuid);",
+      "alter table secrets enable row level security;",
+    ].map((text, index) => parseSqlStatement({
+      path: `prisma/migrations/001.sql`,
+      startLine: index + 1,
+      endLine: index + 1,
+      text,
+    }));
+
+    const findings = analyzeStaticSqlRls(reduceSqlStream(
+      "root:prisma/migrations",
+      operations,
+      "prisma/migrations",
+    ));
+
+    expect(findings).toContainEqual(expect.objectContaining({
+      ruleId: "database/sql-rls/rls-disabled",
+      severity: "medium",
+    }));
   });
 });

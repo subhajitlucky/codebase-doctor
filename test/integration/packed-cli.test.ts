@@ -24,7 +24,9 @@ function run(executable: string, args: readonly string[], cwd = repositoryRoot) 
   return spawnSync(executable, [...args], {
     cwd,
     encoding: "utf8",
-    timeout: 30_000,
+    // npm install from a freshly packed tarball can exceed 30s on a cold
+    // runner or slow registry connection. Keep the release gate deterministic.
+    timeout: 120_000,
   });
 }
 
@@ -35,7 +37,7 @@ describe("release package", () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
-  it("installs the real tarball and runs its binary from a clean project", async () => {
+  it("installs the real tarball and runs its binary from a clean project", { timeout: 120_000 }, async () => {
     const temporaryRoot = await mkdtemp(join(tmpdir(), "codebase-doctor-package-"));
     try {
       const packed = run("npm", [
@@ -598,5 +600,5 @@ void [scope, full, error, comparison, finding, discovery, domainCoverage, AUDIT_
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
-  }, 60_000);
+  });
 });

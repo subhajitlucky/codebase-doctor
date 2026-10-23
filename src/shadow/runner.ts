@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { promisify } from "node:util";
 import { classifyScanExit } from "../core/normalize.js";
 import { auditCodebase } from "../core/scan.js";
@@ -31,6 +31,54 @@ export interface ShadowOutcome {
   exitCode: 0 | 1 | 2;
 }
 
+function safeRelativePath(value: string): string | undefined {
+  if (value.length === 0 || value.includes("\0")) return undefined;
+  if (value.startsWith("/") || /^[A-Za-z]:/u.test(value)) return undefined;
+  const normalized = posix.normalize(value.replaceAll("\\", "/"));
+  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
+    return undefined;
+  }
+  return normalized;
+}
+
+async function copyWorkingTree(root: string, destination: string): Promise<void> {
+  const patchPath = join(destination, "..", ".codebase-doctor-working-tree.patch");
+  try {
+    const diff = await execFileAsync(
+      "git",
+      ["diff", "HEAD", "--binary", "--no-ext-diff"],
+      { cwd: root, encoding: "utf8", timeout: SHADOW_TIMEOUT_MS, maxBuffer: 32 * 1024 * 1024 },
+    );
+    if (diff.stdout.length > 0) {
+      await writeFile(patchPath, diff.stdout, "utf8");
+      await execFileAsync(
+        "git",
+        ["apply", "--whitespace=nowarn", patchPath],
+        { cwd: destination, timeout: SHADOW_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
+      );
+    }
+
+    const untracked = await execFileAsync(
+      "git",
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+      { cwd: root, encoding: "utf8", timeout: SHADOW_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
+    );
+    for (const rawPath of untracked.stdout.split("\0")) {
+      if (rawPath.length === 0) continue;
+      const relativePath = safeRelativePath(rawPath);
+      if (relativePath === undefined) {
+        throw new Error(`Git returned an unsafe untracked path: ${JSON.stringify(rawPath)}`);
+      }
+      const source = join(root, ...relativePath.split("/"));
+      const target = join(destination, ...relativePath.split("/"));
+      await mkdir(dirname(target), { recursive: true });
+      await cp(source, target, { recursive: true, force: true, dereference: false });
+    }
+  } finally {
+    await rm(patchPath, { force: true }).catch(() => undefined);
+  }
+}
+
 export async function copyRepository(root: string, destination: string): Promise<void> {
   if (existsSync(join(root, ".git"))) {
     await execFileAsync(
@@ -38,6 +86,10 @@ export async function copyRepository(root: string, destination: string): Promise
       ["clone", "--quiet", "--no-hardlinks", root, destination],
       { timeout: SHADOW_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
     );
+    // A clone contains only committed history. Mirror the working tree so
+    // shadow audits cover staged, unstaged, deleted, renamed, and untracked
+    // files exactly as review does.
+    await copyWorkingTree(root, destination);
     return;
   }
   await cp(root, destination, {

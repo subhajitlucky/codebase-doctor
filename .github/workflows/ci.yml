@@ -33,5 +33,11 @@ jobs:
       - name: Verify source and release package
         run: npm run ci:full
 
+      - name: Live RLS integration
+        timeout-minutes: 10
+        env:
+          CODEBASE_DOCTOR_ALLOW_DESTRUCTIVE_TESTS: "1"
+        run: npm run test:rls-integration
+
       - name: Self-audit
         run: node dist/cli.js audit . --baseline .codebase-doctor-baseline.json --format brief --fail-on high

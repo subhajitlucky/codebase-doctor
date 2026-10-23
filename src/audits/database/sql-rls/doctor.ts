@@ -240,7 +240,7 @@ export function createSqlRlsDoctor(options: SqlRlsDoctorOptions = {}): Doctor {
           }
         }
 
-        const state = reduceSqlStream(stream.id, statements.map(parseSqlStatement));
+        const state = reduceSqlStream(stream.id, statements.map(parseSqlStatement), stream.root);
         findings.push(...analyzeStaticSqlRls(state));
         limitations.push(...state.coverage.limitations);
         const analysisPartial = limitations.length > 0;

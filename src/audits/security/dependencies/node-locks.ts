@@ -233,7 +233,16 @@ function scanPnpm(content: string): NodeLockSummary {
   }
 
   const packages = new Map<string, NodeLockPackage>();
-  for (const section of ["packages", "snapshots"]) {
+  // pnpm v9 stores resolved package metadata (including integrity) in
+  // `packages` and dependency edges in `snapshots`. Snapshot entries normally
+  // have no `resolution`; merging both sections lets a resolution-less
+  // snapshot overwrite the package's real integrity evidence. Only `packages`
+  // supplies package identity and integrity.
+  const packageEntries = parsed["packages"];
+  if (!isObject(packageEntries)) {
+    limitations.push("pnpm lockfile has no packages section; package integrity was not compared.");
+  }
+  for (const section of ["packages"] as const) {
     const entries = parsed[section];
     if (!isObject(entries)) continue;
     for (const [key, value] of Object.entries(entries)) {
