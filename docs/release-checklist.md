@@ -18,7 +18,7 @@ validation subprocesses remain unsandboxed and may have side effects.
 - [x] Read-only scan: Sutra Python repository
 - [x] Target Git status unchanged before and after every scan
 - [x] MIHA `.venv-*` false positive captured as a regression test and corrected
-- [x] `codebase-doctor@0.4.13` is the previously published package; `0.4.14` is the release candidate. Recheck the live package immediately before publication.
+- [x] `codebase-doctor@0.4.14` is the previously published package; `0.5.0` is the release candidate. Recheck the live package immediately before publication.
 
 ## Before publication
 
@@ -45,4 +45,4 @@ validation subprocesses remain unsandboxed and may have side effects.
 - [ ] Run the published package's `--version` in a clean temporary directory.
 - [ ] Run a read-only `codebase-doctor audit . --json` smoke test and inspect skipped coverage.
 - [ ] Confirm the npm package page shows the expected README, license, files, and version.
-- [ ] Confirm the approved `v0.4.14` tag and GitHub release exist only after the published package passes the clean-install smoke test.
+- [ ] Confirm the approved `v0.5.0` tag and GitHub release exist only after the published package passes the clean-install smoke test.

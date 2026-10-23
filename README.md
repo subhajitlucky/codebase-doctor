@@ -139,7 +139,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v4
-  - uses: subhajitlucky/codebase-doctor@v0.4.14
+  - uses: subhajitlucky/codebase-doctor@v0.5.0
     with:
       format: sarif
       upload: "true"
@@ -541,7 +541,7 @@ const API_KEY = "..."; // codebase-doctor-ignore: security/secrets/provider-toke
 ## MCP server and agents
 
 ```bash
-claude mcp add codebase-doctor --scope user -- npx -y codebase-doctor@0.4.14 mcp
+claude mcp add codebase-doctor --scope user -- npx -y codebase-doctor@0.5.0 mcp
 ```
 
 Read-only tools, each annotated `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`: `audit_codebase`, `review_changes`, `verify_changes`, `explain_finding`, `verify_intent`, `build_receipt`, `describe_capabilities`. Responses are bounded at roughly 50 KB; the server never enables `--run-checks` or live database access. Failures return structured JSON shaped as `{ error: { code, message, nextAction } }`. Setup for Codex CLI, Gemini CLI, and generic stdio clients is in [docs/agents.md](docs/agents.md).

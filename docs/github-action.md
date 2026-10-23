@@ -59,7 +59,7 @@ jobs:
 | `with-advisories` | `"false"` | Permit the opt-in OSV advisory lookup over lockfiles |
 | `receipt` | `""` | Optional portable receipt path; uploaded as the `codebase-doctor-receipt` artifact |
 | `require-base` | `"false"` | For `review`: fail if no base is supplied instead of treating an empty checkout as a no-op |
-| `version` | `0.4.14` | Pinned codebase-doctor version to install from npm |
+| `version` | `0.5.0` | Pinned codebase-doctor version to install from npm |
 | `node-version` | `22` | Node.js version used to run the CLI; `package.json` requires Node 22+ |
 
 ## Exit codes
