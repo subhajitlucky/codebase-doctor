@@ -9,13 +9,13 @@ explicitly to grant those separately. Failures return
 `invalid-arguments`, `path-not-found`, `path-access-denied`, `unknown-tool`,
 `internal-error`.
 
-Pin the version (`@0.4.13` below) to the release you audited; tool schemas
+Pin the version (`@0.4.14` below) to the release you audited; tool schemas
 move with server versions. `initialize` reports the exact server version.
 
 ## Claude Code
 
 ```bash
-claude mcp add codebase-doctor --scope user -- npx -y codebase-doctor@0.4.13 mcp
+claude mcp add codebase-doctor --scope user -- npx -y codebase-doctor@0.4.14 mcp
 ```
 
 Auto-approve the read-only tools in `.claude/settings.json`:
@@ -41,7 +41,7 @@ The agent skill is also installable: `npx skills add subhajitlucky/codebase-doct
 ## Codex CLI
 
 ```bash
-codex mcp add codebase-doctor -- npx -y codebase-doctor@0.4.13 mcp
+codex mcp add codebase-doctor -- npx -y codebase-doctor@0.4.14 mcp
 ```
 
 Equivalent `~/.codex/config.toml`:
@@ -49,7 +49,7 @@ Equivalent `~/.codex/config.toml`:
 ```toml
 [mcp_servers.codebase-doctor]
 command = "npx"
-args = ["-y", "codebase-doctor@0.4.13", "mcp"]
+args = ["-y", "codebase-doctor@0.4.14", "mcp"]
 ```
 
 Codex reads [AGENTS.md](AGENTS.md) for repo context.
@@ -57,7 +57,7 @@ Codex reads [AGENTS.md](AGENTS.md) for repo context.
 ## Gemini CLI
 
 ```bash
-gemini mcp add codebase-doctor npx -y codebase-doctor@0.4.13 mcp
+gemini mcp add codebase-doctor npx -y codebase-doctor@0.4.14 mcp
 ```
 
 Equivalent `~/.gemini/settings.json`:
@@ -67,7 +67,7 @@ Equivalent `~/.gemini/settings.json`:
   "mcpServers": {
     "codebase-doctor": {
       "command": "npx",
-      "args": ["-y", "codebase-doctor@0.4.13", "mcp"]
+      "args": ["-y", "codebase-doctor@0.4.14", "mcp"]
     }
   }
 }
@@ -85,7 +85,7 @@ Code-compatible harness — this config works as-is:
   "mcpServers": {
     "codebase-doctor": {
       "command": "npx",
-      "args": ["-y", "codebase-doctor@0.4.13", "mcp"]
+      "args": ["-y", "codebase-doctor@0.4.14", "mcp"]
     }
   }
 }

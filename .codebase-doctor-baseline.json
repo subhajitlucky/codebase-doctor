@@ -2,7 +2,7 @@
   "schemaVersion": "1",
   "tool": {
     "name": "codebase-doctor",
-    "version": "0.4.13"
+    "version": "0.4.14"
   },
   "repository": {
     "root": "/home/subhajit/project/codebase-doctor"

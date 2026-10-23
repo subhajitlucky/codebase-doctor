@@ -20,7 +20,7 @@ codebase-doctor audit .                            # full audit
 codebase-doctor review . --base main --format markdown
 ```
 
-MCP: `gemini mcp add codebase-doctor npx -y codebase-doctor@0.4.13 mcp`
+MCP: `gemini mcp add codebase-doctor npx -y codebase-doctor@0.4.14 mcp`
 Tools: `audit_codebase`, `review_changes`, `verify_changes`,
 `explain_finding`, `verify_intent`, `build_receipt`,
 `describe_capabilities`. Call `describe_capabilities` first; errors return
