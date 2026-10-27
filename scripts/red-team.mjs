@@ -270,6 +270,48 @@ const CASES = [
       );
     },
   },
+  {
+    name: "oauth-callback-binding",
+    kind: "mutant",
+    rule: "backend/auth/oauth-callback-session-binding",
+    setup(root) {
+      write(
+        root,
+        "server.js",
+        [
+          'const express = require("express");',
+          "const app = express();",
+          'app.get("/callback", async (req, res) => {',
+          "  const sessionId = req.query.session_id;",
+          "  const token = await exchange(req.query.code);",
+          "  sessions.get(sessionId).accessToken = token;",
+          '  res.send("ok");',
+          "});",
+        ].join("\n"),
+      );
+    },
+  },
+  {
+    name: "oauth-state-cookie-control",
+    kind: "control",
+    rule: "backend/auth/oauth-callback-session-binding",
+    setup(root) {
+      write(
+        root,
+        "server.js",
+        [
+          'const express = require("express");',
+          "const app = express();",
+          'app.get("/callback", async (req, res) => {',
+          "  if (req.query.state !== req.cookies.oauth_state) return res.status(403).end();",
+          "  const token = await exchange(req.query.code);",
+          "  sessions.get(req.session.id).accessToken = token;",
+          '  res.send("ok");',
+          "});",
+        ].join("\n"),
+      );
+    },
+  },
 ];
 
 function evaluate(def) {

@@ -2,6 +2,16 @@
 
 All notable changes to Codebase Doctor are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Add `backend/auth/oauth-callback-session-binding`, a read-only cross-file
+  OAuth callback analysis for JavaScript/TypeScript and Go. It flags a callback
+  that binds an access token to a query-string session identifier without a
+  browser-bound state cookie. Unresolved handlers and the Go-only coverage gap
+  are reported as coverage limitations, never as guessed findings.
+
 ## [0.5.0] - 2026-10-23
 
 ### Added

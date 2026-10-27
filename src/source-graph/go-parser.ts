@@ -11,7 +11,7 @@ export interface GoImportParseResult {
   readonly limitations: readonly string[];
 }
 
-interface Token {
+export interface GoToken {
   readonly kind: "name" | "string" | "op" | "newline";
   readonly value: string;
   readonly line: number;
@@ -22,8 +22,8 @@ interface Token {
 const NAME_START = /[A-Za-z_]/u;
 const NAME_PART = /[A-Za-z0-9_]/u;
 
-function tokenize(source: string): Token[] | undefined {
-  const tokens: Token[] = [];
+export function tokenizeGo(source: string): GoToken[] | undefined {
+  const tokens: GoToken[] = [];
   let index = 0;
   let line = 1;
   let lineStart = 0;
@@ -134,11 +134,11 @@ function tokenize(source: string): Token[] | undefined {
   return tokens;
 }
 
-function isName(token: Token | undefined, value: string): boolean {
+function isName(token: GoToken | undefined, value: string): boolean {
   return token?.kind === "name" && token.value === value;
 }
 
-function isOp(token: Token | undefined, value: string): boolean {
+function isOp(token: GoToken | undefined, value: string): boolean {
   return token?.kind === "op" && token.value === value;
 }
 
@@ -149,7 +149,7 @@ function isOp(token: Token | undefined, value: string): boolean {
  * always zero. Unsupported import-block syntax becomes a limitation.
  */
 export function parseGoImports(path: string, source: string): GoImportParseResult {
-  const tokens = tokenize(source);
+  const tokens = tokenizeGo(source);
   if (tokens === undefined) {
     return {
       status: "partial",
@@ -200,7 +200,7 @@ export function parseGoImports(path: string, source: string): GoImportParseResul
           cursor += 1;
           continue;
         }
-        let specifierToken: Token | undefined;
+        let specifierToken: GoToken | undefined;
         if (current.kind === "string") {
           specifierToken = current;
         } else if (current.kind === "name" || isOp(current, ".")) {

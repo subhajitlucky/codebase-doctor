@@ -570,13 +570,14 @@ never findings.
 ## Built-in backend audit
 
 The combined audit registers `backend/auth` as a read-only, offline Doctor over
-JavaScript and TypeScript backend sources. It never starts a server, sends a
-request, or issues a token.
+JavaScript and TypeScript backend sources, plus Go sources for the OAuth
+callback-binding rule. It never starts a server, sends a request, or issues a
+token.
 
 A rule fires only when the callee provably resolves to the audited package:
 import declarations and CommonJS `require` calls are resolved to their local
 binding names, so an unrelated local helper named `cors` or `decode` is never
-reported. `backend/auth` reports four rules:
+reported. `backend/auth` reports five rules:
 
 - `cors-wildcard-origin-with-credentials` — CORS middleware configured with a
   wildcard (`origin: "*"`), a reflected origin (`origin: true`), or an allowlist
@@ -587,6 +588,13 @@ reported. `backend/auth` reports four rules:
   contains no `verify` call, so the decoded claims are unverified input.
 - `jwt-verify-algorithm-unrestricted` — a `verify` call that passes no
   `algorithms` allowlist.
+- `oauth-callback-session-binding` — an OAuth callback route reads a
+  query-string session identifier and assigns an access token to that session
+  without a browser-bound state cookie. JS/TS uses the Babel AST; Go uses a
+  bounded tokenizer plus a cross-file function index so a callback route in one
+  file can resolve a handler in another. The Go tokenizer is not a full Go AST:
+  an unresolved callback handler becomes a coverage limitation, and Go CORS,
+  session-cookie, and JWT rules remain unimplemented.
 
 Every rule rests on an observed construct rather than an inferred absence:
 configuration that cannot be resolved statically — a non-literal options

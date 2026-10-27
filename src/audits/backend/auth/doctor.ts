@@ -5,6 +5,7 @@ import { parse, type ParserPlugin } from "@babel/parser";
 import type { AuditCoverage, Doctor, DoctorResult } from "../../../core/doctor.js";
 import { createFingerprint, sortFindings, type Finding } from "../../../core/findings.js";
 import { selectChangedCandidates } from "../../../scope/changed-files.js";
+import { analyzeOAuthFlows, isGoSourcePath, type OAuthCallbackFinding } from "./oauth-flow.js";
 
 const DOCTOR_ID = "backend/auth";
 const DEFAULT_MAX_FILE_BYTES = 1_000_000;
@@ -360,6 +361,30 @@ const READ_ONLY_CONSTRAINT =
 const PRESERVE_CONTRACT_CONSTRAINT =
   "Preserve the existing request and response contract for every client of this endpoint.";
 
+const OAUTH_CALLBACK_RULE = "oauth-callback-session-binding";
+
+function oauthFinding(spec: OAuthCallbackFinding, changed: boolean): Finding {
+  const location = {
+    ...(spec.line === undefined ? {} : { line: spec.line }),
+    ...(spec.column === undefined ? {} : { column: spec.column }),
+  };
+  return findingFor(spec.path, {
+    ruleId: OAUTH_CALLBACK_RULE,
+    severity: "high",
+    title: "OAuth callback binds a token to an unverified session identifier",
+    message: "An OAuth callback reads a session identifier from the query string and assigns an access token to that session without a browser-bound state check.",
+    detail: spec.detail,
+    identity: spec.identity,
+    impact: "An attacker can hand their own authorize URL to a victim; after the victim logs in, the victim's access token is attached to the attacker's session and the attacker can call the application's tools.",
+    remediationConstraints: [
+      "Preserve the existing OAuth redirect and callback contract for every client.",
+      "Bind the callback to the browser that started the login.",
+      READ_ONLY_CONSTRAINT,
+    ],
+    remediation: "On the authorize route, generate a random state, store it in a short-lived HttpOnly/Secure/SameSite cookie, and send it to the identity provider. On the callback, compare the returned state with the cookie constant-time before exchanging the code, make it single-use, and rotate the session after login.",
+  }, location, changed);
+}
+
 /**
  * Deterministic, offline backend authentication analysis. Rules fire only for
  * calls whose callee provably resolves to the audited package, and every finding
@@ -633,7 +658,11 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
         .filter((file) => file.kind === "file" && isBackendSourcePath(file.path))
         .map((file) => file.path)
         .sort();
-      if (allCandidates.length === 0) {
+      const allGoCandidates = snapshot.files
+        .filter((file) => file.kind === "file" && isGoSourcePath(file.path))
+        .map((file) => file.path)
+        .sort();
+      if (allCandidates.length === 0 && allGoCandidates.length === 0) {
         return {
           status: "completed",
           findings: [],
@@ -645,6 +674,7 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
       const limitations: string[] = [];
       const scopeNotes: string[] = [];
       let candidates = allCandidates;
+      let goCandidates = allGoCandidates;
       if (changed) {
         const selection = selectChangedCandidates(
           snapshot.auditScope.changes,
@@ -654,7 +684,15 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
         );
         candidates = [...selection.candidates];
         limitations.push(...selection.limitations);
-        if (candidates.length === 0) {
+        const goSelection = selectChangedCandidates(
+          snapshot.auditScope.changes,
+          snapshot.files,
+          isGoSourcePath,
+          "backend OAuth",
+        );
+        goCandidates = [...goSelection.candidates];
+        limitations.push(...goSelection.limitations);
+        if (candidates.length === 0 && goCandidates.length === 0) {
           return {
             status: "completed",
             findings: [],
@@ -664,7 +702,7 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
               0,
               0,
               0,
-              [...limitations, "No changed backend files were selected; unchanged files were not independently re-audited."],
+              [...limitations, "No changed backend or Go OAuth files were selected; unchanged files were not independently re-audited."],
             )],
             durationMs: Date.now() - startedAt,
           };
@@ -672,6 +710,8 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
         scopeNotes.push("Changed scope examined selected current changed files only; unchanged files were not independently re-audited.");
       }
       const findings: Finding[] = [];
+      const oauthSources = new Map<string, string>();
+      const goSources = new Map<string, string>();
       let filesExamined = 0;
       let callsExamined = 0;
       let totalBytes = 0;
@@ -704,11 +744,54 @@ export function createBackendAuthDoctor(options: BackendAuthDoctorOptions = {}):
         totalBytes += bytes.byteLength;
         filesExamined += 1;
         const content = Buffer.from(bytes).toString("utf8");
+        oauthSources.set(path, content);
         const analysis = analyzeBackendAuth(path, content, snapshot.auditScope.mode === "changed");
         callsExamined += analysis.callsExamined;
         findings.push(...analysis.findings);
         limitations.push(...analysis.limitations);
       }
+
+      for (const path of goCandidates) {
+        if (findings.length >= maxFindings) {
+          limitations.push(
+            `Backend auth audit finding limit of ${maxFindings} was reached; remaining Go OAuth files were not reported.`,
+          );
+          break;
+        }
+        const file = snapshot.files.find((entry) => entry.path === path);
+        const size = file?.size ?? 0;
+        if (size > maxFileBytes) {
+          limitations.push(`${path}: file exceeds the ${maxFileBytes}-byte Go OAuth audit size limit.`);
+          continue;
+        }
+        if (totalBytes + size > maxTotalBytes) {
+          limitations.push(
+            `Backend auth audit total content limit of ${maxTotalBytes} bytes was reached before ${path}.`,
+          );
+          break;
+        }
+        let bytes: Uint8Array;
+        try {
+          bytes = await readSelectedFile(join(snapshot.root, ...path.split("/")));
+        } catch {
+          limitations.push(`${path}: Go source file could not be read.`);
+          continue;
+        }
+        totalBytes += bytes.byteLength;
+        filesExamined += 1;
+        goSources.set(path, Buffer.from(bytes).toString("utf8"));
+      }
+
+      if (goSources.size > 0) {
+        limitations.push(
+          "Go source is analyzed for OAuth callback binding only; CORS, session-cookie, and JWT rules remain JavaScript/TypeScript-only.",
+        );
+      }
+
+      const oauth = analyzeOAuthFlows(oauthSources, goSources);
+      findings.push(...oauth.findings.map((spec) => oauthFinding(spec, changed)));
+      limitations.push(...oauth.limitations);
+      callsExamined += oauth.candidatesExamined;
 
       return {
         status: "completed",

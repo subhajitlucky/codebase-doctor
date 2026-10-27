@@ -5,6 +5,7 @@ import {
   createBackendAuthDoctor,
   isBackendSourcePath,
 } from "../../../../src/audits/backend/auth/doctor.js";
+import { isGoSourcePath } from "../../../../src/audits/backend/auth/oauth-flow.js";
 import { fullAuditScope } from "../../../../src/scope/planner.js";
 import type { ProjectSnapshot } from "../../../../src/workspace/types.js";
 
@@ -220,6 +221,199 @@ describe("backend auth analysis", () => {
     const analysis = analyzeBackendAuth("src/broken.ts", "const = = =;", false);
     expect(analysis.findings).toEqual([]);
     expect(analysis.limitations).toEqual(["src/broken.ts: backend source could not be parsed."]);
+  });
+});
+
+describe("backend auth OAuth callback binding", () => {
+  it("recognizes Go source paths separately from JavaScript/TypeScript paths", () => {
+    expect(isGoSourcePath("src/server.go")).toBe(true);
+    expect(isGoSourcePath("src/server.ts")).toBe(false);
+  });
+
+  it("flags a callback that binds a token to a query-string session_id without a state cookie", async () => {
+    const contents: Record<string, string> = {
+      "src/server.ts": [
+        'import express from "express";',
+        "const app = express();",
+        'app.get("/callback", async (req, res) => {',
+        "  const sessionId = req.query.session_id;",
+        "  const token = await exchange(req.query.code);",
+        "  sessions.get(sessionId).accessToken = token;",
+        '  res.send("ok");',
+        "});",
+      ].join("\n"),
+    };
+    const doctor = createBackendAuthDoctor({
+      readFile: async (absolutePath) => Buffer.from(
+        contents[absolutePath.replace(/^\/repo\//u, "")] ?? "",
+      ),
+    });
+
+    const result = await doctor.diagnose({
+      snapshot: snapshotWith(Object.keys(contents)),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(result.findings.map((entry) => entry.ruleId)).toContain(
+      "backend/auth/oauth-callback-session-binding",
+    );
+    expect(result.findings[0]?.severity).toBe("high");
+  });
+
+  it("accepts a callback that verifies state against a browser cookie", async () => {
+    const contents: Record<string, string> = {
+      "src/server.ts": [
+        'import express from "express";',
+        "const app = express();",
+        'app.get("/callback", async (req, res) => {',
+        "  if (req.query.state !== req.cookies.oauth_state) return res.status(403).end();",
+        "  const token = await exchange(req.query.code);",
+        "  sessions.get(req.session.id).accessToken = token;",
+        '  res.send("ok");',
+        "});",
+      ].join("\n"),
+    };
+    const doctor = createBackendAuthDoctor({
+      readFile: async (absolutePath) => Buffer.from(
+        contents[absolutePath.replace(/^\/repo\//u, "")] ?? "",
+      ),
+    });
+
+    const result = await doctor.diagnose({
+      snapshot: snapshotWith(Object.keys(contents)),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(result.findings.map((entry) => entry.ruleId)).not.toContain(
+      "backend/auth/oauth-callback-session-binding",
+    );
+  });
+
+  it("flags the Go callback pattern across files", async () => {
+    const contents: Record<string, string> = {
+      "app/app.go": [
+        "package app",
+        "",
+        "func setup(mux *http.ServeMux, m *Manager) {",
+        '    mux.HandleFunc("/callback", m.HandleKiteCallback())',
+        "}",
+      ].join("\n"),
+      "kc/manager.go": [
+        "package kc",
+        "",
+        "func (m *Manager) HandleKiteCallback() func(w http.ResponseWriter, r *http.Request) {",
+        "    return func(w http.ResponseWriter, r *http.Request) {",
+        "        requestToken, mcpSessionID, err := m.extractCallbackParams(r)",
+        "        if err != nil { return }",
+        "        _ = m.CompleteSession(mcpSessionID, requestToken)",
+        "    }",
+        "}",
+        "",
+        "func (m *Manager) extractCallbackParams(r *http.Request) (string, string, error) {",
+        "    qVals := r.URL.Query()",
+        '    return qVals.Get("request_token"), qVals.Get("session_id"), nil',
+        "}",
+        "",
+        "func (m *Manager) CompleteSession(mcpSessionID, requestToken string) error {",
+        '    return m.client.SetAccessToken("token")',
+        "}",
+      ].join("\n"),
+    };
+    const doctor = createBackendAuthDoctor({
+      readFile: async (absolutePath) => Buffer.from(
+        contents[absolutePath.replace(/^\/repo\//u, "")] ?? "",
+      ),
+    });
+
+    const result = await doctor.diagnose({
+      snapshot: snapshotWith(Object.keys(contents)),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    const oauth = result.findings.find(
+      (entry) => entry.ruleId === "backend/auth/oauth-callback-session-binding",
+    );
+    expect(oauth).toBeDefined();
+    expect(oauth?.location?.path).toBe("kc/manager.go");
+    expect(JSON.stringify(oauth)).toContain("query-string session identifier");
+    expect(result.coverage?.[0]?.limitations.join(" ")).toContain(
+      "Go source is analyzed for OAuth callback binding only",
+    );
+  });
+
+  it("accepts a Go callback that verifies state", async () => {
+    const contents: Record<string, string> = {
+      "app/app.go": [
+        "package app",
+        "",
+        "func setup(mux *http.ServeMux, m *Manager) {",
+        '    mux.HandleFunc("/callback", m.HandleKiteCallback())',
+        "}",
+      ].join("\n"),
+      "kc/manager.go": [
+        "package kc",
+        "",
+        "func (m *Manager) HandleKiteCallback() func(w http.ResponseWriter, r *http.Request) {",
+        "    return func(w http.ResponseWriter, r *http.Request) {",
+        '        if r.URL.Query().Get("state") != m.stateCookie(r) { return }',
+        "        requestToken, mcpSessionID, err := m.extractCallbackParams(r)",
+        "        if err != nil { return }",
+        "        _ = m.CompleteSession(mcpSessionID, requestToken)",
+        "    }",
+        "}",
+        "",
+        "func (m *Manager) extractCallbackParams(r *http.Request) (string, string, error) {",
+        "    qVals := r.URL.Query()",
+        '    return qVals.Get("request_token"), qVals.Get("session_id"), nil',
+        "}",
+        "",
+        "func (m *Manager) CompleteSession(mcpSessionID, requestToken string) error {",
+        '    return m.client.SetAccessToken("token")',
+        "}",
+      ].join("\n"),
+    };
+    const doctor = createBackendAuthDoctor({
+      readFile: async (absolutePath) => Buffer.from(
+        contents[absolutePath.replace(/^\/repo\//u, "")] ?? "",
+      ),
+    });
+
+    const result = await doctor.diagnose({
+      snapshot: snapshotWith(Object.keys(contents)),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(result.findings.map((entry) => entry.ruleId)).not.toContain(
+      "backend/auth/oauth-callback-session-binding",
+    );
+  });
+
+  it("reports an unresolved Go callback handler as a coverage limitation", async () => {
+    const contents: Record<string, string> = {
+      "app/app.go": [
+        "package app",
+        "",
+        "func setup(mux *http.ServeMux) {",
+        '    mux.HandleFunc("/callback", handler)',
+        "}",
+      ].join("\n"),
+    };
+    const doctor = createBackendAuthDoctor({
+      readFile: async (absolutePath) => Buffer.from(
+        contents[absolutePath.replace(/^\/repo\//u, "")] ?? "",
+      ),
+    });
+
+    const result = await doctor.diagnose({
+      snapshot: snapshotWith(Object.keys(contents)),
+      allowedCapabilities: new Set(["filesystem:read"]),
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(result.coverage?.[0]?.status).toBe("partial");
+    expect(result.coverage?.[0]?.limitations.join(" ")).toContain(
+      "handler could not be resolved statically",
+    );
   });
 });
 

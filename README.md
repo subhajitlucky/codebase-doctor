@@ -261,9 +261,9 @@ JSX/TSX and static HTML accessibility (`img-missing-alt`, `iframe-missing-title`
 
 ### Backend and auth
 
-`backend/auth` is read-only and offline over JavaScript and TypeScript sources. It never starts a server, sends a request, or issues a token — it reads source text only.
+`backend/auth` is read-only and offline over JavaScript and TypeScript sources, plus Go sources for the OAuth callback-binding rule. It never starts a server, sends a request, or issues a token — it reads source text only.
 
-Rules: `cors-wildcard-origin-with-credentials` (wildcard `origin: "*"`, reflected `origin: true`, or an allowlist containing `*`, with credentials enabled), `session-cookie-security-disabled` (cookie `secure` or `httpOnly` explicitly `false`), `jwt-decode-without-verify` (a `decode` call in a file containing no `verify` call), and `jwt-verify-algorithm-unrestricted` (no `algorithms` allowlist).
+Rules: `cors-wildcard-origin-with-credentials` (wildcard `origin: "*"`, reflected `origin: true`, or an allowlist containing `*`, with credentials enabled), `session-cookie-security-disabled` (cookie `secure` or `httpOnly` explicitly `false`), `jwt-decode-without-verify` (a `decode` call in a file containing no `verify` call), `jwt-verify-algorithm-unrestricted` (no `algorithms` allowlist), and `oauth-callback-session-binding` (a callback route reads a query-string session identifier and assigns a token to that session without a browser-bound state cookie). The OAuth rule parses the Babel AST for JS/TS and a bounded Go tokenizer with a cross-file function index for Go. It reports an unresolved callback handler or a Go-only gap as a coverage limitation, never as a finding. CORS, session-cookie, and JWT rules remain JavaScript/TypeScript-only.
 
 `backend/api` is read-only and offline over the same sources: `sql-string-concat-query` fires for concatenated or interpolated SQL text passed to a provably bound `pg`, `postgres`, `mysql`, `mysql2`, `better-sqlite3`, or `sqlite3` query call (parameterized queries with a values array are safe), and `child-process-exec-dynamic` fires for non-static commands passed to a provably bound `child_process` `exec`/`execSync` (including `spawn` with `shell: true`), while `execFile` and plain `spawn` never fire. Instance calls through `new Pool()`-style construction resolve like direct imports. Unresolvable query text stays a coverage limitation.
 
@@ -295,7 +295,7 @@ That means:
 | Configured validation | JS/TS and Python command planning; execution only with `--run-checks` | Sandboxed validation across ecosystems |
 | Database | Offline migration RLS, Drizzle Date hazards, live RLS, static-to-live drift | Schemas, queries, permissions, more engines |
 | Frontend | JSX/HTML a11y, static-HTML SEO, and raw-HTML sinks | React, Next.js, bundle analysis, broader a11y |
-| Backend and authz | Read-only, offline `backend/auth` (CORS, session-cookie, JWT) plus `backend/api` (SQL concatenation, shell execution) analysis in JS/TS; NestJS detection | Worker, webhook, cron, rate-limit analysis |
+| Backend and authz | Read-only, offline `backend/auth` (CORS, session-cookie, JWT, OAuth callback binding; JS/TS and Go OAuth) plus `backend/api` (SQL concatenation, shell execution) analysis in JS/TS; NestJS detection | Worker, webhook, cron, rate-limit analysis |
 | Security | Secrets (tree + history), dependency rules, opt-in OSV | Secrets, permission, vulnerability, supply chain |
 | Infrastructure | Dockerfile and GitHub Actions | Hosting and deployment analysis |
 | Performance | Static file hygiene: committed build artifacts, oversized sources | Cache, query, memory, profiling |

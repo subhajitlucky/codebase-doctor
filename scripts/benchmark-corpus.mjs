@@ -178,6 +178,31 @@ export const CASES = [
     exit: 0,
   },
   {
+    name: "oauth-callback-binding",
+    command: ["audit", "--json", "--fail-on", "none"],
+    setup(root) {
+      write(root, "package.json", JSON.stringify({ name: "bench", private: true }));
+      write(
+        root,
+        "server.js",
+        [
+          'const express = require("express");',
+          "const app = express();",
+          'app.get("/callback", async (req, res) => {',
+          "  const sessionId = req.query.session_id;",
+          "  const token = await exchange(req.query.code);",
+          "  sessions.get(sessionId).accessToken = token;",
+          '  res.send("ok");',
+          "});",
+          "",
+        ].join("\n"),
+      );
+      commitAll(root, "add oauth callback");
+    },
+    expect: ["backend/auth/oauth-callback-session-binding"],
+    exit: 0,
+  },
+  {
     name: "build-artifact",
     command: ["audit", "--json", "--fail-on", "none"],
     setup(root) {
